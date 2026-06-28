@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#F4ECE2" />
+  <title>Eventually — the event directory where good things land</title>
+  <meta name="description" content="The event directory where good things land — eventually." />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="assets/icon.svg" />
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles/main.css" />
+</head>
+<body>
+  <!-- background -->
+  <div id="stars"></div>
+  <canvas id="globe" aria-label="Interactive 3D globe of world events"></canvas>
+  <div id="hovertip"></div>
+
+  <!-- top bar -->
+  <header class="topbar">
+    <div class="brand" title="Eventually — good things land, eventually">
+      <span class="brand-dots"><i></i><i></i><i></i></span>
+      <span class="brand-name">eventually</span>
+    </div>
+
+    <div class="search-wrap">
+      <svg viewBox="0 0 24 24" class="search-ic"><path d="M21 21l-4.3-4.3M11 18a7 7 0 100-14 7 7 0 000 14z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <input id="search" placeholder="Search events, cities, categories…" autocomplete="off" />
+      <div class="types-wrap">
+        <button id="types-btn" class="types-btn" aria-label="Filter event types">Types <span class="types-badge" style="display:none"></span> <span class="types-caret">▾</span></button>
+        <div id="types-menu" class="types-menu"></div>
+      </div>
+      <div id="search-results"></div>
+    </div>
+
+    <nav class="nav">
+      <div class="stats">
+        <span><b id="stat-live">0</b> live</span>
+        <span><b id="stat-up">0</b> upcoming</span>
+        <span class="muted"><b id="stat-total">0</b> total</span>
+      </div>
+      <div class="loc-wrap">
+        <button id="nav-location" class="loc-chip" title="Set your location">⌖ <span class="loc-name">Set location</span></button>
+        <div id="loc-menu" class="loc-menu"></div>
+      </div>
+      <div class="menu-wrap">
+        <button id="nav-menu" class="menu-btn" aria-label="Menu" aria-haspopup="true" aria-expanded="false">
+          <span class="menu-dots"><i></i><i></i><i></i></span>
+        </button>
+        <div id="nav-dropdown" class="dropdown"></div>
+      </div>
+    </nav>
+  </header>
+
+  <!-- globe controls -->
+  <div class="globe-controls">
+    <button id="ctl-spin" class="ctl" title="Pause / resume spin" aria-label="Pause spin">
+      <svg viewBox="0 0 24 24" class="ic-pause"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+      <svg viewBox="0 0 24 24" class="ic-play" style="display:none"><path d="M8 5v14l11-7z"/></svg>
+    </button>
+    <button id="ctl-zoom-in" class="ctl" title="Zoom in" aria-label="Zoom in">+</button>
+    <button id="ctl-zoom-out" class="ctl" title="Zoom out" aria-label="Zoom out">−</button>
+  </div>
+
+  <!-- location popup: all events at one place, scrollable -->
+  <aside id="place" class="place">
+    <header class="place-head">
+      <div>
+        <h2 class="place-city"></h2>
+        <p class="place-count"></p>
+      </div>
+      <button class="place-close" aria-label="Close">✕</button>
+    </header>
+    <div class="place-tools"></div>
+    <div class="place-list"></div>
+  </aside>
+
+  <!-- timeline -->
+  <div id="timeline" class="timeline"></div>
+
+  <!-- ambient AI host -->
+  <div id="ai-host" class="ai-host"></div>
+
+  <!-- auth modal -->
+  <div id="auth" class="auth">
+    <div class="auth-backdrop"></div>
+    <div class="auth-modal">
+      <button class="auth-close" aria-label="Close">✕</button>
+      <span class="brand-dots" style="justify-content:center"><i></i><i></i><i></i></span>
+      <h2>Join Eventually</h2>
+      <p class="auth-sub">Browse anonymously anytime. Sign in to like, attend, and light up the globe.</p>
+      <div class="sso">
+        <button class="sso-btn" data-sso="google"><span>G</span> Continue with Google</button>
+      </div>
+      <div class="auth-or"><span>or</span></div>
+      <form class="magic">
+        <input type="email" placeholder="you@email.com — get a magic link" />
+        <button type="submit">Send magic link</button>
+      </form>
+      <p class="auth-fine">We'll email you a secure sign-in link. No password needed.</p>
+    </div>
+  </div>
+
+  <!-- coordinator portal -->
+  <div id="coordinator" class="coordinator"></div>
+
+  <!-- full event detail (tap-through from a card) -->
+  <aside id="event" class="evdetail"><div class="evd-scroll"></div></aside>
+
+  <!-- profile / "You" panel -->
+  <aside id="profile" class="profile">
+    <header class="pf-head">
+      <div>
+        <h2 class="pf-greeting">Hello there</h2>
+        <p class="pf-plus-state">Free plan</p>
+      </div>
+      <button class="pf-close" aria-label="Close">✕</button>
+    </header>
+    <div class="pf-body">
+      <section class="pf-sec">
+        <div class="pf-row"><span class="pf-k">Location</span><span class="pf-loc">not set</span></div>
+        <div class="pf-row"><span class="pf-k">Saved events</span><span><b class="pf-saved-n">0</b></span></div>
+      </section>
+
+      <section class="pf-sec">
+        <div class="pf-label">Your interests</div>
+        <div class="pf-interests"></div>
+      </section>
+
+      <section class="pf-sec">
+        <div class="pf-label">For you</div>
+        <div class="pf-recs"></div>
+      </section>
+
+      <section class="pf-sec">
+        <div class="pf-label">Host language</div>
+        <div class="pf-langs"></div>
+        <p class="pf-hint">Free on-device voices for now · premium ElevenLabs voices coming with Plus.</p>
+      </section>
+
+      <section class="pf-sec">
+        <button class="pf-toggle pf-notify"><span>Event notifications</span><span class="tg-state">Off</span></button>
+        <button class="pf-toggle pf-filter" style="display:none"><span>Filter globe to my interests</span><span class="tg-state">Off</span></button>
+      </section>
+
+      <section class="pf-plus">
+        <div class="pf-plus-h">Eventually <b>Plus</b></div>
+        <ul class="pf-plus-list">
+          <li>Ad-free · no sponsor reads</li>
+          <li>Advanced filtering & personalized Host</li>
+          <li>Travel tools, reminders & early access</li>
+        </ul>
+        <button class="pf-plus-btn">Go Plus — $7/mo</button>
+        <p class="pf-fine">Demo only — no payment is taken.</p>
+      </section>
+
+      <button class="pf-logout" style="display:none">Sign out</button>
+    </div>
+  </aside>
+
+  <!-- display ad zone (Revenue 1) -->
+  <div id="adbar" class="adbar"></div>
+
+  <!-- shared modal (Help centre, Contact sales, Event types) -->
+  <div id="modal" class="modal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-box">
+      <header class="modal-head"><h2 class="modal-title"></h2><button class="modal-close" aria-label="Close">✕</button></header>
+      <div class="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- background music: real track wired in (swap the src to change it) -->
+  <audio id="bg-music" preload="none" loop src="assets/eventually.mp3"></audio>
+
+  <div id="toast" class="toast"></div>
+
+  <!-- Backend config. Safe to commit: the anon key is a PUBLIC key, protected by
+       row-level security. Leave both blank to run on the built-in demo data.
+       (The Ticketmaster key is NEVER here — it lives only in Supabase Secrets.) -->
+  <script>
+    window.EVENTUALLY_CONFIG = {
+      supabaseUrl: 'https://gpsetmqivzchlvyrcgld.supabase.co',
+      supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdwc2V0bXFpdnpjaGx2eXJjZ2xkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1MDM2NzcsImV4cCI6MjA5ODA3OTY3N30.a0BB-FQDh5NKFvgxeSgJ3YmeN_HYOWGLOJza29wW8KI'
+    };
+  </script>
+
+  <!-- Supabase JS (auth + user data). Falls back to anonymous mode if it can't load. -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- scripts: classic (file:// friendly), dependency order -->
+  <script src="src/dedup.js"></script>
+  <script src="src/data.js"></script>
+  <script src="src/api.js"></script>
+  <script src="src/auth.js"></script>
+  <script src="src/landdata.js"></script>
+  <script src="src/profile.js"></script>
+  <script src="src/monetize.js"></script>
+  <script src="src/i18n.js"></script>
+  <script src="src/narrator.js"></script>
+  <script src="src/music.js"></script>
+  <script src="src/globe.js"></script>
+  <script src="src/timeline.js"></script>
+  <script src="src/aihost.js"></script>
+  <script src="src/coordinator.js"></script>
+  <script src="src/app.js"></script>
+</body>
+</html>
