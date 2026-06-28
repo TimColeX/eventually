@@ -854,44 +854,44 @@
     A.saveProfile({ name: p.name, location: p.location, interests: p.interests,
                     notify: p.notify, language: p.language, is_plus: p.plus });
   }
-  function migrateProfileToAccount(serverProfile) {
-    const p = P.get(), patch = {};
-    if ((!serverProfile || !serverProfile.location) && p.location) patch.location = p.location;
-    if ((!serverProfile || !(serverProfile.interests && serverProfile.interests.length)) && p.interests.length) patch.interests = p.interests;
-    if (!serverProfile && p.language) patch.language = p.language;
-    if (Object.keys(patch).length) A.saveProfile(patch);
-    (p.saved || []).forEach(function (id) { A.setUserEvent('save', id, snap(D.getById(id)), true); });
-    (p.attended || []).forEach(function (id) { A.setUserEvent('attend', id, snap(D.getById(id)), true); });
-  }
   if (authReal) {
-    let migrated = false;
     A.onChange(function (u) {
-      if (u) {
-        const meta = u.user_metadata || {};
-        user = { id: u.id, provider: (u.app_metadata && u.app_metadata.provider) || 'email',
-                 name: meta.name || meta.full_name || (u.email || 'You').split('@')[0] };
-        closeAuth();
-        A.getProfile().then(function (pr) {
-          if (pr) P.set({ name: user.name, interests: pr.interests || P.get().interests,
-                          location: pr.location || P.get().location, plus: !!pr.is_plus,
-                          notify: !!pr.notify, language: pr.language || P.get().language });
-          else P.setName(user.name);
-          if (!migrated) { migrated = true; migrateProfileToAccount(pr); }
-          return A.listUserEvents();
-        }).then(function (rows) {
-          if (rows) {
-            const saved = [], attended = [];
-            rows.forEach(function (r) { if (r.action === 'save') saved.push(r.event_id); else if (r.action === 'attend') attended.push(r.event_id); });
-            P.set({ saved: saved, attended: attended });
-          }
-          renderMenuTrigger(); renderLocChip(); applyMonetization(); refreshMarkers(); refreshProfile();
-          window.EventuallyToast('Signed in' + (user.name ? ' — welcome, ' + user.name + '.' : '.'));
-          if (pendingAction) { const a = pendingAction; pendingAction = null; a(); }
-        }).catch(function (err) { console.warn('[auth] profile load failed', err); renderMenuTrigger(); });
-      } else {
+      if (!u) {
         const was = user; user = null; renderMenuTrigger(); refreshProfile();
         if (was) window.EventuallyToast('Signed out.');
+        return;
       }
+      const meta = u.user_metadata || {};
+      user = { id: u.id, provider: (u.app_metadata && u.app_metadata.provider) || 'email',
+               name: meta.name || meta.full_name || (u.email || 'You').split('@')[0] };
+      closeAuth();
+      // Load profile + saved/liked/attended together, then MERGE with any local
+      // (anonymous) data — never overwrite local saves with an empty remote read.
+      Promise.all([A.getProfile(), A.listUserEvents()]).then(function (res) {
+        const pr = res[0], rows = res[1] || [];
+        const rSaved = [], rAttended = [];
+        rows.forEach(function (r) { if (r.action === 'save') rSaved.push(r.event_id); else if (r.action === 'attend') rAttended.push(r.event_id); });
+        const local = P.get();
+        const saved = Array.from(new Set(rSaved.concat(local.saved || [])));
+        const attended = Array.from(new Set(rAttended.concat(local.attended || [])));
+        if (pr) P.set({ name: user.name,
+                        interests: (pr.interests && pr.interests.length) ? pr.interests : local.interests,
+                        location: pr.location || local.location, plus: !!pr.is_plus,
+                        notify: !!pr.notify, language: pr.language || local.language });
+        else P.setName(user.name);
+        P.set({ saved: saved, attended: attended });
+        // Push any local-only items up to the account (so they survive the next login).
+        saved.filter(function (id) { return rSaved.indexOf(id) < 0; })
+             .forEach(function (id) { A.setUserEvent('save', id, snap(D.getById(id)), true); });
+        attended.filter(function (id) { return rAttended.indexOf(id) < 0; })
+                .forEach(function (id) { A.setUserEvent('attend', id, snap(D.getById(id)), true); });
+        if (!pr) syncProfile();   // create/fill the profile row from local data
+        renderMenuTrigger(); renderLocChip(); applyMonetization(); refreshMarkers(); refreshProfile();
+        if (eventEl.classList.contains('open') && activeEventId) openEvent(activeEventId);
+        if (place.classList.contains('open')) rerenderPlace();
+        window.EventuallyToast('Signed in' + (user.name ? ' — welcome, ' + user.name + '.' : '.'));
+        if (pendingAction) { const a = pendingAction; pendingAction = null; a(); }
+      }).catch(function (err) { console.warn('[auth] load failed', err); renderMenuTrigger(); });
     });
   }
 

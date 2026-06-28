@@ -55,7 +55,7 @@
   Timeline.prototype._buildTicks = function () {
     let html = '';
     for (let d = this.min; d <= this.max; d += 15) {
-      const dt = new Date(this.today); dt.setUTCDate(dt.getUTCDate() + d);
+      const dt = new Date(this.today); dt.setDate(dt.getDate() + d);
       const pct = (d - this.min) / (this.max - this.min) * 100;
       const lbl = dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
       html += '<span style="left:' + pct + '%">' + lbl + '</span>';
@@ -71,7 +71,7 @@
 
   Timeline.prototype.selectedDate = function () {
     const d = new Date(this.today);
-    d.setUTCDate(d.getUTCDate() + this.value);
+    d.setDate(d.getDate() + this.value);   // local day math (matches data.js)
     return d;
   };
 

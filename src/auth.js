@@ -29,6 +29,7 @@
 
   function emit(u) { currentUser = u; listeners.forEach(function (cb) { try { cb(u); } catch (e) { console.error(e); } }); }
   function redirectTo() { return location.origin + location.pathname; }
+  function logErr(tag) { return function (r) { if (r && r.error) console.warn('[EventuallyAuth] ' + tag + ' failed: ' + r.error.message); return r; }; }
 
   const api = {
     enabled: ENABLED,
@@ -52,7 +53,7 @@
     },
     saveProfile: function (patch) {
       if (!currentUser) return Promise.resolve();
-      return sb.from('profiles').update(patch).eq('id', currentUser.id);
+      return sb.from('profiles').update(patch).eq('id', currentUser.id).then(logErr('saveProfile'));
     },
     listUserEvents: function () {
       if (!currentUser) return Promise.resolve([]);
@@ -65,10 +66,11 @@
         return sb.from('user_events').upsert(
           { user_id: currentUser.id, event_id: eventId, action: action, snapshot: snapshot || null },
           { onConflict: 'user_id,event_id,action' }
-        );
+        ).then(logErr('setUserEvent ' + action));
       }
       return sb.from('user_events').delete()
-        .match({ user_id: currentUser.id, event_id: eventId, action: action });
+        .match({ user_id: currentUser.id, event_id: eventId, action: action })
+        .then(logErr('removeUserEvent ' + action));
     }
   };
 

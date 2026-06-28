@@ -5,14 +5,15 @@
 (function (global) {
   'use strict';
 
-  // "Today" = the real current day (noon UTC). Both demo events and live API
-  // events are dated relative to this, so the 0..60-day timeline always starts
-  // on the actual today and "live today" markers line up with real events.
-  const TODAY = new Date(); TODAY.setUTCHours(12, 0, 0, 0);
+  // "Today" = the user's LOCAL current day (local noon). All day math below uses
+  // local calendar components so the timeline/markers match the date on the
+  // user's own device — not UTC. (noon avoids DST edge wobble.)
+  const _now = new Date();
+  const TODAY = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate(), 12, 0, 0, 0);
 
   function dayOffset(n) {
     const d = new Date(TODAY);
-    d.setUTCDate(d.getUTCDate() + n);
+    d.setDate(d.getDate() + n);
     return d;
   }
 
@@ -299,11 +300,12 @@
 
   function typeForDate(evt, selectedDate) {
     // Same calendar day as selected date => LIVE (pillar). Future => UPCOMING (dot).
+    // Local calendar components so "today" matches the user's device date.
     const a = evt.date, b = selectedDate;
     const sameDay =
-      a.getUTCFullYear() === b.getUTCFullYear() &&
-      a.getUTCMonth() === b.getUTCMonth() &&
-      a.getUTCDate() === b.getUTCDate();
+      a.getFullYear() === b.getFullYear() &&
+      a.getMonth() === b.getMonth() &&
+      a.getDate() === b.getDate();
     if (sameDay) return 'live';
     return a.getTime() > b.getTime() ? 'upcoming' : 'past';
   }

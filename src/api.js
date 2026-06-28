@@ -32,8 +32,9 @@
   const SRC = D.SOURCES;
 
   function dayOffsetFrom(date, today) {
-    const a = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
-    const b = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+    // Local calendar days (matches data.js TODAY + typeForDate).
+    const a = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const b = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     return Math.round((a - b) / 86400000);
   }
 
