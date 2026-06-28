@@ -1,5 +1,5 @@
 /* Eventually — service worker. Offline-first cache of the app shell. */
-const CACHE = 'eventually-v40';
+const CACHE = 'eventually-v45';
 const ASSETS = [
   './', './index.html', './styles/main.css',
   './src/dedup.js', './src/data.js', './src/api.js', './src/auth.js', './src/landdata.js', './src/profile.js', './src/monetize.js',

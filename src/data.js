@@ -372,10 +372,10 @@
       return EVENTS;
     },
     addEvent: function (evt) {
-      evt.id = 'evt_' + (++_id);
+      if (!evt.id) evt.id = 'evt_' + (++_id);   // keep a pre-assigned id (DB native event)
       // a coordinator-published event is native, single-source
       evt.sources = [{
-        source_id: 'src_native_' + _id, source: 'native', sourceLabel: 'Eventually', badge: '',
+        source_id: 'src_native_' + evt.id, source: 'native', sourceLabel: 'Eventually', badge: '',
         url: evt.ticketUrl || null, price: null, priceLabel: 'Register',
         organizer: 'Eventually', last_updated: Date.now(),
         title: evt.name, city: evt.city, lat: evt.lat, lon: evt.lon,

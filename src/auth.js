@@ -60,6 +60,34 @@
       return sb.from('user_events').select('*').eq('user_id', currentUser.id)
         .then(function (r) { return r.data || []; });
     },
+    // Publish a native (coordinator) event to the globe, attributed to this user.
+    // Writes the events row then its native event_sources row. RLS-gated.
+    publishEvent: function (evt) {
+      if (!currentUser) return Promise.resolve({ error: { message: 'Not signed in' } });
+      const srcId = 'natsrc_' + evt.id;
+      const row = {
+        event_id: evt.id, title: evt.name, description: evt.description || null,
+        category: evt.category, start_time: evt.date.toISOString(),
+        city: evt.city || null, country: evt.country || null, lat: evt.lat, lon: evt.lon,
+        display_source: 'native', is_native: true, sponsored: !!evt.sponsored,
+        popularity: 0.4, image_url: null, source_count: 1,
+        cheapest_source_id: null, created_by: currentUser.id
+      };
+      return sb.from('events').insert(row).then(logErr('publishEvent')).then(function (r) {
+        if (r && r.error) return r;
+        return sb.from('event_sources').insert({
+          source_id: srcId, event_id: evt.id, source: 'native',
+          url: evt.ticketUrl || null, price: null, currency: null,
+          organizer: (currentUser.email ? currentUser.email.split('@')[0] : 'Eventually'),
+          badge: '', last_updated: new Date().toISOString()
+        }).then(logErr('publishEvent source'));
+      });
+    },
+    myEvents: function () {
+      if (!currentUser) return Promise.resolve([]);
+      return sb.rpc('my_events').then(function (r) { return (r && r.data) || []; });
+    },
+
     setUserEvent: function (action, eventId, snapshot, on) {
       if (!currentUser) return Promise.resolve();
       if (on) {

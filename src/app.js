@@ -49,7 +49,7 @@
     const interests = (interestFilterActive && P.get().plus) ? P.effectiveInterests(D.getById) : null;
     const selMs = selectedDate.getTime();
     D.getClusters().forEach(function (c) {
-      let vis = 0, live = 0, soon = 0, maxPop = 0, col = null, bestPop = -1, featured = false, editor = false, likeSum = 0;
+      let vis = 0, live = 0, soon = 0, maxPop = 0, col = null, bestPop = -1, featured = false, editor = false, likeSum = 0, nat = false;
       const ids = c.eventIds;
       for (let k = 0; k < ids.length; k++) {
         const ev = D.getById(ids[k]);
@@ -62,6 +62,7 @@
         else if (ev.date.getTime() - selMs <= WEEK_MS) soon++;   // starts within 7 days
         if (ev.sponsored) featured = true;
         if (ev.editor) editor = true;
+        if (ev.is_native) nat = true;        // Eventually-published (native) event here
         const p = D.popularity(ev);
         if (p > maxPop) maxPop = p;
         if (p > bestPop) { bestPop = p; col = ev.categoryColor; }
@@ -75,8 +76,10 @@
       c._featured = featured; c._editor = editor;
       c._score = live * 3 + maxPop * 4 + (soon > 0 ? 1.5 : 0) + (featured ? 6 : 0) +
         (editor ? 4 : 0) + Math.min(4, vis * 0.05) + Math.min(3, likeSum / 3000);
+      c._hasNative = nat;
       c._eligible = featured || editor || live > 0 || vis >= 10;
-      c._lodMin = (c._visible >= 14) ? 0.95 : (c._visible >= 5 ? 1.4 : 2.0);
+      // Native (Eventually-published) clusters always show their dot, at any zoom.
+      c._lodMin = nat ? 0 : ((c._visible >= 14) ? 0.95 : (c._visible >= 5 ? 1.4 : 2.0));
       if (!c._continent) c._continent = continentOf(c.lat, c.lon);
     });
     selectSpikes();
@@ -231,13 +234,24 @@
   });
 
   /* ---------- coordinator portal ---------- */
+  function addPublishedLocally(evt) {
+    D.addEvent(evt);                 // re-clusters internally
+    globe.setClusters(D.getClusters());
+    refreshMarkers();
+    updateStats();
+    timeline._drawSpark();
+  }
   const coordinator = new window.EventuallyCoordinator(document.getElementById('coordinator'), {
+    // Returns a Promise<boolean>: true = published. When signed in we write the
+    // native event to Supabase (attributed to the user); otherwise demo/local only.
     onPublish: function (evt) {
-      D.addEvent(evt);                 // re-clusters internally
-      globe.setClusters(D.getClusters());
-      refreshMarkers();
-      updateStats();
-      timeline._drawSpark();
+      if (acctEnabled()) {
+        return A.publishEvent(evt).then(function (r) {
+          if (r && r.error) { window.EventuallyToast('Publish failed: ' + r.error.message); return false; }
+          evt._mine = true; addPublishedLocally(evt); return true;
+        });
+      }
+      evt._mine = true; addPublishedLocally(evt); return Promise.resolve(true);
     },
     onFlyTo: function (lat, lon) { coordinator.close(); globe.flyTo(lat, lon); },
     getMyEvents: function () {
@@ -540,25 +554,53 @@
   searchInput.addEventListener('input', function () {
     const q = searchInput.value.trim().toLowerCase();
     if (!q) { searchResults.classList.remove('show'); return; }
+
+    // City matches — location clusters (with visible events) whose city matches.
+    const byCity = {};
+    D.getClusters().forEach(function (c) {
+      if (!c._visible || !c.city) return;
+      if (c.city.toLowerCase().indexOf(q) < 0) return;
+      const key = c.city.toLowerCase();
+      if (!byCity[key] || c._visible > byCity[key]._visible) byCity[key] = c;   // largest cluster per city
+    });
+    const cities = Object.keys(byCity).map(function (k) { return byCity[k]; })
+      .sort(function (a, b) { return b._visible - a._visible; }).slice(0, 3);
+
+    // Event matches.
     const hits = D.getEvents().filter(function (e) {
       return (e.name + ' ' + e.city + ' ' + e.category).toLowerCase().indexOf(q) > -1;
     }).sort(function (a, b) {                 // featured events rank higher
       if (!!b.sponsored !== !!a.sponsored) return b.sponsored ? 1 : -1;
       return D.popularity(b) - D.popularity(a);
-    }).slice(0, 6);
-    searchResults.innerHTML = hits.length
-      ? hits.map(function (e) {
-          return '<button data-id="' + e.id + '"><span class="dot" style="background:' +
-            e.categoryColor + '"></span>' + e.name +
-            '<small>' + e.city + '</small></button>';
-        }).join('')
-      : '<div class="no-hits">No events found.</div>';
+    }).slice(0, 5);
+
+    let html = cities.map(function (c) {
+      return '<button class="sr-city" data-place="' + c.id + '"><span class="dot city">📍</span>' +
+        esc(c.city) + '<small>' + c._visible + ' event' + (c._visible === 1 ? '' : 's') + '</small></button>';
+    }).join('');
+    html += hits.map(function (e) {
+      return '<button data-id="' + e.id + '"><span class="dot" style="background:' +
+        e.categoryColor + '"></span>' + esc(e.name) + '<small>' + esc(e.city) + '</small></button>';
+    }).join('');
+    searchResults.innerHTML = html || '<div class="no-hits">No events found.</div>';
     searchResults.classList.add('show');
+
     searchResults.querySelectorAll('button').forEach(function (b) {
       b.addEventListener('click', function () {
-        const ev = D.getById(b.dataset.id);
         P.addSearch(searchInput.value);          // personalization — remember searches
+        if (b.dataset.place) {                   // a CITY result → fly + red pulse + open the list
+          const c = clusterById(b.dataset.place);
+          searchResults.classList.remove('show'); searchInput.value = '';
+          if (c) {
+            globe.flyTo(c.lat, c.lon);
+            globe.setHighlight(c.lat, c.lon, { color: '#ff3b30' });
+            setTimeout(function () { openPlace(c.id); }, 650);
+          }
+          return;
+        }
+        const ev = D.getById(b.dataset.id);      // an EVENT result
         globe.flyTo(ev.lat, ev.lon);
+        globe.setHighlight(ev.lat, ev.lon, { color: '#ff3b30', id: ev.id });
         searchResults.classList.remove('show');
         searchInput.value = '';
         setTimeout(function () { openEvent(ev.id); }, 600);
@@ -844,6 +886,8 @@
      profile + saved/liked/attended and migrate any anonymous localStorage data
      up once. When not configured, the mock auth flow above stays in charge. */
   function acctEnabled() { return !!(authReal && user); }
+  let myEventIds = [];
+  function markMine() { myEventIds.forEach(function (id) { const e = D.getById(id); if (e) e._mine = true; }); }
   function snap(e) {
     return e ? { title: e.name, city: e.city, category: e.category, lat: e.lat, lon: e.lon,
                  start: e.date && e.date.toISOString(), url: e.ticketUrl || null } : null;
@@ -886,6 +930,7 @@
         attended.filter(function (id) { return rAttended.indexOf(id) < 0; })
                 .forEach(function (id) { A.setUserEvent('attend', id, snap(D.getById(id)), true); });
         if (!pr) syncProfile();   // create/fill the profile row from local data
+        if (A.myEvents) A.myEvents().then(function (rows) { myEventIds = (rows || []).map(function (r) { return r.event_id; }); markMine(); });
         renderMenuTrigger(); renderLocChip(); applyMonetization(); refreshMarkers(); refreshProfile();
         if (eventEl.classList.contains('open') && activeEventId) openEvent(activeEventId);
         if (place.classList.contains('open')) rerenderPlace();
@@ -902,6 +947,7 @@
   if (window.EventuallyAPI && window.EventuallyAPI.config.remote) {
     window.EventuallyAPI.onData(function (events) {
       D.replaceAll(events);
+      markMine();
       globe.setClusters(D.getClusters());
       refreshMarkers();
       updateStats();

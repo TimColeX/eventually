@@ -87,6 +87,7 @@
     this.onMarkerClick = null;
     this.onMarkerHover = null;
     this.hoverId = null;
+    this.highlight = null;   // { lat, lon, color, id } — red search-result marker
     this._buildDots();
     this._buildCoast();
     this._bind();
@@ -149,6 +150,14 @@
   };
 
   Globe.prototype.setClusters = function (clusters) { this.clusters = clusters; };
+
+  // Drop a prominent red marker at a location (used when a search result is chosen).
+  // Always drawn, regardless of zoom level-of-detail, so any event is findable.
+  Globe.prototype.setHighlight = function (lat, lon, opts) {
+    this.highlight = (lat == null) ? null
+      : { lat: lat, lon: lon, color: (opts && opts.color) || '#ff3b30', id: opts && opts.id };
+  };
+  Globe.prototype.clearHighlight = function () { this.highlight = null; };
   Globe.prototype.setPaused = function (p) { this.paused = p; };
   Globe.prototype.togglePaused = function () { this.paused = !this.paused; return this.paused; };
   Globe.prototype.zoomBy = function (f) {
@@ -380,6 +389,12 @@
         ctx.strokeStyle = hexA(col, 0.95); ctx.lineWidth = 1;
         ctx.beginPath(); ctx.arc(p.x, p.y, r + 1.4, 0, Math.PI * 2); ctx.stroke();
       }
+      if (c._hasNative) {                                 // Eventually-published: cream halo
+        ctx.strokeStyle = 'rgba(255,250,243,0.95)'; ctx.lineWidth = 1.6;
+        ctx.beginPath(); ctx.arc(p.x, p.y, r + 2.6, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = hexA(col, 0.5); ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(p.x, p.y, r + 4.4, 0, Math.PI * 2); ctx.stroke();
+      }
       ctx.fillStyle = 'rgba(255,250,243,' + (live ? 0.72 : 0.5) + ')';
       ctx.beginPath(); ctx.arc(p.x - r * 0.28, p.y - r * 0.28, r * 0.24, 0, Math.PI * 2); ctx.fill();
       if (hovered) { ctx.strokeStyle = hexA(col, 0.9); ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(p.x, p.y, r + 6, 0, Math.PI * 2); ctx.stroke(); }
@@ -420,6 +435,33 @@
       }
       c._spikeTop = { x: pt.x, y: pt.y };
     }
+
+    this._drawHighlight(ctx, R, t);
+  };
+
+  // Red search-result marker: a pulsing dot with an expanding "radar ping" ring,
+  // drawn on top of everything and never culled by zoom LOD.
+  Globe.prototype._drawHighlight = function (ctx, R, t) {
+    const hl = this.highlight; if (!hl) return;
+    const base = llToVec(hl.lat, hl.lon);
+    const rv = this._rotate(base);
+    if (rv[2] <= 0.02) return;                 // behind the globe right now
+    const p = this._project(rv, R);
+    const col = hl.color || '#ff3b30';
+    const ping = (t * 0.85) % 1;               // expanding ring, loops 0..1
+    ctx.strokeStyle = hexA(col, (1 - ping) * 0.85);
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(p.x, p.y, 6 + ping * 24, 0, Math.PI * 2); ctx.stroke();
+    const pulse = 0.5 + 0.5 * Math.sin(t * 4.2);
+    const r = (4.6 + pulse * 1.6) * p.persp;
+    ctx.shadowColor = col; ctx.shadowBlur = 16;
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = hexA(col, 0.95); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(p.x, p.y, r + 2.5, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.beginPath(); ctx.arc(p.x - r * 0.3, p.y - r * 0.3, r * 0.3, 0, Math.PI * 2); ctx.fill();
   };
 
   // Independent breathing cycle per cluster, in ABSOLUTE seconds so spikes linger

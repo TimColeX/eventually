@@ -106,6 +106,10 @@ body {
 #search-results button small { color: var(--faint); margin-left: auto; font-family: var(--mono); font-size: 11px; }
 #search-results .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 #search-results .no-hits { padding: 14px; color: var(--muted); font-size: 14px; }
+/* City results sit at the top, visually distinct from individual events. */
+#search-results .sr-city { font-weight: 700; border-bottom: 1px solid var(--line); }
+#search-results .sr-city:last-of-type { border-bottom: 1px solid var(--line-2); }
+#search-results .dot.city { width: auto; height: auto; font-size: 13px; line-height: 1; }
 
 .nav { display: flex; align-items: center; gap: 10px; margin-left: auto; }
 .stats { display: flex; gap: 16px; font-family: var(--mono); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink); }
@@ -355,6 +359,11 @@ body {
 .swatches { display: flex; gap: 8px; margin-top: 8px; margin-bottom: 16px; }
 .sw { width: 38px; height: 28px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; }
 .sw.active { border-color: var(--ink); box-shadow: 0 0 0 2px var(--clay); }
+.co-feature { display: flex; align-items: flex-start; gap: 9px; margin-bottom: 16px; cursor: pointer; }
+.co-form input.f-feature { width: auto; margin: 3px 0 0; flex: none; accent-color: var(--clay); }
+.co-feature-txt { display: flex; flex-direction: column; }
+.co-feature-txt b { font-size: 13.5px; color: var(--ink); font-weight: 700; }
+.co-feature-txt small { font-size: 11px; color: var(--hint); line-height: 1.4; margin-top: 2px; }
 .co-publish {
   width: 100%; padding: 14px; border-radius: 12px; cursor: pointer; font-family: var(--font);
   font-weight: 700; font-size: 15px; background: var(--clay); color: var(--cream); border: 0;
@@ -370,6 +379,8 @@ body {
 .f-addr:focus { border-color: var(--clay); }
 .latlon { margin-top: 8px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
 .latlon strong { color: var(--clay); }
+.co-place { margin-top: 6px; font-size: 13px; color: var(--ink); }
+.co-place strong { color: var(--clay); font-weight: 700; }
 .an-empty { color: var(--muted); font-size: 14px; }
 .an-kpis { display: flex; gap: 14px; margin-bottom: 18px; flex-wrap: wrap; }
 .kpi {
