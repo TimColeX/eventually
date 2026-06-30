@@ -19,6 +19,7 @@
   <div id="stars"></div>
   <canvas id="globe" aria-label="Interactive 3D globe of world events"></canvas>
   <div id="hovertip"></div>
+  <div id="globe-loading"><span class="gl-dots"><i></i><i></i><i></i></span> Loading live events…</div>
 
   <!-- top bar -->
   <header class="topbar">
@@ -185,7 +186,18 @@
   <script>
     window.EVENTUALLY_CONFIG = {
       supabaseUrl: 'https://gpsetmqivzchlvyrcgld.supabase.co',
-      supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdwc2V0bXFpdnpjaGx2eXJjZ2xkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1MDM2NzcsImV4cCI6MjA5ODA3OTY3N30.a0BB-FQDh5NKFvgxeSgJ3YmeN_HYOWGLOJza29wW8KI'
+      supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdwc2V0bXFpdnpjaGx2eXJjZ2xkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1MDM2NzcsImV4cCI6MjA5ODA3OTY3N30.a0BB-FQDh5NKFvgxeSgJ3YmeN_HYOWGLOJza29wW8KI',
+      // Billing (Lemon Squeezy). Leave blank to keep the mock Plus toggle.
+      // Fill these in once your store + products exist (see backend/SETUP-BILLING.md).
+      billing: {
+        plusCheckoutUrl: '',      // Lemon Squeezy "Eventually Plus" subscription checkout URL
+        featureCheckoutUrl: '',   // one-off "Feature this event" product checkout URL
+        freeFeaturesPerMonth: 3   // hybrid: free features/month for Plus members
+      },
+      // AI Host premium voice (ElevenLabs, Plus-only). Set elevenlabs:true once the
+      // host-tts function + ELEVENLABS_API_KEY + voice ids are set up. Free tier
+      // (and everyone if false) keeps the on-device browser voice.
+      host: { elevenlabs: false }
     };
   </script>
 
@@ -197,6 +209,9 @@
   <script src="src/data.js"></script>
   <script src="src/api.js"></script>
   <script src="src/auth.js"></script>
+  <script src="src/billing.js"></script>
+  <script src="src/geo.js"></script>
+  <script src="src/hostvoice.js"></script>
   <script src="src/landdata.js"></script>
   <script src="src/profile.js"></script>
   <script src="src/monetize.js"></script>

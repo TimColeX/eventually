@@ -11,6 +11,11 @@
   let interestFilterActive = false;     // Plus "advanced filtering"
   const activeTypes = {};               // "Event types" globe filter (all on by default)
   Object.keys(D.CATEGORIES).forEach(function (c) { activeTypes[c] = true; });
+  // Runtime config — admin-tunable via the app_config table; these are the code
+  // defaults used until (and if) the remote config loads.
+  let RT = { spikes: { priority: 18, fair: 15, sponsored: 12 }, maxClusters: 0, adsEnabled: true, hostEnabled: true };
+  // "Key moment" line kinds that use the premium ElevenLabs voice (Plus only).
+  const HOST_VOICE_KINDS = ['greeting', 'spotlight', 'countdown', 'welcome'];
 
   // location-popup state (declared early: the timeline fires onChange during
   // construction, which calls rerenderPlace before the popup section runs)
@@ -102,20 +107,20 @@
     let s = 0;
     Object.keys(spon).forEach(function (cont) {
       const list = spon[cont], start = list.length > 3 ? (spikeRotation % list.length) : 0;
-      for (let k = 0; k < Math.min(3, list.length) && s < 12; k++) {
+      for (let k = 0; k < Math.min(3, list.length) && s < RT.spikes.sponsored; k++) {
         const c = list[(start + k) % list.length];
         if (!chosen[c.id]) { mark(c, 'sponsored'); s++; }
       }
     });
-    // global top priority (18)
+    // global top priority
     let g = 0;
-    for (let i = 0; i < pool.length && g < 18; i++) if (!chosen[pool[i].id]) { mark(pool[i], 'priority'); g++; }
-    // continent fairness (15) — round-robin so every continent is represented
+    for (let i = 0; i < pool.length && g < RT.spikes.priority; i++) if (!chosen[pool[i].id]) { mark(pool[i], 'priority'); g++; }
+    // continent fairness — round-robin so every continent is represented
     const conts = ['NA', 'SA', 'EU', 'AF', 'AS', 'OC'];
     let f = 0, progress = true;
-    while (f < 15 && progress) {
+    while (f < RT.spikes.fair && progress) {
       progress = false;
-      for (let ci = 0; ci < conts.length && f < 15; ci++) {
+      for (let ci = 0; ci < conts.length && f < RT.spikes.fair; ci++) {
         const cont = conts[ci];
         const c = pool.find(function (x) { return x._continent === cont && !chosen[x.id]; });
         if (c) { mark(c, 'fair'); f++; progress = true; }
@@ -230,7 +235,15 @@
     onPlay: function () { music.start(); narrator.reset(); },   // bed on + lead with the user's area
     onPause: function () { music.stop(); },
     onSpeakStart: function () { music.duck(true); },   // duck under the voice
-    onSpeakEnd: function () { music.duck(false); }     // swell between segments
+    onSpeakEnd: function () { music.duck(false); },    // swell between segments
+    // Premium voice (ElevenLabs) — Plus-only, "key moment" lines only; returns an
+    // audio URL or null (→ the host uses the free browser voice).
+    synth: function (text, lang, kind) {
+      if (!window.EventuallyHostVoice || !window.EventuallyHostVoice.enabled) return Promise.resolve(null);
+      if (!P.get().plus) return Promise.resolve(null);
+      if (HOST_VOICE_KINDS.indexOf(kind) < 0) return Promise.resolve(null);
+      return window.EventuallyHostVoice.synthesize(text, lang);
+    }
   });
 
   /* ---------- coordinator portal ---------- */
@@ -248,7 +261,9 @@
       if (acctEnabled()) {
         return A.publishEvent(evt).then(function (r) {
           if (r && r.error) { window.EventuallyToast('Publish failed: ' + r.error.message); return false; }
-          evt._mine = true; addPublishedLocally(evt); return true;
+          evt._mine = true; addPublishedLocally(evt);
+          if (evt.sponsored && billingEnabled()) handleFeature(evt);   // settle free/paid featuring
+          return true;
         });
       }
       evt._mine = true; addPublishedLocally(evt); return Promise.resolve(true);
@@ -732,10 +747,7 @@
       setTimeout(function () { openEvent(ev.id); }, 600);
     }
   });
-  profileEl.querySelector('.pf-plus-btn').addEventListener('click', function () {
-    P.setPlus(!P.get().plus); applyMonetization(); renderProfile(); renderMenuTrigger(); syncProfile();
-    window.EventuallyToast(P.get().plus ? 'Welcome to Eventually Plus — ads & sponsor reads off (demo).' : 'Eventually Plus cancelled (demo).');
-  });
+  profileEl.querySelector('.pf-plus-btn').addEventListener('click', goPlus);
   profileEl.querySelector('.pf-notify').addEventListener('click', enableNotifications);
   profileEl.querySelector('.pf-filter').addEventListener('click', function () {
     interestFilterActive = !interestFilterActive;
@@ -768,10 +780,10 @@
     adbar.querySelector('.ad-plus').addEventListener('click', openProfile);
   }
   function applyMonetization() {
-    const plus = P.get().plus;
-    document.body.classList.toggle('has-ad', !plus);
-    adbar.style.display = plus ? 'none' : '';
-    if (!plus) renderAd();
+    const showAds = RT.adsEnabled && !P.get().plus;   // admin can disable ads globally
+    document.body.classList.toggle('has-ad', showAds);
+    adbar.style.display = showAds ? '' : 'none';
+    if (showAds) renderAd();
     rerenderPlace();                 // show/hide the partner card
   }
   applyMonetization();
@@ -892,11 +904,74 @@
     return e ? { title: e.name, city: e.city, category: e.category, lat: e.lat, lon: e.lon,
                  start: e.date && e.date.toISOString(), url: e.ticketUrl || null } : null;
   }
+  function billingEnabled() { return !!(window.EventuallyBilling && window.EventuallyBilling.enabled); }
   function syncProfile() {
     if (!acctEnabled()) return;
     const p = P.get();
-    A.saveProfile({ name: p.name, location: p.location, interests: p.interests,
-                    notify: p.notify, language: p.language, is_plus: p.plus });
+    const patch = { name: p.name, location: p.location, interests: p.interests,
+                    notify: p.notify, language: p.language };
+    if (!billingEnabled()) patch.is_plus = p.plus;   // when billing is live, is_plus is server-only
+    A.saveProfile(patch);
+  }
+  function goPlus() {
+    if (billingEnabled()) {
+      if (P.get().plus) { window.EventuallyToast("You're on Eventually Plus — manage it from your email receipts."); return; }
+      requireLogin(function () {
+        window.EventuallyToast('Opening secure checkout…');
+        window.EventuallyBilling.startPlusCheckout({ id: user.id, email: user.email });
+      });
+      return;
+    }
+    // demo (no billing configured): mock toggle
+    P.setPlus(!P.get().plus); applyMonetization(); renderProfile(); renderMenuTrigger(); syncProfile();
+    window.EventuallyToast(P.get().plus ? 'Welcome to Eventually Plus — ads & sponsor reads off (demo).' : 'Eventually Plus cancelled (demo).');
+  }
+  // After a native event is published with "Feature" ticked, settle the placement:
+  // a Plus member's monthly free quota first, otherwise a one-off checkout.
+  function handleFeature(evt) {
+    if (!billingEnabled()) return;                 // demo: it's already featured locally
+    A.claimFreeFeature(evt.id).then(function (res) {
+      if (res && res.ok) {
+        evt.sponsored = true; refreshMarkers();
+        window.EventuallyToast('Featured with Plus — ' + res.remaining + ' free left this month.');
+      } else {
+        evt.sponsored = false; refreshMarkers();   // not featured until paid
+        window.EventuallyToast('Opening checkout to feature this event…');
+        window.EventuallyBilling.startFeatureCheckout({ id: user.id, email: user.email }, evt.id);
+      }
+    }).catch(function () { window.EventuallyToast('Could not start featuring — try again.'); });
+  }
+  // One-time "complete your profile" step after first sign-in.
+  function promptProfileSetup(pr) {
+    const p = P.get();
+    const nm = (pr && pr.name) || p.name || (user && user.name) || '';
+    const cityVal = (p.location && p.location.city) || '';
+    openModal('Complete your profile',
+      '<form class="ps-form">' +
+        '<label>Display name<input class="ps-name" value="' + esc(nm) + '" placeholder="Your name" required></label>' +
+        '<label>City <span class="ps-opt">(optional)</span><input class="ps-city" value="' + esc(cityVal) + '" placeholder="e.g. Toronto" autocomplete="off"></label>' +
+        '<label>Phone <span class="ps-opt">(optional, but encouraged)</span><input class="ps-phone" type="tel" placeholder="+1 555 123 4567"></label>' +
+        '<p class="ps-fine">Your city tailors nearby events. Phone is optional and never shown publicly.</p>' +
+        '<div class="ps-actions"><button type="button" class="ps-skip">Skip for now</button><button type="submit" class="ps-save">Save</button></div>' +
+      '</form>',
+      function (body) {
+        function finish(extra) { A.saveProfile(Object.assign({ profile_completed: true }, extra || {})); closeModal(); }
+        body.querySelector('.ps-skip').addEventListener('click', function () { finish(); });
+        body.querySelector('.ps-form').addEventListener('submit', function (e) {
+          e.preventDefault();
+          const name = body.querySelector('.ps-name').value.trim() || nm || 'You';
+          const phone = body.querySelector('.ps-phone').value.trim() || null;
+          const cityStr = body.querySelector('.ps-city').value.trim();
+          P.setName(name); renderMenuTrigger();
+          const done = function () { finish({ name: name, phone: phone }); window.EventuallyToast('Profile saved.'); };
+          if (cityStr && window.EventuallyGeo) {
+            window.EventuallyGeo.forward(cityStr).then(function (res) {
+              if (res) setLocation({ city: res.city || cityStr, lat: res.lat, lon: res.lon, source: 'manual' });
+              done();
+            }).catch(done);
+          } else { done(); }
+        });
+      });
   }
   if (authReal) {
     A.onChange(function (u) {
@@ -906,7 +981,7 @@
         return;
       }
       const meta = u.user_metadata || {};
-      user = { id: u.id, provider: (u.app_metadata && u.app_metadata.provider) || 'email',
+      user = { id: u.id, email: u.email, provider: (u.app_metadata && u.app_metadata.provider) || 'email',
                name: meta.name || meta.full_name || (u.email || 'You').split('@')[0] };
       closeAuth();
       // Load profile + saved/liked/attended together, then MERGE with any local
@@ -936,15 +1011,39 @@
         if (place.classList.contains('open')) rerenderPlace();
         window.EventuallyToast('Signed in' + (user.name ? ' — welcome, ' + user.name + '.' : '.'));
         if (pendingAction) { const a = pendingAction; pendingAction = null; a(); }
+        // First-time users: ask for display name / city / phone (once).
+        // Only when the column exists AND is false (avoids prompting before the
+        // 07_profile_fields.sql migration is run).
+        if (pr && pr.profile_completed === false) promptProfileSetup(pr);
       }).catch(function (err) { console.warn('[auth] load failed', err); renderMenuTrigger(); });
     });
   }
 
   /* ---------- live data (Supabase) ----------
-     Stale-while-revalidate: the globe already booted on demo data above. If a
-     backend is configured (window.EVENTUALLY_CONFIG), real events replace it the
-     moment they arrive. Any failure = we silently stay on demo data. */
+     When a backend is configured we do NOT paint the dense demo dataset first
+     (that caused a "flash" of many dots that then collapsed to the real, sparser
+     set). Instead we show a clean globe with a small "loading" hint, fetch the
+     real events, and populate once. If the load fails, we fall back to the demo
+     data so the globe is never empty. */
+  function setGlobeLoading(on) {
+    const el = document.getElementById('globe-loading');
+    if (el) el.classList.toggle('show', !!on);
+  }
   if (window.EventuallyAPI && window.EventuallyAPI.config.remote) {
+    // Pull admin-tunable runtime config (spike budget, ad/host toggles…).
+    if (window.EventuallyAPI.getConfig) {
+      window.EventuallyAPI.getConfig().then(function (cfg) {
+        if (!cfg) return;
+        if (cfg.spikes) RT.spikes = Object.assign({}, RT.spikes, cfg.spikes);
+        if (typeof cfg.maxClusters === 'number') RT.maxClusters = cfg.maxClusters;
+        if (typeof cfg.adsEnabled === 'boolean') RT.adsEnabled = cfg.adsEnabled;
+        if (typeof cfg.hostEnabled === 'boolean') RT.hostEnabled = cfg.hostEnabled;
+        refreshMarkers(); applyMonetization();
+      });
+    }
+    globe.setClusters([]);            // clear the demo markers before the first paint
+    refreshMarkers();
+    setGlobeLoading(true);
     window.EventuallyAPI.onData(function (events) {
       D.replaceAll(events);
       markMine();
@@ -953,9 +1052,16 @@
       updateStats();
       rerenderPlace();
       if (timeline && timeline._drawSpark) timeline._drawSpark();
-      window.EventuallyToast('Showing live events near you.');
+      setGlobeLoading(false);
     });
-    window.EventuallyAPI.boot();
+    window.EventuallyAPI.boot().then(function (ok) {
+      if (!ok) {                      // load failed → fall back to demo data
+        globe.setClusters(D.getClusters());
+        refreshMarkers(); updateStats();
+        if (timeline && timeline._drawSpark) timeline._drawSpark();
+      }
+      setGlobeLoading(false);
+    });
   }
 
   /* ---------- PWA service worker ---------- */

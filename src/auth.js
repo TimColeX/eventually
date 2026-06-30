@@ -69,7 +69,10 @@
         event_id: evt.id, title: evt.name, description: evt.description || null,
         category: evt.category, start_time: evt.date.toISOString(),
         city: evt.city || null, country: evt.country || null, lat: evt.lat, lon: evt.lon,
-        display_source: 'native', is_native: true, sponsored: !!evt.sponsored,
+        // When billing is live, featuring is granted server-side only (free quota
+        // RPC or paid webhook) — never trust the client to self-feature.
+        display_source: 'native', is_native: true,
+        sponsored: (global.EventuallyBilling && global.EventuallyBilling.enabled) ? false : !!evt.sponsored,
         popularity: 0.4, image_url: null, source_count: 1,
         cheapest_source_id: null, created_by: currentUser.id
       };
@@ -86,6 +89,14 @@
     myEvents: function () {
       if (!currentUser) return Promise.resolve([]);
       return sb.rpc('my_events').then(function (r) { return (r && r.data) || []; });
+    },
+    // Try to feature an event using the Plus monthly free quota (server-checked).
+    // Returns { ok, remaining } or { ok:false, reason }.
+    claimFreeFeature: function (eventId) {
+      if (!currentUser) return Promise.resolve({ ok: false, reason: 'not_signed_in' });
+      const quota = (global.EventuallyBilling && global.EventuallyBilling.freeFeaturesPerMonth) || 3;
+      return sb.rpc('claim_free_feature', { p_event_id: eventId, p_quota: quota })
+        .then(function (r) { return (r && r.data) || { ok: false, reason: (r && r.error && r.error.message) || 'error' }; });
     },
 
     setUserEvent: function (action, eventId, snapshot, on) {

@@ -107,11 +107,21 @@
     });
   }
 
+  // Remote app config (admin-tunable). Resolves null if unavailable → code defaults.
+  function getConfig() {
+    if (!REMOTE) return Promise.resolve(null);
+    return fetch(BASE + '/rest/v1/app_config?select=config&limit=1', { headers: headers() })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (rows) { return (rows && rows[0] && rows[0].config) || null; })
+      .catch(function () { return null; });
+  }
+
   global.EventuallyAPI = {
     config: { remote: REMOTE, baseUrl: BASE },
     boot: boot,
     onData: onData,
     fetchEvents: fetchEvents,
-    toEvent: toEvent
+    toEvent: toEvent,
+    getConfig: getConfig
   };
 })(window);

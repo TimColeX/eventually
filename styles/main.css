@@ -62,6 +62,22 @@ body {
   opacity: 0; transition: opacity .2s; pointer-events: none;
   box-shadow: var(--shadow);
 }
+/* Subtle "loading live events" hint while the globe waits for the backend. */
+#globe-loading {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  z-index: 18; display: none; align-items: center; gap: 9px;
+  padding: 9px 16px; border-radius: 999px;
+  background: rgba(33,26,21,0.72); color: var(--cream);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+  pointer-events: none; box-shadow: var(--shadow);
+}
+#globe-loading.show { display: inline-flex; }
+#globe-loading .gl-dots { display: inline-flex; gap: 4px; }
+#globe-loading .gl-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--clay); opacity: .4; animation: glPulse 1s infinite; }
+#globe-loading .gl-dots i:nth-child(2) { animation-delay: .15s; }
+#globe-loading .gl-dots i:nth-child(3) { animation-delay: .3s; }
+@keyframes glPulse { 0%,100% { opacity: .3; } 50% { opacity: 1; } }
 
 /* ---------- top bar ---------- */
 .topbar {
@@ -350,9 +366,15 @@ body {
 .co-card-h { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); margin-bottom: 14px; }
 .co-form label { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 14px; }
 .co-form input, .co-form select, .co-form textarea {
-  display: block; width: 100%; margin-top: 6px; padding: 11px 13px; border-radius: 11px;
+  display: block; width: 100%; max-width: 100%; min-width: 0; margin-top: 6px;
+  padding: 11px 13px; border-radius: 11px;
   background: #faf3ea; border: 1px solid var(--line-2); color: var(--ink);
-  font-family: var(--font); font-size: 14px; outline: none; resize: vertical;
+  font-family: var(--font); font-size: 16px; outline: none; resize: vertical;
+}
+/* iOS renders date/time inputs at an intrinsic width that can overflow the card;
+   normalise their appearance so they respect width:100% + box-sizing. */
+.co-form input[type="date"], .co-form input[type="time"] {
+  -webkit-appearance: none; appearance: none;
 }
 .co-form input:focus, .co-form select:focus, .co-form textarea:focus { border-color: var(--clay); background: #fff; }
 .f-banner span { font-size: 12.5px; color: var(--muted); }
@@ -381,6 +403,16 @@ body {
 .latlon strong { color: var(--clay); }
 .co-place { margin-top: 6px; font-size: 13px; color: var(--ink); }
 .co-place strong { color: var(--clay); font-weight: 700; }
+/* address autocomplete */
+.co-search { position: relative; }
+.co-suggest { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 30; display: none;
+  background: var(--paper); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: var(--shadow-lg);
+  overflow: hidden; max-height: 240px; overflow-y: auto; }
+.co-suggest.show { display: block; }
+.co-sug { display: block; width: 100%; text-align: left; padding: 10px 12px; border: 0; background: none; cursor: pointer;
+  font-family: var(--font); font-size: 13px; color: var(--ink); border-bottom: 1px solid var(--line); line-height: 1.35; }
+.co-sug:last-child { border-bottom: 0; }
+.co-sug:hover { background: #faf3ea; }
 .an-empty { color: var(--muted); font-size: 14px; }
 .an-kpis { display: flex; gap: 14px; margin-bottom: 18px; flex-wrap: wrap; }
 .kpi {
@@ -570,6 +602,18 @@ body.has-ad .toast { bottom: 144px; }
 .contact-form input, .contact-form textarea { padding: 11px 13px; border-radius: 11px; background: var(--paper); border: 1px solid var(--line-2); color: var(--ink); font-family: var(--font); font-size: 14px; outline: none; resize: vertical; }
 .contact-form input:focus, .contact-form textarea:focus { border-color: var(--clay); }
 .contact-form button[type=submit] { padding: 12px; border-radius: 11px; cursor: pointer; background: var(--clay); color: var(--cream); border: 0; font-family: var(--font); font-weight: 700; font-size: 14px; }
+/* Complete-your-profile step */
+.ps-form label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 13px; }
+.ps-form input { display: block; width: 100%; margin-top: 6px; padding: 11px 13px; border-radius: 11px;
+  background: var(--paper); border: 1px solid var(--line-2); color: var(--ink); font-family: var(--font); font-size: 16px; outline: none; }
+.ps-form input:focus { border-color: var(--clay); background: #fff; }
+.ps-opt { color: var(--faint); font-weight: 400; font-size: 11px; }
+.ps-fine { font-size: 11px; color: var(--hint); margin: 2px 0 16px; line-height: 1.45; }
+.ps-actions { display: flex; gap: 10px; }
+.ps-skip { flex: 0 0 auto; padding: 12px 16px; border-radius: 12px; cursor: pointer; background: var(--paper);
+  border: 1px solid var(--line-2); color: var(--muted); font-family: var(--font); font-weight: 600; }
+.ps-save { flex: 1; padding: 12px; border-radius: 12px; cursor: pointer; background: var(--clay); color: var(--cream);
+  border: 0; font-family: var(--font); font-weight: 700; font-size: 15px; }
 
 /* ---------- full event detail (dedup view) ---------- */
 .evdetail {
@@ -688,4 +732,21 @@ body.has-ad .toast { bottom: 144px; }
   body.has-ad .ai-host { bottom: 66px; }
   body.has-ad .timeline { bottom: 128px; }
   body.has-ad .globe-controls { bottom: 188px; }
+
+  /* --- Auth ("Join Eventually") card: compact + stack the magic form --- */
+  .auth-modal { padding: 24px 18px; border-radius: 18px; }
+  .auth-modal h2 { font-size: 22px; }
+  .auth-sub { font-size: 13px; margin-bottom: 16px; }
+  .magic { flex-direction: column; }
+  .magic input { font-size: 16px; }            /* 16px avoids iOS focus-zoom */
+  .magic button { padding: 13px; width: 100%; }
+
+  /* --- Coordinator ("Publish to the globe"): single column, tighter cards --- */
+  .co-shell { padding: 16px 12px 44px; }
+  .co-head { margin-bottom: 16px; }
+  .co-head h2 { font-size: 22px; }
+  .co-grid { grid-template-columns: 1fr; gap: 14px; }
+  .co-card { padding: 15px; border-radius: 14px; }
+  .co-form label { margin-bottom: 12px; }
+  .map-canvas { max-height: 230px; }
 }

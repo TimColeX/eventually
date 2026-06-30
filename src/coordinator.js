@@ -22,29 +22,8 @@
     return false;
   }
 
-  /* ---- Geocoding via OpenStreetMap Nominatim (free, no key, CORS-enabled).
-   * Fair-use: ~1 req/sec — fine for manual coordinator use. Move server-side if
-   * volume grows (browsers can't set a custom User-Agent). */
-  function nomFetch(url) {
-    return fetch(url, { headers: { 'Accept': 'application/json' } })
-      .then(function (r) { return r.ok ? r.json() : null; });
-  }
-  function shortPlace(a) {
-    if (!a) return null;
-    return a.city || a.town || a.village || a.municipality || a.county || a.state || a.country || null;
-  }
-  function geocodeForward(q) {
-    return nomFetch('https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=1&q=' + encodeURIComponent(q))
-      .then(function (arr) {
-        if (!arr || !arr.length) return null;
-        const r = arr[0];
-        return { lat: +r.lat, lon: +r.lon, city: shortPlace(r.address) || (r.display_name || '').split(',')[0] };
-      });
-  }
-  function geocodeReverse(lat, lon) {
-    return nomFetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&lat=' + lat + '&lon=' + lon)
-      .then(function (j) { return j && j.address ? (shortPlace(j.address) || (j.display_name || '').split(',')[0]) : null; });
-  }
+  // Geocoding is the shared EventuallyGeo util (OpenStreetMap Nominatim).
+  const Geo = global.EventuallyGeo;
 
   function Coordinator(el, opts) {
     this.el = el;
@@ -99,7 +78,7 @@
             '<div class="co-card-h">Geolocation · drop a pin</div>' +
             '<canvas class="map-canvas"></canvas>' +
             '<div class="co-coords">' +
-              '<input class="f-addr" placeholder="Search address or city…">' +
+              '<div class="co-search"><input class="f-addr" placeholder="Search address or city…" autocomplete="off"><div class="co-suggest"></div></div>' +
               '<div class="latlon">lat <strong class="ll-lat"></strong> · lon <strong class="ll-lon"></strong></div>' +
             '<div class="co-place">📍 <strong class="ll-city">—</strong></div>' +
             '</div>' +
@@ -147,25 +126,49 @@
       self._drawMap();
       // name the dropped pin (best-effort reverse geocode)
       const at = { lat: self.pin.lat, lon: self.pin.lon };
-      geocodeReverse(at.lat, at.lon).then(function (name) {
-        if (name && self.pin.lat === at.lat && self.pin.lon === at.lon) { self.city = name; self._drawMap(); }
+      if (Geo) Geo.reverse(at.lat, at.lon).then(function (res) {
+        if (res && self.pin.lat === at.lat && self.pin.lon === at.lon) { self.city = res.city; self._drawMap(); }
       }).catch(function () {});
     });
 
-    // Real geocode: type an address / city -> coordinates (Nominatim).
-    this.el.querySelector('.f-addr').addEventListener('keydown', function (e) {
-      if (e.key !== 'Enter') return;
-      e.preventDefault();
-      const q = e.target.value.trim();
-      if (!q) return;
-      self._toast('Searching…');
-      geocodeForward(q).then(function (res) {
-        if (!res) { self._toast('No match — try a more specific address or city.'); return; }
-        self.pin.lat = res.lat; self.pin.lon = res.lon; self.city = res.city;
-        self._drawMap();
-        self._toast('📍 ' + (res.city || 'Location set'));
-      }).catch(function () { self._toast('Geocoding unavailable right now.'); });
+    // Address autocomplete: type-ahead suggestions; pick one to drop the pin
+    // (still adjustable by clicking the map). Enter picks the top suggestion.
+    const addr = this.el.querySelector('.f-addr');
+    const suggest = this.el.querySelector('.co-suggest');
+    let acTimer = null, acResults = [];
+    function hideSuggest() { suggest.classList.remove('show'); suggest.innerHTML = ''; acResults = []; }
+    function pick(res) {
+      self.pin.lat = res.lat; self.pin.lon = res.lon; self.city = res.city;
+      addr.value = res.city || (res.label || '').split(',')[0];
+      hideSuggest(); self._drawMap();
+      self._toast('📍 ' + (res.city || 'Location set'));
+    }
+    function renderSuggest() {
+      if (!acResults.length) { hideSuggest(); return; }
+      suggest.innerHTML = acResults.map(function (r, i) {
+        return '<button type="button" class="co-sug" data-i="' + i + '">📍 ' + esc(r.label || r.city) + '</button>';
+      }).join('');
+      suggest.classList.add('show');
+    }
+    addr.addEventListener('input', function () {
+      const q = addr.value.trim();
+      clearTimeout(acTimer);
+      if (q.length < 3 || !Geo) { hideSuggest(); return; }
+      acTimer = setTimeout(function () {
+        Geo.search(q, 5).then(function (rs) { acResults = rs || []; renderSuggest(); }).catch(hideSuggest);
+      }, 350);   // debounce (respects Nominatim fair-use)
     });
+    addr.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); if (acResults[0]) pick(acResults[0]); }
+      else if (e.key === 'Escape') hideSuggest();
+    });
+    suggest.addEventListener('click', function (e) {
+      const b = e.target.closest('[data-i]'); if (!b) return;
+      const r = acResults[+b.dataset.i]; if (r) pick(r);
+    });
+    document.addEventListener('click', function (e) { if (!e.target.closest('.co-search')) hideSuggest(); });
+
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (m) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[m]; }); }
 
     this.el.querySelector('.co-publish').addEventListener('click', function () {
       self._publish();
