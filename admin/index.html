@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>Eventually — Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="admin.css" />
+</head>
+<body>
+  <script>
+    // Same Supabase project as the app. Anon key is public (RLS-protected); admin
+    // access is enforced server-side by the is_admin flag + RLS policies.
+    window.EVENTUALLY_ADMIN_CONFIG = {
+      supabaseUrl: 'https://gpsetmqivzchlvyrcgld.supabase.co',
+      supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdwc2V0bXFpdnpjaGx2eXJjZ2xkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1MDM2NzcsImV4cCI6MjA5ODA3OTY3N30.a0BB-FQDh5NKFvgxeSgJ3YmeN_HYOWGLOJza29wW8KI'
+    };
+  </script>
+
+  <header class="ad-top">
+    <div class="ad-brand"><span class="ad-dots"><i></i><i></i><i></i></span> eventually <b>admin</b></div>
+    <div class="ad-user"></div>
+  </header>
+
+  <main id="ad-main">
+    <div id="ad-loading" class="ad-center">Loading…</div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="admin.js"></script>
+</body>
+</html>
