@@ -18,7 +18,20 @@
   Object.keys(D.CATEGORIES).forEach(function (c) { activeTypes[c] = true; });
   // Runtime config — admin-tunable via the app_config table; these are the code
   // defaults used until (and if) the remote config loads.
-  let RT = { spikes: { priority: 18, fair: 15, sponsored: 12 }, maxClusters: 0, adsEnabled: true, hostEnabled: true };
+  let RT = { spikes: { priority: 18, fair: 15, sponsored: 12 }, maxClusters: 0, adsEnabled: true, hostEnabled: true,
+             hostLines: null, pinned: [], hiddenCities: [], hiddenEvents: [], _hidEv: {}, _hidCity: {} };
+  function applyHidden() {
+    RT._hidEv = {}; (RT.hiddenEvents || []).forEach(function (id) { RT._hidEv[id] = 1; });
+    RT._hidCity = {}; (RT.hiddenCities || []).forEach(function (c) { RT._hidCity[String(c).toLowerCase()] = 1; });
+  }
+  // Render an admin template ("{event} in {city}") from a line's data dict.
+  function renderTemplate(tmpl, data) {
+    return String(tmpl).replace(/\{(\w+)\}/g, function (_, k) {
+      const v = data ? data[k] : null;
+      if (v == null) return '';
+      return (typeof v === 'number') ? v.toLocaleString() : String(v);
+    }).replace(/\s{2,}/g, ' ').trim();
+  }
 
   // location-popup state (declared early: the timeline fires onChange during
   // construction, which calls rerenderPlace before the popup section runs)
@@ -61,6 +74,7 @@
       const ids = c.eventIds;
       for (let k = 0; k < ids.length; k++) {
         const ev = D.getById(ids[k]);
+        if (RT._hidEv[ev.id] || RT._hidCity[(ev.city || '').toLowerCase()]) continue;   // admin-hidden
         if (!activeTypes[ev.category]) continue;
         if (interests && interests.length && interests.indexOf(ev.category) < 0) continue;
         const t = D.typeForDate(ev, selectedDate);
@@ -129,6 +143,17 @@
         if (c) { mark(c, 'fair'); f++; progress = true; }
       }
     }
+    // Admin-pinned cities ALWAYS spike, with their chosen type.
+    (RT.pinned || []).forEach(function (pin) {
+      if (!pin || !pin.city) return;
+      const key = String(pin.city).toLowerCase();
+      const c = all.find(function (x) { return x._visible > 0 && x.city && x.city.toLowerCase() === key; });
+      if (!c) return;
+      c._spike = true; c._lodMin = 0;
+      c._spikeKind = pin.type === 'sponsored' ? 'sponsored' : 'priority';
+      if (pin.type === 'sponsored') c._featured = true;
+      if (pin.type === 'editor') c._editor = true;
+    });
   }
   function highestPriorityCluster() {
     let best = null, bs = -1;
@@ -231,9 +256,22 @@
   const I18n = window.EventuallyI18n;
   new window.EventuallyAIHost(document.getElementById('ai-host'), {
     getLine: function () {                       // localize the structured line to the user's language
-      const line = narrator.next();
+      let line = narrator.next();
+      // Skip admin-disabled line types (cap attempts to avoid loops).
+      let guard = 0;
+      while (RT.hostLines && RT.hostLines[line.kind] && RT.hostLines[line.kind].on === false && guard++ < 8) {
+        line = narrator.next();
+      }
       const lang = P.get().language || 'en';
-      return { text: I18n.format(line, lang), kind: line.kind, sponsor: line.sponsor, lang: I18n.bcp(lang), rtl: I18n.isRTL(lang) };
+      const ov = RT.hostLines && RT.hostLines[line.kind];
+      let text;
+      // English admin override (skip the greeting's no-recs form — it lacks the data).
+      if (lang === 'en' && ov && ov.text && !(line.kind === 'greeting' && line.data && !line.data.hasRecs)) {
+        text = renderTemplate(ov.text, line.data || {});
+      } else {
+        text = I18n.format(line, lang);
+      }
+      return { text: text, kind: line.kind, sponsor: line.sponsor, lang: I18n.bcp(lang), rtl: I18n.isRTL(lang) };
     },
     onPlay: function () { music.start(); narrator.reset(); },   // bed on + lead with the user's area
     onPause: function () { music.stop(); },
@@ -595,6 +633,7 @@
 
     // Event matches.
     const hits = D.getEvents().filter(function (e) {
+      if (RT._hidEv[e.id] || RT._hidCity[(e.city || '').toLowerCase()]) return false;   // admin-hidden
       return (e.name + ' ' + e.city + ' ' + e.category).toLowerCase().indexOf(q) > -1;
     }).sort(function (a, b) {                 // featured events rank higher
       if (!!b.sponsored !== !!a.sponsored) return b.sponsored ? 1 : -1;
@@ -1082,6 +1121,11 @@
         if (typeof cfg.maxClusters === 'number') RT.maxClusters = cfg.maxClusters;
         if (typeof cfg.adsEnabled === 'boolean') RT.adsEnabled = cfg.adsEnabled;
         if (typeof cfg.hostEnabled === 'boolean') RT.hostEnabled = cfg.hostEnabled;
+        if (cfg.hostLines) RT.hostLines = cfg.hostLines;
+        if (cfg.pinnedLocations) RT.pinned = cfg.pinnedLocations;
+        if (cfg.hiddenCities) RT.hiddenCities = cfg.hiddenCities;
+        if (cfg.hiddenEvents) RT.hiddenEvents = cfg.hiddenEvents;
+        applyHidden();
         refreshMarkers(); applyMonetization();
       });
     }

@@ -1,5 +1,5 @@
 /* Eventually — service worker. Offline-first cache of the app shell. */
-const CACHE = 'eventually-v55';
+const CACHE = 'eventually-v56';
 const ASSETS = [
   './', './index.html', './styles/main.css',
   './src/dedup.js', './src/data.js', './src/api.js', './src/auth.js', './src/billing.js', './src/geo.js', './src/hostvoice.js', './src/landdata.js', './src/profile.js', './src/monetize.js',
@@ -26,6 +26,8 @@ self.addEventListener('fetch', (e) => {
   // Google fonts/OAuth). They must always hit the network so account/event data
   // is never served stale from the app-shell cache.
   if (new URL(e.request.url).origin !== self.location.origin) return;
+  // Never intercept the admin app (separate site) — always hit the network.
+  if (new URL(e.request.url).pathname.indexOf('/admin/') !== -1) return;
   e.respondWith(
     caches.match(e.request).then((hit) =>
       hit || fetch(e.request).then((res) => {

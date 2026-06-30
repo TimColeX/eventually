@@ -58,7 +58,7 @@
     main.innerHTML =
       '<div class="ad-tabs">' +
         tabBtn('overview', 'Overview') + tabBtn('host', 'AI Host Script') +
-        tabBtn('globe', 'Globe & Display') +
+        tabBtn('browser', 'Browser Voice') + tabBtn('globe', 'Globe & Display') +
       '</div><div id="ad-body"></div>';
     main.querySelectorAll('.ad-tab').forEach(function (b) {
       b.onclick = function () { tab = b.dataset.tab; renderDashboard(); };
@@ -66,7 +66,16 @@
     const body = document.getElementById('ad-body');
     if (tab === 'overview') renderOverview(body);
     else if (tab === 'host') renderHost(body);
+    else if (tab === 'browser') renderBrowser(body);
     else renderGlobe(body);
+  }
+
+  // Merge a partial into app_config.config and save (admin RLS).
+  function patchConfig(partial) {
+    return sb.from('app_config').select('config').eq('id', 1).maybeSingle().then(function (r) {
+      const c = Object.assign({}, (r.data && r.data.config) || {}, partial);
+      return sb.from('app_config').update({ config: c, updated_at: new Date().toISOString() }).eq('id', 1);
+    });
   }
   function tabBtn(id, label) { return '<button class="ad-tab' + (tab === id ? ' on' : '') + '" data-tab="' + id + '">' + label + '</button>'; }
 
@@ -167,12 +176,58 @@
     };
   }
 
+  /* ---------------- Browser-voice scripts (free rotation, EN) ---------------- */
+  const LINE_DEFS = [
+    { kind: 'greeting', label: 'Greeting (personalized)', tmpl: 'Good {part}, {name}. Based on your interests, I found {k} live {cat} events within {mi} miles, including {event} in {city}.', ph: '{part} {name} {k} {cat} {mi} {event} {city}' },
+    { kind: 'welcome', label: 'Worldwide pulse', tmpl: 'Welcome to Eventually. There are currently {count} live events happening worldwide.', ph: '{count}' },
+    { kind: 'spotlight', label: 'Spotlight', tmpl: 'Spinning the spotlight onto {event} in {city} — {going} people are going right now.', ph: '{event} {city} {going}' },
+    { kind: 'countdown', label: 'Countdown', tmpl: '{event} kicks off in {min} minutes in {city}.', ph: '{event} {min} {city}' },
+    { kind: 'region', label: 'Regional roundup', tmpl: '{n} major {cat} events are currently underway in {region}.', ph: '{n} {cat} {region}' },
+    { kind: 'trending', label: 'Trending', tmpl: 'Trending right now: {event} in {city}, with {likes} likes.', ph: '{event} {city} {likes}' },
+    { kind: 'tip', label: 'Tip', tmpl: 'Tap any glowing marker to see everything happening there.', ph: '(none)' }
+  ];
+  function renderBrowser(body) {
+    body.innerHTML = '<div class="ad-center">Loading…</div>';
+    sb.from('app_config').select('config').eq('id', 1).maybeSingle().then(function (r) {
+      const hl = ((r.data && r.data.config) || {}).hostLines || {};
+      let html = '<div class="ad-sec"><h2>Browser-voice Host (free)</h2>' +
+        '<p class="ad-hint">The rotating lines spoken by the free on-device voice (separate from the ElevenLabs city briefing). English; placeholders fill from live data. Untick to stop a line type playing.</p>';
+      LINE_DEFS.forEach(function (d) {
+        const cur = hl[d.kind] || {};
+        const text = cur.text != null ? cur.text : d.tmpl;
+        const on = cur.on !== false;
+        html += '<div class="ad-field" data-kind="' + d.kind + '">' +
+          '<label>' + esc(d.label) + ' <span class="ad-muted">— ' + esc(d.ph) + '</span></label>' +
+          '<textarea class="bl-text">' + esc(text) + '</textarea>' +
+          '<label class="ad-toggle" style="margin-top:6px"><input type="checkbox" class="bl-on"' + (on ? ' checked' : '') + '> Enabled</label></div>';
+      });
+      html += '<div><button class="ad-save" id="bl-save">Save scripts</button><span class="ad-saved" id="bl-msg"></span></div></div>';
+      body.innerHTML = html;
+      document.getElementById('bl-save').onclick = function () {
+        const out = {};
+        body.querySelectorAll('[data-kind]').forEach(function (f) {
+          out[f.dataset.kind] = { text: f.querySelector('.bl-text').value, on: f.querySelector('.bl-on').checked };
+        });
+        const btn = document.getElementById('bl-save'); btn.disabled = true;
+        patchConfig({ hostLines: out }).then(function (r) {
+          btn.disabled = false;
+          const m = document.getElementById('bl-msg');
+          if (r.error) { m.textContent = 'Error: ' + r.error.message; m.style.color = '#b3402a'; }
+          else { m.textContent = 'Saved ✓ (applies on next app load)'; m.style.color = '#3a7d44'; }
+        });
+      };
+    });
+  }
+
   /* ---------------- Globe & Display config ---------------- */
   function renderGlobe(body) {
     body.innerHTML = '<div class="ad-center">Loading config…</div>';
     sb.from('app_config').select('config').eq('id', 1).maybeSingle().then(function (r) {
       const c = (r.data && r.data.config) || {};
       const sp = c.spikes || { priority: 18, fair: 15, sponsored: 12 };
+      const pins = c.pinnedLocations || [];
+      const hidC = (c.hiddenCities || []).join('\n');
+      const hidE = (c.hiddenEvents || []).join('\n');
       body.innerHTML =
         '<div class="ad-sec"><h2>Globe &amp; display</h2>' +
         '<p class="ad-hint">Controls the live globe and platform toggles. Applies on next app load.</p>' +
@@ -180,13 +235,45 @@
         field('cf-pri', 'Priority spikes', sp.priority) + field('cf-fair', 'Continent-fair spikes', sp.fair) + field('cf-spon', 'Sponsored spikes', sp.sponsored) +
         '</div>' +
         '<label class="ad-toggle"><input type="checkbox" id="cf-ads"' + (c.adsEnabled === false ? '' : ' checked') + '> Show ads (non-Plus)</label>' +
-        '<label class="ad-toggle"><input type="checkbox" id="cf-host"' + (c.hostEnabled === false ? '' : ' checked') + '> AI Host enabled</label>' +
-        '<div><button class="ad-save" id="cf-save">Save config</button><span class="ad-saved" id="cf-msg"></span></div></div>';
+        '<label class="ad-toggle"><input type="checkbox" id="cf-host"' + (c.hostEnabled === false ? '' : ' checked') + '> AI Host enabled</label></div>' +
+
+        '<div class="ad-sec"><h2>Pinned locations</h2>' +
+        '<p class="ad-hint">These cities always show a spike on the globe, with the chosen style. Use the city name as it appears in events.</p>' +
+        '<div id="pin-list"></div>' +
+        '<button class="ad-save" id="pin-add" type="button" style="margin-top:6px">+ Add city</button></div>' +
+
+        '<div class="ad-sec"><h2>Hide from the globe &amp; search</h2>' +
+        '<div class="ad-field"><label>Hidden cities (one per line)</label><textarea id="cf-hidc">' + esc(hidC) + '</textarea></div>' +
+        '<div class="ad-field"><label>Hidden event IDs (one per line, e.g. tm_… or nat_…)</label><textarea id="cf-hide">' + esc(hidE) + '</textarea></div></div>' +
+
+        '<div><button class="ad-save" id="cf-save">Save all</button><span class="ad-saved" id="cf-msg"></span></div>';
+
+      // pinned rows
+      const list = document.getElementById('pin-list');
+      function pinRow(p) {
+        const row = document.createElement('div'); row.className = 'ad-row pin-row';
+        row.innerHTML = '<div class="ad-field"><input class="pin-city" placeholder="City (e.g. Toronto)" value="' + esc(p.city || '') + '"></div>' +
+          '<div class="ad-field"><select class="pin-type">' +
+          ['priority', 'sponsored', 'editor'].map(function (t) { return '<option value="' + t + '"' + (p.type === t ? ' selected' : '') + '>' + (t === 'editor' ? "Editor's Choice" : t.charAt(0).toUpperCase() + t.slice(1)) + '</option>'; }).join('') +
+          '</select></div><button class="ad-chip pin-del" type="button" style="align-self:center">remove</button>';
+        row.querySelector('.pin-del').onclick = function () { row.remove(); };
+        list.appendChild(row);
+      }
+      (pins.length ? pins : []).forEach(pinRow);
+      document.getElementById('pin-add').onclick = function () { pinRow({ city: '', type: 'priority' }); };
+
       document.getElementById('cf-save').onclick = function () {
+        const pinned = [];
+        list.querySelectorAll('.pin-row').forEach(function (row) {
+          const city = row.querySelector('.pin-city').value.trim();
+          if (city) pinned.push({ city: city, type: row.querySelector('.pin-type').value });
+        });
+        const lines = function (id) { return document.getElementById(id).value.split(/[\n,]+/).map(function (s) { return s.trim(); }).filter(Boolean); };
         const merged = Object.assign({}, c, {
           spikes: { priority: +val('cf-pri'), fair: +val('cf-fair'), sponsored: +val('cf-spon') },
           adsEnabled: document.getElementById('cf-ads').checked,
-          hostEnabled: document.getElementById('cf-host').checked
+          hostEnabled: document.getElementById('cf-host').checked,
+          pinnedLocations: pinned, hiddenCities: lines('cf-hidc'), hiddenEvents: lines('cf-hide')
         });
         const btn = document.getElementById('cf-save'); btn.disabled = true;
         sb.from('app_config').update({ config: merged, updated_at: new Date().toISOString() }).eq('id', 1).then(function (r) {
