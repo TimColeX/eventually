@@ -12,7 +12,9 @@
     this.onPause = opts.onPause || function () {};
     this.onSpeakStart = opts.onSpeakStart || function () {};
     this.onSpeakEnd = opts.onSpeakEnd || function () {};
-    this.synth = opts.synth || null;       // (text, lang, kind) -> Promise<url|null> (ElevenLabs, Plus)
+    this.synth = opts.synth || null;       // (text, lang, kind) -> Promise<url|null> (legacy per-line)
+    this.getBriefing = opts.getBriefing || null;  // () -> Promise<{url,text}|null> (shared city briefing)
+    this.getOpener = opts.getOpener || null;      // () -> { text, lang, rtl } (personalized, browser voice)
     this._audio = new Audio();             // reusable element for premium-voice playback
     this._audio.preload = 'auto'; this._audio.setAttribute('playsinline', '');
     this.speaking = false;
@@ -54,33 +56,71 @@
     this.el.querySelector('.ah-play').addEventListener('click', function () { self.toggle(); });
   };
 
-  AIHost.prototype._rotate = function () {
-    if (!this.getLine) return;
-    const line = this.getLine();
-    if (!line) return;
+  // Update the caption (no audio). Shared by line rotation + briefing mode.
+  AIHost.prototype._showCaption = function (line) {
     this.current = line;
-    this._lang = line.lang || 'en-US';                 // BCP-47 for the utterance
     this.sponEl.style.display = line.kind === 'sponsor' ? '' : 'none';
     this.el.querySelector('.ah-caption').classList.toggle('is-sponsor', line.kind === 'sponsor');
     this.textEl.setAttribute('dir', line.rtl ? 'rtl' : 'ltr');   // Arabic etc.
-    // fade swap
     this.textEl.style.opacity = 0;
     const self = this;
     setTimeout(function () { self.textEl.textContent = line.text; self.textEl.style.opacity = 1; }, 180);
+  };
+
+  // After a spoken segment: swell music back, then leave a ~GAP before the next.
+  AIHost.prototype._afterSegment = function () {
+    clearInterval(this._ampTimer);
+    this.onSpeakEnd();
+    if (!this.speaking) return;
+    const self = this;
+    clearTimeout(this._gapTimer);
+    this._gapTimer = setTimeout(function () { if (self.speaking) self._rotate(); }, this._jitter(this.GAP, 2500));
+  };
+
+  AIHost.prototype._rotate = function () {
+    if (!this.getLine) return;
+    const self = this;
+    // Briefing mode (Plus): a personalized opener in the browser voice, then the
+    // SHARED, cached city briefing in the premium voice (cost-optimized "radio").
+    if (this.speaking && this.getBriefing) {
+      if (!this._openerDone) {
+        this._openerDone = true;
+        const op = this.getOpener ? this.getOpener() : null;
+        if (op && op.text) {
+          this._showCaption({ text: op.text, kind: 'greeting', lang: op.lang, rtl: op.rtl });
+          this._lang = op.lang || 'en-US';
+          this._browserSpeak(op.text, function () { if (self.speaking) self._rotate(); });
+          return;
+        }
+      }
+      this.getBriefing().then(function (b) {
+        if (!self.speaking) return;
+        if (b && b.url) {
+          self._showCaption({ text: b.text, kind: 'briefing', lang: 'en-US' });
+          self._audioSpeak(b.url, b.text, self._afterSegment.bind(self));
+        } else {
+          self._rotateLine();    // not Plus / unavailable → free browser rotation
+        }
+      }).catch(function () { self._rotateLine(); });
+      return;
+    }
+    this._rotateLine();
+  };
+
+  // Classic per-line rotation (free browser voice, or per-line synth if provided).
+  AIHost.prototype._rotateLine = function () {
+    const line = this.getLine();
+    if (!line) return;
+    this._lang = line.lang || 'en-US';                 // BCP-47 for the utterance
+    this._showCaption(line);
     if (this.speaking) this._speakAndContinue(line.text);
   };
 
-  // Speak one segment, then leave a ~GAP of music before advancing to the next.
-  // Premium (ElevenLabs) voice for eligible Plus lines; otherwise the browser voice.
+  // Speak one line, then a music GAP. Premium per-line synth if `synth` is set
+  // (legacy path), otherwise the free browser voice.
   AIHost.prototype._speakAndContinue = function (text) {
     const self = this;
-    function afterSegment() {
-      clearInterval(self._ampTimer);
-      self.onSpeakEnd();                                   // swell music back up
-      if (!self.speaking) return;
-      clearTimeout(self._gapTimer);
-      self._gapTimer = setTimeout(function () { if (self.speaking) self._rotate(); }, self._jitter(self.GAP, 2500));
-    }
+    const afterSegment = this._afterSegment.bind(this);
     const kind = this.current && this.current.kind;
     if (this.synth) {
       this.synth(text, this._lang, kind).then(function (url) {
@@ -138,6 +178,7 @@
 
   AIHost.prototype.play = function () {
     this.speaking = true;
+    this._openerDone = false;              // personalized opener plays once per session
     this.icPlay.style.display = 'none';
     this.icPause.style.display = '';
     this._unlockSpeech();                   // MUST run inside the tap to enable mobile TTS

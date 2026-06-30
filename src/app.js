@@ -6,7 +6,12 @@
   const D = window.EventuallyData;
   const P = window.EventuallyProfile;
   const M = window.EventuallyMonetize;
-  let user = P.get().name ? { name: P.get().name, provider: 'saved' } : null;
+  const A = window.EventuallyAuth;
+  const authReal = !!(A && A.enabled);
+  // With real auth on, signed-in state comes ONLY from a live Supabase session
+  // (set in onChange) — never from cached localStorage. This avoids showing a
+  // false "signed in / Plus" before (or without) a verified session.
+  let user = (!authReal && P.get().name) ? { name: P.get().name, provider: 'saved' } : null;
   let selectedDate = D.TODAY;
   let interestFilterActive = false;     // Plus "advanced filtering"
   const activeTypes = {};               // "Event types" globe filter (all on by default)
@@ -14,8 +19,6 @@
   // Runtime config — admin-tunable via the app_config table; these are the code
   // defaults used until (and if) the remote config loads.
   let RT = { spikes: { priority: 18, fair: 15, sponsored: 12 }, maxClusters: 0, adsEnabled: true, hostEnabled: true };
-  // "Key moment" line kinds that use the premium ElevenLabs voice (Plus only).
-  const HOST_VOICE_KINDS = ['greeting', 'spotlight', 'countdown', 'welcome'];
 
   // location-popup state (declared early: the timeline fires onChange during
   // construction, which calls rerenderPlace before the popup section runs)
@@ -236,13 +239,23 @@
     onPause: function () { music.stop(); },
     onSpeakStart: function () { music.duck(true); },   // duck under the voice
     onSpeakEnd: function () { music.duck(false); },    // swell between segments
-    // Premium voice (ElevenLabs) — Plus-only, "key moment" lines only; returns an
-    // audio URL or null (→ the host uses the free browser voice).
-    synth: function (text, lang, kind) {
+    // Cost-optimized "radio" model: a SHARED, cached ElevenLabs briefing per city
+    // (Plus only). null → the host uses the free browser-voice rotation.
+    getBriefing: function () {
       if (!window.EventuallyHostVoice || !window.EventuallyHostVoice.enabled) return Promise.resolve(null);
       if (!P.get().plus) return Promise.resolve(null);
-      if (HOST_VOICE_KINDS.indexOf(kind) < 0) return Promise.resolve(null);
-      return window.EventuallyHostVoice.synthesize(text, lang);
+      const loc = P.get().location;
+      const city = (loc && loc.city) ? loc.city : null;   // null → worldwide briefing
+      return window.EventuallyHostVoice.getBriefing(city, P.get().language || 'en');
+    },
+    // Personalized opener spoken in the FREE browser voice (no ElevenLabs cost).
+    getOpener: function () {
+      if (!P.get().plus) return null;
+      const p = P.get();
+      const h = new Date().getHours();
+      const part = h < 12 ? 'morning' : (h < 18 ? 'afternoon' : 'evening');
+      return { text: 'Good ' + part + (p.name ? ', ' + p.name : '') + ". Here's your Eventually briefing.",
+               lang: 'en-US', rtl: false };
     }
   });
 
@@ -289,8 +302,7 @@
 
   authEl.querySelector('.auth-close').addEventListener('click', closeAuth);
   authEl.querySelector('.auth-backdrop').addEventListener('click', closeAuth);
-  const A = window.EventuallyAuth;
-  const authReal = !!(A && A.enabled);
+  // (A / authReal are declared at the top of the IIFE.)
   authEl.querySelectorAll('[data-sso]').forEach(function (b) {
     b.addEventListener('click', function () {
       const provider = b.dataset.sso;
@@ -725,6 +737,27 @@
     profileEl.querySelector('.pf-filter').style.display = p.plus ? '' : 'none';
     profileEl.querySelector('.pf-plus-btn').textContent = p.plus ? 'Cancel Plus (demo)' : 'Go Plus — $7/mo';
     profileEl.querySelector('.pf-logout').style.display = user ? '' : 'none';
+    renderIdentities();
+  }
+  // Show linked sign-in methods + let the user attach Google to this account so
+  // Google and the magic link open ONE account (real auth only).
+  function renderIdentities() {
+    const sec = profileEl.querySelector('.pf-identities');
+    if (!sec) return;
+    if (!authReal || !user) { sec.style.display = 'none'; return; }
+    sec.style.display = '';
+    const list = sec.querySelector('.pf-id-list');
+    list.innerHTML = '<span class="pf-id-loading">…</span>';
+    A.listIdentities().then(function (ids) {
+      const have = {}; ids.forEach(function (i) { have[i.provider] = true; });
+      let h = ids.map(function (i) {
+        const label = i.provider === 'google' ? 'Google' : (i.provider === 'email' ? 'Email magic link' : i.provider);
+        return '<div class="pf-id-row"><span>✓ ' + esc(label) + '</span></div>';
+      }).join('');
+      if (!have.google) h += '<button class="pf-id-link" data-link="google">Connect Google</button>';
+      else if (!have.email) h += '<p class="pf-hint">Tip: sign in with the email magic link to add it too.</p>';
+      list.innerHTML = h || '<span class="pf-id-loading">No methods found.</span>';
+    }).catch(function () { list.innerHTML = '<span class="pf-id-loading">Could not load methods.</span>'; });
   }
   function refreshProfile() { if (profileEl.classList.contains('open')) renderProfile(); }
   function openProfile() { profileEl.classList.add('open'); renderProfile(); }
@@ -745,6 +778,14 @@
       const ev = D.getById(rec.dataset.id);
       profileEl.classList.remove('open'); globe.flyTo(ev.lat, ev.lon);
       setTimeout(function () { openEvent(ev.id); }, 600);
+      return;
+    }
+    const link = e.target.closest('.pf-id-link');
+    if (link && link.dataset.link === 'google' && authReal) {
+      window.EventuallyToast('Opening Google to link it to this account…');
+      A.linkGoogle().then(function (r) {
+        if (r && r.error) window.EventuallyToast('Could not link Google: ' + r.error.message);
+      });
     }
   });
   profileEl.querySelector('.pf-plus-btn').addEventListener('click', goPlus);
@@ -976,7 +1017,10 @@
   if (authReal) {
     A.onChange(function (u) {
       if (!u) {
-        const was = user; user = null; renderMenuTrigger(); refreshProfile();
+        const was = user; user = null;
+        // Plus is account-bound — never leave a cached Plus state active without a session.
+        if (P.get().plus) { P.setPlus(false); applyMonetization(); }
+        renderMenuTrigger(); refreshProfile();
         if (was) window.EventuallyToast('Signed out.');
         return;
       }

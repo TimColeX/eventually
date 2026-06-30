@@ -45,6 +45,20 @@
     },
     signOut: function () { return sb.auth.signOut(); },
 
+    // ---- identity linking (so Google + email open one account) ----
+    // List the providers currently attached to the signed-in account.
+    listIdentities: function () {
+      if (!sb.auth.getUserIdentities) return Promise.resolve([]);
+      return sb.auth.getUserIdentities()
+        .then(function (r) { return (r && r.data && r.data.identities) || []; })
+        .catch(function () { return []; });
+    },
+    // Attach Google to the current account (requires Manual Linking enabled in Supabase).
+    linkGoogle: function () {
+      if (!sb.auth.linkIdentity) return Promise.resolve({ error: { message: 'Linking not supported' } });
+      return sb.auth.linkIdentity({ provider: 'google', options: { redirectTo: redirectTo() } });
+    },
+
     // ---- account data ----
     getProfile: function () {
       if (!currentUser) return Promise.resolve(null);
