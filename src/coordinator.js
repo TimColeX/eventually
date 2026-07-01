@@ -27,12 +27,17 @@
 
   function Coordinator(el, opts) {
     this.el = el;
-    this.onPublish = opts.onPublish;       // (eventObj) -> void
+    this.onPublish = opts.onPublish;       // (eventObj) -> Promise<bool>
+    this.onUpdate = opts.onUpdate;         // (eventObj) -> Promise<bool>  (edit existing)
+    this.onDelete = opts.onDelete;         // (eventId) -> Promise<bool>
+    this.onSetPublished = opts.onSetPublished; // (eventId, bool) -> Promise
+    this.getCreatorStats = opts.getCreatorStats; // () -> Promise<[{event_id,title,...,saves,likes,attends,published}]>
     this.onFlyTo = opts.onFlyTo;           // (lat, lon) -> void
-    this.getMyEvents = opts.getMyEvents;   // () -> [events]
+    this.getMyEvents = opts.getMyEvents;   // () -> [events]  (demo fallback)
     this.pin = { lat: 48.85, lon: 2.35 };  // default Paris
     this.banner = ['#CB5A3C', '#8A3B1E'];
     this.city = null;                       // resolved place name (geocoded)
+    this.editId = null;                     // set when editing an existing event
     this._build();
   }
 
@@ -54,6 +59,7 @@
         '</header>' +
         '<div class="co-grid">' +
           '<section class="co-card co-form">' +
+            '<div class="co-card-h co-form-h">Publish a new event</div>' +
             '<label>Event name<input class="f-name" placeholder="Midnight Rooftop Sessions"></label>' +
             '<label>Category' +
               '<select class="f-cat">' + Object.keys(global.EventuallyData.CATEGORIES)
@@ -71,6 +77,7 @@
               '<small>Premium placement — distinct highlight, a spike, and top of search. Billed via Eventually Plus.</small></span>' +
             '</label>' +
             '<button class="co-publish">Publish event ✦</button>' +
+            '<button class="co-cancel-edit" type="button" style="display:none">Cancel edit</button>' +
             '<p class="co-note">Your event is geo-located and published live to the globe.</p>' +
           '</section>' +
 
@@ -85,7 +92,7 @@
           '</section>' +
 
           '<section class="co-card co-analytics">' +
-            '<div class="co-card-h">Your engagement</div>' +
+            '<div class="co-card-h">My events &amp; engagement</div>' +
             '<div class="an-body"></div>' +
           '</section>' +
         '</div>' +
@@ -173,6 +180,20 @@
     this.el.querySelector('.co-publish').addEventListener('click', function () {
       self._publish();
     });
+    this.el.querySelector('.co-cancel-edit').addEventListener('click', function () { self._resetForm(); });
+
+    // My-events list actions (edit / publish-toggle / delete)
+    this.el.querySelector('.an-body').addEventListener('click', function (e) {
+      const b = e.target.closest('[data-me-act]'); if (!b) return;
+      const id = b.dataset.id, act = b.dataset.meAct;
+      const ev = (self._myEvents || []).find(function (x) { return x.event_id === id; });
+      if (act === 'edit') { if (ev) self._editEvent(ev); }
+      else if (act === 'toggle') { if (self.onSetPublished) Promise.resolve(self.onSetPublished(id, !(ev && ev.published !== false))).then(function () { self._renderAnalytics(); }); }
+      else if (act === 'delete') {
+        if (!confirm('Delete "' + (ev ? ev.title : 'this event') + '" permanently? This cannot be undone.')) return;
+        if (self.onDelete) Promise.resolve(self.onDelete(id)).then(function () { if (self.editId === id) self._resetForm(); self._renderAnalytics(); });
+      }
+    });
   };
 
   Coordinator.prototype._publish = function () {
@@ -189,8 +210,9 @@
     if (dayOffset < 0) { this._toast('Pick a date from today onward.'); return; }
     if (dayOffset > 60) { this._toast('Events can be up to 60 days ahead.'); return; }
     const url = q('.f-url').value.trim();
-    const id = 'nat_' + (global.crypto && crypto.randomUUID ? crypto.randomUUID()
-      : (Date.now() + '_' + Math.random().toString(36).slice(2)));
+    const editing = !!this.editId;
+    const id = this.editId || ('nat_' + (global.crypto && crypto.randomUUID ? crypto.randomUUID()
+      : (Date.now() + '_' + Math.random().toString(36).slice(2))));
 
     const evt = {
       id: id, name: name, city: this.city || 'Dropped pin', lat: this.pin.lat, lon: this.pin.lon,
@@ -205,18 +227,48 @@
       _mine: true
     };
     const btn = this.el.querySelector('.co-publish');
-    btn.disabled = true; btn.textContent = 'Publishing…';
-    Promise.resolve(this.onPublish(evt)).then(function (ok) {
-      btn.disabled = false; btn.textContent = 'Publish event ✦';
-      if (!ok) return;   // onPublish already reported the failure
-      self._toast('Published! ' + name + ' is now live on the globe.');
+    btn.disabled = true; btn.textContent = editing ? 'Saving…' : 'Publishing…';
+    const action = editing && this.onUpdate ? this.onUpdate(evt) : this.onPublish(evt);
+    Promise.resolve(action).then(function (ok) {
+      btn.disabled = false;
+      if (!ok) { btn.textContent = editing ? 'Update event' : 'Publish event ✦'; return; }
+      self._toast(editing ? 'Saved changes to ' + name + '.' : 'Published! ' + name + ' is now live on the globe.');
       if (self.onFlyTo) self.onFlyTo(evt.lat, evt.lon);
-      q('.f-name').value = ''; q('.f-desc').value = ''; q('.f-url').value = ''; q('.f-feature').checked = false;
+      self._resetForm();
       self._renderAnalytics();
     }).catch(function () {
-      btn.disabled = false; btn.textContent = 'Publish event ✦';
-      self._toast('Publish failed — please try again.');
+      btn.disabled = false; btn.textContent = editing ? 'Update event' : 'Publish event ✦';
+      self._toast((editing ? 'Save' : 'Publish') + ' failed — please try again.');
     });
+  };
+
+  // Reset the form to "create" mode.
+  Coordinator.prototype._resetForm = function () {
+    const q = function (s) { return this.el.querySelector(s); }.bind(this);
+    this.editId = null; this.city = null;
+    q('.f-name').value = ''; q('.f-desc').value = ''; q('.f-url').value = '';
+    if (q('.f-feature')) q('.f-feature').checked = false;
+    q('.co-publish').textContent = 'Publish event ✦';
+    const h = this.el.querySelector('.co-form-h'); if (h) h.textContent = 'Publish a new event';
+    const cancel = this.el.querySelector('.co-cancel-edit'); if (cancel) cancel.style.display = 'none';
+    this._drawMap();
+  };
+
+  // Load an event into the form for editing.
+  Coordinator.prototype._editEvent = function (ev) {
+    const q = function (s) { return this.el.querySelector(s); }.bind(this);
+    this.editId = ev.event_id;
+    q('.f-name').value = ev.title || '';
+    q('.f-cat').value = ev.category || q('.f-cat').value;
+    if (ev.start_time) { const d = new Date(ev.start_time); q('.f-date').value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+    q('.f-desc').value = ev.description || '';
+    q('.f-url').value = ev.url || '';
+    this.pin = { lat: +ev.lat, lon: +ev.lon }; this.city = ev.city || null;
+    q('.co-publish').textContent = 'Update event';
+    const h = this.el.querySelector('.co-form-h'); if (h) h.textContent = 'Editing: ' + (ev.title || 'event');
+    const cancel = this.el.querySelector('.co-cancel-edit'); if (cancel) cancel.style.display = '';
+    this._drawMap();
+    this.el.querySelector('.co-shell').scrollTop = 0;
   };
 
   Coordinator.prototype._drawMap = function () {
@@ -256,35 +308,48 @@
   };
 
   Coordinator.prototype._renderAnalytics = function () {
-    const mine = (this.getMyEvents && this.getMyEvents()) || [];
-    const body = this.el.querySelector('.an-body');
-    if (!mine.length) {
-      body.innerHTML = '<p class="an-empty">No events yet. Publish one to see live likes, clicks and attendees here.</p>';
-      return;
+    const self = this, body = this.el.querySelector('.an-body');
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>]/g, function (m) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[m]; }); }
+    function draw(rows, real) {
+      self._myEvents = rows;
+      if (!rows.length) {
+        body.innerHTML = '<p class="an-empty">' + (real === false
+          ? 'Sign in to publish and manage your events here.'
+          : 'No events yet. Publish one to see it here with likes, saves and attendees.') + '</p>';
+        return;
+      }
+      const sum = function (k) { return rows.reduce(function (a, e) { return a + (+e[k] || 0); }, 0); };
+      let html = '<div class="an-kpis">' +
+        kpi('Saves', sum('saves'), '#CB5A3C') + kpi('Likes', sum('likes'), '#8A3B1E') + kpi('Attending', sum('attends'), '#B5722F') +
+        '</div><div class="an-list">';
+      rows.forEach(function (e) {
+        const pub = e.published !== false;
+        html += '<div class="an-row2">' +
+          '<div class="an-r-main"><strong>' + esc(e.title) + '</strong>' +
+          (pub ? '' : ' <span class="an-badge">unpublished</span>') +
+          '<small>' + esc(e.city || '') + ' · ★ ' + (+e.saves || 0) + ' · ♥ ' + (+e.likes || 0) + ' · ✓ ' + (+e.attends || 0) + ' going</small></div>' +
+          '<div class="an-r-actions">' +
+            '<button class="an-act" data-me-act="edit" data-id="' + esc(e.event_id) + '">Edit</button>' +
+            '<button class="an-act" data-me-act="toggle" data-id="' + esc(e.event_id) + '">' + (pub ? 'Unpublish' : 'Publish') + '</button>' +
+            '<button class="an-act an-danger" data-me-act="delete" data-id="' + esc(e.event_id) + '">Delete</button>' +
+          '</div></div>';
+      });
+      body.innerHTML = html + '</div>';
     }
-    const totL = mine.reduce(function (a, e) { return a + e.likes; }, 0);
-    const totA = mine.reduce(function (a, e) { return a + e.attending; }, 0);
-    const totC = mine.reduce(function (a, e) { return a + e.clicks; }, 0);
-    let html =
-      '<div class="an-kpis">' +
-        kpi('Likes', totL, '#CB5A3C') + kpi('Attending', totA, '#8A3B1E') +
-        kpi('Link clicks', totC, '#B5722F') +
-      '</div><div class="an-list">';
-    const max = Math.max.apply(null, mine.map(function (e) { return e.likes + e.attending + 1; }));
-    mine.forEach(function (e) {
-      const v = (e.likes + e.attending) / max * 100;
-      html += '<div class="an-row"><span>' + esc(e.name) + '</span>' +
-        '<div class="an-bar"><i style="width:' + v + '%"></i></div>' +
-        '<small>' + e.likes + '♥ · ' + e.attending + ' going</small></div>';
-    });
-    html += '</div>';
-    body.innerHTML = html;
+    function kpi(label, val, col) { return '<div class="kpi"><strong style="color:' + col + '">' + (val || 0).toLocaleString() + '</strong><span>' + label + '</span></div>'; }
 
-    function kpi(label, val, col) {
-      return '<div class="kpi"><strong style="color:' + col + '">' + val.toLocaleString() +
-        '</strong><span>' + label + '</span></div>';
+    body.innerHTML = '<p class="an-empty">Loading your events…</p>';
+    if (this.getCreatorStats) {
+      this.getCreatorStats().then(function (rows) {
+        if (rows && rows.length) return draw(rows, true);
+        // no backend rows → demo fallback (local _mine events)
+        const mine = (self.getMyEvents && self.getMyEvents()) || [];
+        draw(mine.map(function (e) { return { event_id: e.id, title: e.name, city: e.city, published: true, saves: 0, likes: e.likes, attends: e.attending, start_time: e.date && e.date.toISOString(), description: e.description, category: e.category, lat: e.lat, lon: e.lon, url: e.ticketUrl }; }), false);
+      }).catch(function () { draw([], false); });
+    } else {
+      const mine = (this.getMyEvents && this.getMyEvents()) || [];
+      draw(mine.map(function (e) { return { event_id: e.id, title: e.name, city: e.city, published: true, saves: 0, likes: e.likes, attends: e.attending }; }), true);
     }
-    function esc(s) { return s.replace(/[&<>]/g, function (m) { return ({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]; }); }
   };
 
   Coordinator.prototype._toast = function (msg) {

@@ -85,7 +85,7 @@
         city: evt.city || null, country: evt.country || null, lat: evt.lat, lon: evt.lon,
         // When billing is live, featuring is granted server-side only (free quota
         // RPC or paid webhook) — never trust the client to self-feature.
-        display_source: 'native', is_native: true,
+        display_source: 'native', is_native: true, published: true,
         sponsored: (global.EventuallyBilling && global.EventuallyBilling.enabled) ? false : !!evt.sponsored,
         popularity: 0.4, image_url: null, source_count: 1,
         cheapest_source_id: null, created_by: currentUser.id
@@ -103,6 +103,30 @@
     myEvents: function () {
       if (!currentUser) return Promise.resolve([]);
       return sb.rpc('my_events').then(function (r) { return (r && r.data) || []; });
+    },
+    // ---- creator tools: edit / unpublish / delete + per-event stats ----
+    updateEvent: function (evt) {
+      if (!currentUser) return Promise.resolve({ error: { message: 'Not signed in' } });
+      return sb.from('events').update({
+        title: evt.name, description: evt.description || null, category: evt.category,
+        start_time: evt.date.toISOString(), city: evt.city || null, lat: evt.lat, lon: evt.lon
+      }).eq('event_id', evt.id).eq('created_by', currentUser.id).then(logErr('updateEvent')).then(function (r) {
+        if (r && r.error) return r;
+        return sb.from('event_sources').update({ url: evt.ticketUrl || null, last_updated: new Date().toISOString() })
+          .eq('event_id', evt.id).then(logErr('updateEvent source'));
+      });
+    },
+    deleteEvent: function (eventId) {
+      if (!currentUser) return Promise.resolve({ error: { message: 'Not signed in' } });
+      return sb.from('events').delete().eq('event_id', eventId).eq('created_by', currentUser.id).then(logErr('deleteEvent'));
+    },
+    setPublished: function (eventId, on) {
+      if (!currentUser) return Promise.resolve();
+      return sb.from('events').update({ published: !!on }).eq('event_id', eventId).eq('created_by', currentUser.id).then(logErr('setPublished'));
+    },
+    creatorStats: function () {
+      if (!currentUser) return Promise.resolve([]);
+      return sb.rpc('creator_event_stats').then(function (r) { return (r && r.data) || []; });
     },
     // Try to feature an event using the Plus monthly free quota (server-checked).
     // Returns { ok, remaining } or { ok:false, reason }.

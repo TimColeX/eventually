@@ -305,6 +305,13 @@
     updateStats();
     timeline._drawSpark();
   }
+  // Re-fetch live events from the backend and repaint (after edit/unpublish/delete).
+  function refreshLiveEvents() {
+    if (!(window.EventuallyAPI && window.EventuallyAPI.config.remote)) return Promise.resolve();
+    return window.EventuallyAPI.fetchEvents({}).then(function (evs) {
+      if (evs) { D.replaceAll(evs); markMine(); globe.setClusters(D.getClusters()); refreshMarkers(); updateStats(); rerenderPlace(); if (timeline && timeline._drawSpark) timeline._drawSpark(); }
+    }).catch(function () {});
+  }
   const coordinator = new window.EventuallyCoordinator(document.getElementById('coordinator'), {
     // Returns a Promise<boolean>: true = published. When signed in we write the
     // native event to Supabase (attributed to the user); otherwise demo/local only.
@@ -318,6 +325,32 @@
         });
       }
       evt._mine = true; addPublishedLocally(evt); return Promise.resolve(true);
+    },
+    onUpdate: function (evt) {
+      if (!acctEnabled()) return Promise.resolve(false);
+      return A.updateEvent(evt).then(function (r) {
+        if (r && r.error) { window.EventuallyToast('Update failed: ' + r.error.message); return false; }
+        return refreshLiveEvents().then(function () { return true; });
+      });
+    },
+    onDelete: function (id) {
+      if (!acctEnabled()) return Promise.resolve(false);
+      return A.deleteEvent(id).then(function (r) {
+        if (r && r.error) { window.EventuallyToast('Delete failed: ' + r.error.message); return false; }
+        window.EventuallyToast('Event deleted.');
+        return refreshLiveEvents().then(function () { return true; });
+      });
+    },
+    onSetPublished: function (id, on) {
+      if (!acctEnabled()) return Promise.resolve(false);
+      return A.setPublished(id, on).then(function () {
+        window.EventuallyToast(on ? 'Event published.' : 'Event unpublished (hidden from the globe).');
+        return refreshLiveEvents().then(function () { return true; });
+      });
+    },
+    getCreatorStats: function () {
+      if (!acctEnabled()) return Promise.resolve([]);
+      return A.creatorStats();
     },
     onFlyTo: function (lat, lon) { coordinator.close(); globe.flyTo(lat, lon); },
     getMyEvents: function () {

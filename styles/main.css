@@ -425,6 +425,19 @@ body {
 .an-bar { height: 8px; border-radius: 99px; background: #efe4d4; overflow: hidden; }
 .an-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--clay), var(--apricot)); border-radius: 99px; }
 .an-row small { color: var(--faint); white-space: nowrap; font-family: var(--mono); font-size: 11px; }
+/* My-events management rows */
+.an-row2 { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.an-row2:last-child { border-bottom: 0; }
+.an-r-main { min-width: 0; }
+.an-r-main strong { font-size: 14px; }
+.an-r-main small { display: block; color: var(--faint); font-family: var(--mono); font-size: 11px; margin-top: 3px; }
+.an-badge { font-family: var(--mono); font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--ember); background: #f0e0d8; border-radius: 5px; padding: 2px 5px; }
+.an-r-actions { display: flex; gap: 6px; flex: none; }
+.an-act { padding: 6px 11px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--paper); color: var(--ink); font-family: var(--font); font-size: 12px; font-weight: 600; cursor: pointer; }
+.an-act:hover { border-color: var(--clay); }
+.an-danger { color: #b3402a; }
+.an-danger:hover { border-color: #b3402a; background: rgba(179,64,42,.06); }
+.co-cancel-edit { width: 100%; margin-top: 8px; padding: 11px; border-radius: 12px; cursor: pointer; background: var(--paper); border: 1px solid var(--line-2); color: var(--muted); font-family: var(--font); font-weight: 600; font-size: 13px; }
 
 /* ---------- toast ---------- */
 .toast {
