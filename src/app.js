@@ -19,7 +19,8 @@
   // Runtime config — admin-tunable via the app_config table; these are the code
   // defaults used until (and if) the remote config loads.
   let RT = { spikes: { priority: 18, fair: 15, sponsored: 12 }, maxClusters: 0, adsEnabled: true, hostEnabled: true,
-             hostLines: null, pinned: [], hiddenCities: [], hiddenEvents: [], _hidEv: {}, _hidCity: {} };
+             hostLines: null, hostVoice: { rate: 0.98, pitch: 1.0 },
+             pinned: [], hiddenCities: [], hiddenEvents: [], _hidEv: {}, _hidCity: {} };
   function applyHidden() {
     RT._hidEv = {}; (RT.hiddenEvents || []).forEach(function (id) { RT._hidEv[id] = 1; });
     RT._hidCity = {}; (RT.hiddenCities || []).forEach(function (c) { RT._hidCity[String(c).toLowerCase()] = 1; });
@@ -294,7 +295,9 @@
       const part = h < 12 ? 'morning' : (h < 18 ? 'afternoon' : 'evening');
       return { text: 'Good ' + part + (p.name ? ', ' + p.name : '') + ". Here's your Eventually briefing.",
                lang: 'en-US', rtl: false };
-    }
+    },
+    // Admin-tunable delivery for the free browser voice (rate/pitch).
+    getVoiceSettings: function () { return RT.hostVoice || {}; }
   });
 
   /* ---------- coordinator portal ---------- */
@@ -1155,6 +1158,7 @@
         if (typeof cfg.adsEnabled === 'boolean') RT.adsEnabled = cfg.adsEnabled;
         if (typeof cfg.hostEnabled === 'boolean') RT.hostEnabled = cfg.hostEnabled;
         if (cfg.hostLines) RT.hostLines = cfg.hostLines;
+        if (cfg.hostVoice) RT.hostVoice = Object.assign({}, RT.hostVoice, cfg.hostVoice);
         if (cfg.pinnedLocations) RT.pinned = cfg.pinnedLocations;
         if (cfg.hiddenCities) RT.hiddenCities = cfg.hiddenCities;
         if (cfg.hiddenEvents) RT.hiddenEvents = cfg.hiddenEvents;

@@ -36,16 +36,16 @@
 
   const T = {
     en: {
-      welcome: d => `Welcome to Eventually. There are currently ${n(d.count, 'en')} live events happening worldwide.`,
+      welcome: d => `Welcome to Eventually! Right now, there are ${n(d.count, 'en')} events happening live around the world.`,
       greeting: d => d.hasRecs
-        ? `${GREET.en[d.part]}, ${nm(d, 'en')}. Based on your interests, I found ${d.k} live ${c('en', d.cat)} events within ${d.mi} miles, including ${d.event} in ${d.city}.`
-        : `${GREET.en[d.part]}, ${nm(d, 'en')}. Set your location and interests and I'll line up events made for you.`,
-      spotlight: d => `Spinning the spotlight onto ${d.event} in ${d.city} — ${n(d.going, 'en')} people are going right now.`,
-      countdown: d => `${d.event} kicks off in ${d.min} minutes in ${d.city}.`,
-      region: d => `${d.n} major ${c('en', d.cat)} events are currently underway in ${d.region}.`,
-      trending: d => `Trending right now: ${d.event} in ${d.city}, with ${n(d.likes, 'en')} likes.`,
+        ? `${GREET.en[d.part]}, ${nm(d, 'en')}! Based on what you love, I've found ${d.k} live ${c('en', d.cat)} events within ${d.mi} miles — including ${d.event}, over in ${d.city}.`
+        : `${GREET.en[d.part]}, ${nm(d, 'en')}! Set your location and a few interests, and I'll line up events made just for you.`,
+      spotlight: d => `Here's one to watch: ${d.event}, in ${d.city}. ${n(d.going, 'en')} people are heading there right now.`,
+      countdown: d => `Heads up — ${d.event} in ${d.city} kicks off in just ${d.min} minutes.`,
+      region: d => `Over in ${d.region}, ${d.n} big ${c('en', d.cat)} events are underway right now.`,
+      trending: d => `Trending tonight: ${d.event}, in ${d.city}. It's climbing fast, with ${n(d.likes, 'en')} likes.`,
       sponsor: d => `This update is brought to you by ${d.sponsor}.`,
-      tip: () => `Tap any glowing marker to see everything happening there.`
+      tip: () => `Tap any glowing marker on the globe, and you'll see everything happening there.`
     },
     es: {
       welcome: d => `Bienvenido a Eventually. Ahora mismo hay ${n(d.count, 'es')} eventos en directo en todo el mundo.`,

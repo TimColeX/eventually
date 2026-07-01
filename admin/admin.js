@@ -178,20 +178,29 @@
 
   /* ---------------- Browser-voice scripts (free rotation, EN) ---------------- */
   const LINE_DEFS = [
-    { kind: 'greeting', label: 'Greeting (personalized)', tmpl: 'Good {part}, {name}. Based on your interests, I found {k} live {cat} events within {mi} miles, including {event} in {city}.', ph: '{part} {name} {k} {cat} {mi} {event} {city}' },
-    { kind: 'welcome', label: 'Worldwide pulse', tmpl: 'Welcome to Eventually. There are currently {count} live events happening worldwide.', ph: '{count}' },
-    { kind: 'spotlight', label: 'Spotlight', tmpl: 'Spinning the spotlight onto {event} in {city} — {going} people are going right now.', ph: '{event} {city} {going}' },
-    { kind: 'countdown', label: 'Countdown', tmpl: '{event} kicks off in {min} minutes in {city}.', ph: '{event} {min} {city}' },
-    { kind: 'region', label: 'Regional roundup', tmpl: '{n} major {cat} events are currently underway in {region}.', ph: '{n} {cat} {region}' },
-    { kind: 'trending', label: 'Trending', tmpl: 'Trending right now: {event} in {city}, with {likes} likes.', ph: '{event} {city} {likes}' },
-    { kind: 'tip', label: 'Tip', tmpl: 'Tap any glowing marker to see everything happening there.', ph: '(none)' }
+    { kind: 'greeting', label: 'Greeting (personalized)', tmpl: "Good {part}, {name}! Based on what you love, I've found {k} live {cat} events within {mi} miles — including {event}, over in {city}.", ph: '{part} {name} {k} {cat} {mi} {event} {city}' },
+    { kind: 'welcome', label: 'Worldwide pulse', tmpl: 'Welcome to Eventually! Right now, there are {count} events happening live around the world.', ph: '{count}' },
+    { kind: 'spotlight', label: 'Spotlight', tmpl: "Here's one to watch: {event}, in {city}. {going} people are heading there right now.", ph: '{event} {city} {going}' },
+    { kind: 'countdown', label: 'Countdown', tmpl: 'Heads up — {event} in {city} kicks off in just {min} minutes.', ph: '{event} {min} {city}' },
+    { kind: 'region', label: 'Regional roundup', tmpl: 'Over in {region}, {n} big {cat} events are underway right now.', ph: '{n} {cat} {region}' },
+    { kind: 'trending', label: 'Trending', tmpl: "Trending tonight: {event}, in {city}. It's climbing fast, with {likes} likes.", ph: '{event} {city} {likes}' },
+    { kind: 'sponsor', label: 'Sponsor read', tmpl: 'This update is brought to you by {sponsor}.', ph: '{sponsor}' },
+    { kind: 'tip', label: 'Tip', tmpl: "Tap any glowing marker on the globe, and you'll see everything happening there.", ph: '(none)' }
   ];
   function renderBrowser(body) {
     body.innerHTML = '<div class="ad-center">Loading…</div>';
     sb.from('app_config').select('config').eq('id', 1).maybeSingle().then(function (r) {
-      const hl = ((r.data && r.data.config) || {}).hostLines || {};
-      let html = '<div class="ad-sec"><h2>Browser-voice Host (free)</h2>' +
-        '<p class="ad-hint">The rotating lines spoken by the free on-device voice (separate from the ElevenLabs city briefing). English; placeholders fill from live data. Untick to stop a line type playing.</p>';
+      const cfg = (r.data && r.data.config) || {};
+      const hl = cfg.hostLines || {};
+      const hv = cfg.hostVoice || { rate: 0.98, pitch: 1.0 };
+      let html = '<div class="ad-sec"><h2>Voice delivery (free)</h2>' +
+        '<p class="ad-hint">Fine-tune how the free on-device voice sounds. The best available device voice is chosen automatically. 1.0 = normal.</p>' +
+        '<div class="ad-row">' +
+        '<div class="ad-field"><label>Speaking rate (0.7–1.3)</label><input id="hv-rate" type="number" step="0.01" min="0.7" max="1.3" value="' + (hv.rate || 0.98) + '"></div>' +
+        '<div class="ad-field"><label>Pitch (0.7–1.3)</label><input id="hv-pitch" type="number" step="0.01" min="0.7" max="1.3" value="' + (hv.pitch != null ? hv.pitch : 1.0) + '"></div>' +
+        '</div></div>';
+      html += '<div class="ad-sec"><h2>Browser-voice scripts (free)</h2>' +
+        '<p class="ad-hint">The rotating lines spoken by the free on-device voice (separate from the ElevenLabs city briefing). Write them conversationally, for the ear. Placeholders fill from live data. Untick to stop a line type.</p>';
       LINE_DEFS.forEach(function (d) {
         const cur = hl[d.kind] || {};
         const text = cur.text != null ? cur.text : d.tmpl;
@@ -201,15 +210,16 @@
           '<textarea class="bl-text">' + esc(text) + '</textarea>' +
           '<label class="ad-toggle" style="margin-top:6px"><input type="checkbox" class="bl-on"' + (on ? ' checked' : '') + '> Enabled</label></div>';
       });
-      html += '<div><button class="ad-save" id="bl-save">Save scripts</button><span class="ad-saved" id="bl-msg"></span></div></div>';
+      html += '<div><button class="ad-save" id="bl-save">Save voice &amp; scripts</button><span class="ad-saved" id="bl-msg"></span></div></div>';
       body.innerHTML = html;
       document.getElementById('bl-save').onclick = function () {
         const out = {};
         body.querySelectorAll('[data-kind]').forEach(function (f) {
           out[f.dataset.kind] = { text: f.querySelector('.bl-text').value, on: f.querySelector('.bl-on').checked };
         });
+        const voice = { rate: +document.getElementById('hv-rate').value || 0.98, pitch: +document.getElementById('hv-pitch').value || 1.0 };
         const btn = document.getElementById('bl-save'); btn.disabled = true;
-        patchConfig({ hostLines: out }).then(function (r) {
+        patchConfig({ hostLines: out, hostVoice: voice }).then(function (r) {
           btn.disabled = false;
           const m = document.getElementById('bl-msg');
           if (r.error) { m.textContent = 'Error: ' + r.error.message; m.style.color = '#b3402a'; }

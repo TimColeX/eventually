@@ -5,6 +5,15 @@
 (function (global) {
   'use strict';
 
+  // Best-quality natural voices per platform, in priority order (name substrings).
+  const VOICE_PREF = [
+    'ava', 'samantha', 'allison', 'serena', 'zoe', 'nicky', 'evan',            // Apple
+    'aria', 'jenny', 'guy', 'michelle', 'sonia', 'libby', 'ryan',             // Microsoft
+    'google us english', 'google uk english female', 'google uk english male' // Google
+  ];
+  // Quality markers that boost any voice containing them.
+  const VOICE_BOOST = ['enhanced', 'premium', 'neural', 'natural', 'online', 'siri'];
+
   function AIHost(el, opts) {
     this.el = el;
     this.getLine = opts.getLine;          // () -> { text, kind, sponsor? }
@@ -15,6 +24,12 @@
     this.synth = opts.synth || null;       // (text, lang, kind) -> Promise<url|null> (legacy per-line)
     this.getBriefing = opts.getBriefing || null;  // () -> Promise<{url,text}|null> (shared city briefing)
     this.getOpener = opts.getOpener || null;      // () -> { text, lang, rtl } (personalized, browser voice)
+    this.getVoiceSettings = opts.getVoiceSettings || null;  // () -> { rate, pitch } (admin-tunable)
+    // Voices can load asynchronously; refresh the best-voice pick when they arrive.
+    if ('speechSynthesis' in global && global.speechSynthesis.addEventListener) {
+      const self = this;
+      global.speechSynthesis.addEventListener('voiceschanged', function () { self._voiceCache = {}; });
+    }
     this._audio = new Audio();             // reusable element for premium-voice playback
     this._audio.preload = 'auto'; this._audio.setAttribute('playsinline', '');
     this.speaking = false;
@@ -151,27 +166,47 @@
   };
 
   // Free voice: browser SpeechSynthesis (or a timed simulation if unavailable).
+  // Free voice: speak sentence-by-sentence with a natural pause between each (like
+  // a radio presenter), using the best available device voice + tuned rate/pitch.
   AIHost.prototype._browserSpeak = function (text, afterSegment) {
     const self = this;
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      u.rate = 1.0; u.pitch = 1.0; u.volume = 1.0;
-      u.lang = this._lang || 'en-US';
-      const v = this._voiceFor(u.lang); if (v) u.voice = v;
-      u.onstart = function () { self.amp = 0.6; self.onSpeakStart(); };   // duck music under voice
-      u.onboundary = function () { self.amp = 0.55 + Math.random() * 0.4; };
-      u.onend = afterSegment;
-      u.onerror = afterSegment;
-      self._utter = u;                       // keep a ref so the engine doesn't GC events
-      try { window.speechSynthesis.resume(); } catch (e) {}   // iOS can leave it paused
-      window.speechSynthesis.speak(u);
-    } else {
+    if (!('speechSynthesis' in window)) {
       self.amp = 0.5;
       const read = Math.min(9000, 2600 + text.length * 45);
-      clearTimeout(self._readTimer);
-      self._readTimer = setTimeout(afterSegment, read);
+      clearTimeout(self._readTimer); self._readTimer = setTimeout(afterSegment, read);
+      return;
     }
+    window.speechSynthesis.cancel();
+    const sentences = self._splitSentences(text);
+    const voice = self._voiceFor(self._lang || 'en-US');
+    const cfg = self.getVoiceSettings ? (self.getVoiceSettings() || {}) : {};
+    const rate = cfg.rate || 0.98;                        // slightly relaxed = more natural
+    const pitch = (cfg.pitch != null ? cfg.pitch : 1.0);
+    self._utters = [];
+    let i = 0;
+    function next() {
+      if (!self.speaking) return;
+      if (i >= sentences.length) { afterSegment(); return; }
+      const u = new SpeechSynthesisUtterance(sentences[i]);
+      u.lang = self._lang || 'en-US'; u.rate = rate; u.pitch = pitch; u.volume = 1.0;
+      if (voice) u.voice = voice;
+      if (i === 0) u.onstart = function () { self.amp = 0.6; self.onSpeakStart(); };   // duck once
+      u.onboundary = function () { self.amp = 0.55 + Math.random() * 0.35; };
+      u.onend = function () { i++; next(); };             // gap between utterances = a natural breath
+      u.onerror = function () { i++; next(); };
+      self._utters.push(u);                                // GC guard
+      try { window.speechSynthesis.resume(); } catch (e) {}
+      window.speechSynthesis.speak(u);
+    }
+    next();
+  };
+
+  // Split into sentences so the engine pauses naturally between them.
+  AIHost.prototype._splitSentences = function (text) {
+    const t = String(text).replace(/\s+/g, ' ').trim();
+    const parts = t.match(/[^.!?…]+[.!?…]+["')\]]*(\s|$)|[^.!?…]+$/g);
+    const out = (parts || [t]).map(function (s) { return s.trim(); }).filter(Boolean);
+    return out.length ? out : [t];
   };
 
   AIHost.prototype.toggle = function () { this.speaking ? this.stop() : this.play(); };
@@ -196,19 +231,36 @@
     return Math.max(1500, base + (Math.random() * 2 - 1) * spread);
   };
 
-  // Pick a browser voice matching the language (free, on-device). Falls back to
-  // the engine default if no localized voice is installed on the device.
+  // Highest-quality device voice for a language, chosen automatically. Prefers the
+  // best known natural voices per platform (Apple Ava/Samantha, MS Aria/Jenny/Guy,
+  // Google), then any enhanced/premium/neural voice, then the locale default.
+  AIHost.prototype._scoreVoice = function (v) {
+    const n = (v.name || '').toLowerCase();
+    let s = 0;
+    for (let i = 0; i < VOICE_PREF.length; i++) { if (n.indexOf(VOICE_PREF[i]) > -1) { s += 60 - i; break; } }
+    for (let j = 0; j < VOICE_BOOST.length; j++) { if (n.indexOf(VOICE_BOOST[j]) > -1) s += 12; }
+    if (v.localService === false) s += 4;   // Chrome's Google network voices sound better than local eSpeak
+    if (v.default) s += 3;
+    return s;
+  };
   AIHost.prototype._voiceFor = function (bcp) {
     if (!('speechSynthesis' in window)) return null;
-    const pref = (bcp || 'en').slice(0, 2).toLowerCase();
+    const key = (bcp || 'en-US').toLowerCase();
+    this._voiceCache = this._voiceCache || {};
+    if (Object.prototype.hasOwnProperty.call(this._voiceCache, key)) return this._voiceCache[key];
     const vs = window.speechSynthesis.getVoices() || [];
-    let exact = null, lang = null;
-    for (let i = 0; i < vs.length; i++) {
-      const vl = (vs[i].lang || '').toLowerCase();
-      if (vl === (bcp || '').toLowerCase()) { exact = vs[i]; break; }
-      if (!lang && vl.slice(0, 2) === pref) lang = vs[i];
-    }
-    return exact || lang || null;
+    if (!vs.length) return null;                          // not loaded yet — retry on next line
+    const pref2 = key.slice(0, 2);
+    const matches = vs.filter(function (v) { return (v.lang || '').toLowerCase().slice(0, 2) === pref2; });
+    const pool = matches.length ? matches : vs;
+    const self = this;
+    let best = null, bestScore = -1;
+    pool.forEach(function (v) {
+      let sc = self._scoreVoice(v) + ((v.lang || '').toLowerCase() === key ? 5 : 0);   // exact-locale tiebreak
+      if (sc > bestScore) { bestScore = sc; best = v; }
+    });
+    this._voiceCache[key] = best;
+    return best;
   };
 
   // Mobile (esp. iOS Safari) only allows speech that begins inside a user gesture,
