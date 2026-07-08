@@ -393,6 +393,7 @@ body {
 .co-publish:hover { background: #b94e32; box-shadow: 0 10px 26px rgba(203,90,60,.3); }
 .co-note { font-family: var(--mono); font-size: 10px; letter-spacing: .04em; color: var(--hint); margin: 10px 0 0; text-align: center; }
 .map-canvas { width: 100%; border-radius: 12px; border: 1px solid var(--line); cursor: crosshair; display: block; }
+.co-map.co-need-loc { border-color: #b3402a; box-shadow: 0 0 0 2px rgba(179,64,42,.16); }
 .co-coords { margin-top: 12px; }
 .f-addr {
   width: 100%; padding: 10px 13px; border-radius: 11px; background: #faf3ea;

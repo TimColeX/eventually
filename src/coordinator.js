@@ -32,21 +32,32 @@
     this.onDelete = opts.onDelete;         // (eventId) -> Promise<bool>
     this.onSetPublished = opts.onSetPublished; // (eventId, bool) -> Promise
     this.getCreatorStats = opts.getCreatorStats; // () -> Promise<[{event_id,title,...,saves,likes,attends,published}]>
+    this.getDefaultLocation = opts.getDefaultLocation; // () -> {lat,lon,city}|null (user's set location)
     this.onFlyTo = opts.onFlyTo;           // (lat, lon) -> void
     this.getMyEvents = opts.getMyEvents;   // () -> [events]  (demo fallback)
     this.pin = { lat: 48.85, lon: 2.35 };  // default Paris
     this.banner = ['#CB5A3C', '#8A3B1E'];
     this.city = null;                       // resolved place name (geocoded)
     this.editId = null;                     // set when editing an existing event
+    this.locationChosen = false;            // a real location must be picked before publishing
     this._build();
   }
 
   Coordinator.prototype.open = function () {
     this.el.classList.add('open');
+    if (!this.editId && !this.locationChosen) this._applyDefaultLocation();   // start on the user's location
     this._drawMap();
     this._renderAnalytics();
   };
   Coordinator.prototype.close = function () { this.el.classList.remove('open'); };
+
+  // Pre-fill the pin with the user's set location (counts as "chosen"). Otherwise
+  // leave the neutral default and require an explicit pick before publishing.
+  Coordinator.prototype._applyDefaultLocation = function () {
+    const d = this.getDefaultLocation && this.getDefaultLocation();
+    if (d && d.lat != null) { this.pin = { lat: d.lat, lon: d.lon }; this.city = d.city || null; this.locationChosen = true; }
+    else { this.locationChosen = false; }
+  };
 
   Coordinator.prototype._build = function () {
     const self = this;
@@ -130,6 +141,8 @@
       self.pin.lon = x * 360 - 180;
       self.pin.lat = 90 - y * 180;
       self.city = null;
+      self.locationChosen = true;           // dropping a pin counts as choosing a location
+      var m0 = self.el.querySelector('.co-map'); if (m0) m0.classList.remove('co-need-loc');
       self._drawMap();
       // name the dropped pin (best-effort reverse geocode)
       const at = { lat: self.pin.lat, lon: self.pin.lon };
@@ -146,6 +159,8 @@
     function hideSuggest() { suggest.classList.remove('show'); suggest.innerHTML = ''; acResults = []; }
     function pick(res) {
       self.pin.lat = res.lat; self.pin.lon = res.lon; self.city = res.city;
+      self.locationChosen = true;           // picking a searched address counts
+      var m1 = self.el.querySelector('.co-map'); if (m1) m1.classList.remove('co-need-loc');
       addr.value = res.city || (res.label || '').split(',')[0];
       hideSuggest(); self._drawMap();
       self._toast('📍 ' + (res.city || 'Location set'));
@@ -201,6 +216,11 @@
     const q = function (s) { return this.el.querySelector(s); }.bind(this);
     const name = q('.f-name').value.trim();
     if (!name) { this._toast('Add an event name first.'); return; }
+    if (!this.locationChosen) {
+      this._toast('Set a location first — search an address or tap the map.');
+      const map = this.el.querySelector('.co-map'); if (map) { map.classList.add('co-need-loc'); q('.f-addr').focus(); }
+      return;
+    }
     const cat = q('.f-cat').value;
     const dateStr = q('.f-date').value;
     if (!dateStr) { this._toast('Pick a date.'); return; }
@@ -252,6 +272,9 @@
     q('.co-publish').textContent = 'Publish event ✦';
     const h = this.el.querySelector('.co-form-h'); if (h) h.textContent = 'Publish a new event';
     const cancel = this.el.querySelector('.co-cancel-edit'); if (cancel) cancel.style.display = 'none';
+    q('.f-addr').value = '';
+    const map = this.el.querySelector('.co-map'); if (map) map.classList.remove('co-need-loc');
+    this._applyDefaultLocation();            // start fresh on the user's location (if set)
     this._drawMap();
   };
 
@@ -259,6 +282,7 @@
   Coordinator.prototype._editEvent = function (ev) {
     const q = function (s) { return this.el.querySelector(s); }.bind(this);
     this.editId = ev.event_id;
+    this.locationChosen = true;              // an existing event already has a location
     q('.f-name').value = ev.title || '';
     q('.f-cat').value = ev.category || q('.f-cat').value;
     if (ev.start_time) { const d = new Date(ev.start_time); q('.f-date').value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }

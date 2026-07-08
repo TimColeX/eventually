@@ -368,6 +368,11 @@
       if (!acctEnabled()) return Promise.resolve([]);
       return A.creatorStats();
     },
+    // Start the publish map on the user's set location (from the home tab).
+    getDefaultLocation: function () {
+      const l = P.get().location;
+      return (l && l.lat != null) ? { lat: l.lat, lon: l.lon, city: l.city } : null;
+    },
     onFlyTo: function (lat, lon) { coordinator.close(); globe.flyTo(lat, lon); },
     getMyEvents: function () {
       return D.getEvents().filter(function (e) { return e._mine; });
