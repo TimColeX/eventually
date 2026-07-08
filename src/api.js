@@ -116,12 +116,23 @@
       .catch(function () { return null; });
   }
 
+  // Full-database search (any approved upcoming event, not just the loaded globe).
+  function search(q) {
+    if (!REMOTE || !q) return Promise.resolve([]);
+    return fetch(BASE + '/rest/v1/rpc/search_events', {
+      method: 'POST', headers: headers(), body: JSON.stringify({ q: q })
+    }).then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (rows) { return rows || []; })
+      .catch(function () { return []; });
+  }
+
   global.EventuallyAPI = {
     config: { remote: REMOTE, baseUrl: BASE },
     boot: boot,
     onData: onData,
     fetchEvents: fetchEvents,
     toEvent: toEvent,
-    getConfig: getConfig
+    getConfig: getConfig,
+    search: search
   };
 })(window);

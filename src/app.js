@@ -670,62 +670,84 @@
   /* ---------- search ---------- */
   const searchInput = document.getElementById('search');
   const searchResults = document.getElementById('search-results');
-  searchInput.addEventListener('input', function () {
-    const q = searchInput.value.trim().toLowerCase();
-    if (!q) { searchResults.classList.remove('show'); return; }
-
-    // City matches — location clusters (with visible events) whose city matches.
-    const byCity = {};
-    D.getClusters().forEach(function (c) {
-      if (!c._visible || !c.city) return;
-      if (c.city.toLowerCase().indexOf(q) < 0) return;
-      const key = c.city.toLowerCase();
-      if (!byCity[key] || c._visible > byCity[key]._visible) byCity[key] = c;   // largest cluster per city
-    });
-    const cities = Object.keys(byCity).map(function (k) { return byCity[k]; })
-      .sort(function (a, b) { return b._visible - a._visible; }).slice(0, 3);
-
-    // Event matches.
-    const hits = D.getEvents().filter(function (e) {
-      if (RT._hidEv[e.id] || RT._hidCity[(e.city || '').toLowerCase()]) return false;   // admin-hidden
-      return (e.name + ' ' + e.city + ' ' + e.category).toLowerCase().indexOf(q) > -1;
-    }).sort(function (a, b) {                 // featured events rank higher
-      if (!!b.sponsored !== !!a.sponsored) return b.sponsored ? 1 : -1;
-      return D.popularity(b) - D.popularity(a);
-    }).slice(0, 5);
-
+  function nearestClusterId(lat, lon) {
+    let best = null, bd = Infinity;
+    D.getClusters().forEach(function (c) { const dd = (c.lat - lat) * (c.lat - lat) + (c.lon - lon) * (c.lon - lon); if (dd < bd) { bd = dd; best = c; } });
+    return best ? best.id : null;
+  }
+  // Fly to a chosen result. When live, first load that area's events (so cities/
+  // events that weren't on the loaded globe appear), then open it.
+  function goToSearchResult(o) {
+    searchResults.classList.remove('show'); searchInput.value = '';
+    function finish() {
+      globe.flyTo(o.lat, o.lon);
+      globe.setHighlight(o.lat, o.lon, { color: '#ff3b30', id: o.eventId });
+      setTimeout(function () {
+        if (o.eventId && D.getById(o.eventId)) openEvent(o.eventId);
+        else { const cid = nearestClusterId(o.lat, o.lon); if (cid) openPlace(cid); }
+      }, 650);
+    }
+    if (window.EventuallyAPI && window.EventuallyAPI.config.remote && window.EventuallyAPI.fetchEvents) {
+      window.EventuallyAPI.fetchEvents({ minLat: o.lat - 0.4, maxLat: o.lat + 0.4, minLon: o.lon - 0.6, maxLon: o.lon + 0.6 })
+        .then(function (evs) {
+          if (evs && evs.length) { D.mergeEvents(evs); markMine(); globe.setClusters(D.getClusters()); refreshMarkers(); updateStats(); }
+          finish();
+        }).catch(finish);
+    } else { finish(); }
+  }
+  function renderSearchResults(cities, events) {
     let html = cities.map(function (c) {
-      return '<button class="sr-city" data-place="' + c.id + '"><span class="dot city">📍</span>' +
-        esc(c.city) + '<small>' + c._visible + ' event' + (c._visible === 1 ? '' : 's') + '</small></button>';
+      return '<button class="sr-city" data-lat="' + c.lat + '" data-lon="' + c.lon + '"><span class="dot city">📍</span>' +
+        esc(c.city) + '<small>' + c.n + ' event' + (c.n === 1 ? '' : 's') + '</small></button>';
     }).join('');
-    html += hits.map(function (e) {
-      return '<button data-id="' + e.id + '"><span class="dot" style="background:' +
-        e.categoryColor + '"></span>' + esc(e.name) + '<small>' + esc(e.city) + '</small></button>';
+    html += events.map(function (e) {
+      return '<button data-ev="' + esc(e.id) + '" data-lat="' + e.lat + '" data-lon="' + e.lon + '"><span class="dot" style="background:' +
+        (e.color || '#CB5A3C') + '"></span>' + esc(e.name) + '<small>' + esc(e.city || '') + '</small></button>';
     }).join('');
     searchResults.innerHTML = html || '<div class="no-hits">No events found.</div>';
     searchResults.classList.add('show');
-
     searchResults.querySelectorAll('button').forEach(function (b) {
       b.addEventListener('click', function () {
-        P.addSearch(searchInput.value);          // personalization — remember searches
-        if (b.dataset.place) {                   // a CITY result → fly + red pulse + open the list
-          const c = clusterById(b.dataset.place);
-          searchResults.classList.remove('show'); searchInput.value = '';
-          if (c) {
-            globe.flyTo(c.lat, c.lon);
-            globe.setHighlight(c.lat, c.lon, { color: '#ff3b30' });
-            setTimeout(function () { openPlace(c.id); }, 650);
-          }
-          return;
-        }
-        const ev = D.getById(b.dataset.id);      // an EVENT result
-        globe.flyTo(ev.lat, ev.lon);
-        globe.setHighlight(ev.lat, ev.lon, { color: '#ff3b30', id: ev.id });
-        searchResults.classList.remove('show');
-        searchInput.value = '';
-        setTimeout(function () { openEvent(ev.id); }, 600);
+        P.addSearch(searchInput.value);
+        goToSearchResult({ lat: +b.dataset.lat, lon: +b.dataset.lon, eventId: b.dataset.ev });
       });
     });
+  }
+  function localSearch(q) {   // demo / offline: search the loaded set
+    const byCity = {};
+    D.getClusters().forEach(function (c) {
+      if (!c._visible || !c.city || c.city.toLowerCase().indexOf(q) < 0) return;
+      const k = c.city.toLowerCase();
+      if (!byCity[k] || c._visible > byCity[k].n) byCity[k] = { city: c.city, lat: c.lat, lon: c.lon, n: c._visible };
+    });
+    const cities = Object.keys(byCity).map(function (k) { return byCity[k]; }).sort(function (a, b) { return b.n - a.n; }).slice(0, 3);
+    const events = D.getEvents().filter(function (e) {
+      if (RT._hidEv[e.id] || RT._hidCity[(e.city || '').toLowerCase()]) return false;
+      return (e.name + ' ' + e.city + ' ' + e.category).toLowerCase().indexOf(q) > -1;
+    }).sort(function (a, b) { return D.popularity(b) - D.popularity(a); }).slice(0, 5)
+      .map(function (e) { return { id: e.id, name: e.name, city: e.city, lat: e.lat, lon: e.lon, color: e.categoryColor }; });
+    renderSearchResults(cities, events);
+  }
+  let _searchTimer = null;
+  searchInput.addEventListener('input', function () {
+    const q = searchInput.value.trim();
+    if (!q) { searchResults.classList.remove('show'); return; }
+    clearTimeout(_searchTimer);
+    if (window.EventuallyAPI && window.EventuallyAPI.config.remote && window.EventuallyAPI.search) {
+      // Backend search: finds ANY approved event in the database (not just loaded).
+      _searchTimer = setTimeout(function () {
+        window.EventuallyAPI.search(q).then(function (rows) {
+          rows = (rows || []).filter(function (e) { return !RT._hidEv[e.event_id] && !RT._hidCity[(e.city || '').toLowerCase()]; });
+          const byCity = {};
+          rows.forEach(function (e) { const k = (e.city || '').toLowerCase(); if (!k) return; if (!byCity[k]) byCity[k] = { city: e.city, lat: e.lat, lon: e.lon, n: 0 }; byCity[k].n++; });
+          const cities = Object.keys(byCity).map(function (k) { return byCity[k]; }).sort(function (a, b) { return b.n - a.n; }).slice(0, 4);
+          const events = rows.slice(0, 6).map(function (e) { return { id: e.event_id, name: e.title, city: e.city, lat: e.lat, lon: e.lon, color: D.CATEGORIES[e.category] || '#CB5A3C' }; });
+          renderSearchResults(cities, events);
+        });
+      }, 250);
+    } else {
+      localSearch(q.toLowerCase());
+    }
   });
   document.addEventListener('click', function (e) {
     if (!e.target.closest('.search-wrap')) searchResults.classList.remove('show');

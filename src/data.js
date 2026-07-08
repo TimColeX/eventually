@@ -371,6 +371,15 @@
       buildClusters();
       return EVENTS;
     },
+    // Add events not already loaded (from a search/area fetch), then re-cluster.
+    // Used so searching a city off the loaded globe brings its events onto the map.
+    mergeEvents: function (newEvents) {
+      if (!newEvents || !newEvents.length) return EVENTS;
+      let added = 0;
+      newEvents.forEach(function (e) { if (!BYID[e.id]) { EVENTS.push(e); BYID[e.id] = e; added++; } });
+      if (added) buildClusters();
+      return EVENTS;
+    },
     addEvent: function (evt) {
       if (!evt.id) evt.id = 'evt_' + (++_id);   // keep a pre-assigned id (DB native event)
       // a coordinator-published event is native, single-source
