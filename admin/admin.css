@@ -37,6 +37,8 @@ body{margin:0;background:#efe7da;color:var(--ink);font-family:var(--font);font-s
 .ad-kpi{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
 .ad-kpi b{display:block;font-size:26px;font-weight:800;color:var(--clay);font-family:var(--font)}
 .ad-kpi span{font-size:12px;color:var(--muted)}
+.ad-kpi-warn{border-color:#CB5A3C;background:rgba(203,90,60,.06)}
+.ad-kpi-warn b{color:#CB5A3C}
 .ad-sec{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:20px 22px;margin-bottom:18px}
 .ad-sec h2{margin:0 0 4px;font-size:16px}
 .ad-sec .ad-hint{color:var(--muted);font-size:12.5px;margin:0 0 16px;line-height:1.5}

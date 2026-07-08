@@ -141,7 +141,44 @@
         return '<div class="ad-li"><span>' + esc(c.city) + '</span><span>' + c.n + '</span></div>';
       }).join('') + '</div>';
       html += '</div>';
+      html += '<div class="ad-sec" id="ad-dq"><h2>Data quality</h2><p class="ad-hint">Checking event coordinates…</p></div>';
       body.innerHTML = html;
+      renderDataQuality();
+    });
+  }
+
+  // Coordinate sanity: flags the "spike under Africa" class of bug (events at
+  // (0,0), plotted outside their country, or missing a country) automatically.
+  function renderDataQuality() {
+    const box = document.getElementById('ad-dq');
+    if (!box) return;
+    sb.rpc('admin_data_quality').then(function (r) {
+      const d = r.data;
+      if (!d || (r.error && r.error.message)) {
+        box.innerHTML = '<h2>Data quality</h2><p class="ad-hint">Unavailable (' +
+          esc((r.error && r.error.message) || 'run backend/19_data_quality.sql') + ').</p>';
+        return;
+      }
+      const bad = (d.null_island || 0) + (d.out_of_country || 0);
+      const kpi = function (v, l, warn) { return '<div class="ad-kpi' + (warn && v ? ' ad-kpi-warn' : '') + '"><b>' + (v == null ? '—' : v) + '</b><span>' + l + '</span></div>'; };
+      let h = '<h2>Data quality' + (bad ? ' ⚠️' : ' ✅') + '</h2>' +
+        '<p class="ad-hint">Coordinate sanity across all ' + (d.total || 0) + ' events · checked ' +
+        (d.checked_at ? new Date(d.checked_at).toLocaleString() : 'now') + '</p>' +
+        '<div class="ad-grid">' +
+        kpi(d.null_island, 'At (0,0) · Null Island', true) +
+        kpi(d.out_of_country, 'Outside stated country', true) +
+        kpi(d.missing_country, 'Missing country', false) +
+        '</div>';
+      const s = d.samples || [];
+      if (s.length) {
+        h += '<div class="ad-list" style="margin-top:12px">' + s.slice(0, 30).map(function (e) {
+          return '<div class="ad-li"><span>' + esc(e.status) + ' · ' + esc(e.city || '—') + ' (' + esc(e.country || '?') +
+            ')</span><span>' + Number(e.lat).toFixed(2) + ', ' + Number(e.lon).toFixed(2) + '</span></div>';
+        }).join('') + '</div>';
+      } else {
+        h += '<p class="ad-hint">No coordinate anomalies found. 🎉</p>';
+      }
+      box.innerHTML = h;
     });
   }
 

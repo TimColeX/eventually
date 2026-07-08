@@ -298,6 +298,17 @@
   const BYID = {};
   EVENTS.forEach(function (e) { BYID[e.id] = e; });
 
+  // Guard against events with missing / garbage coordinates. Exact (0,0) is
+  // "Null Island" (open ocean in the Gulf of Guinea) — never a real venue, and
+  // the classic symptom of a missing lat/lon that got stored as zero. Filtering
+  // it here (the single chokepoint every live/search/native event passes through)
+  // keeps such rows off the globe no matter which source produced them.
+  function hasValidCoord(e) {
+    return e && Number.isFinite(e.lat) && Number.isFinite(e.lon)
+      && Math.abs(e.lat) <= 90 && Math.abs(e.lon) <= 180
+      && !(e.lat === 0 && e.lon === 0);
+  }
+
   function typeForDate(evt, selectedDate) {
     // Same calendar day as selected date => LIVE (pillar). Future => UPCOMING (dot).
     // Local calendar components so "today" matches the user's device date.
@@ -364,6 +375,7 @@
     // Used by EventuallyAPI when a backend is configured (stale-while-revalidate).
     replaceAll: function (newEvents) {
       if (!newEvents || !newEvents.length) return EVENTS;
+      newEvents = newEvents.filter(hasValidCoord);
       EVENTS.length = 0;
       Array.prototype.push.apply(EVENTS, newEvents);
       for (const k in BYID) { if (Object.prototype.hasOwnProperty.call(BYID, k)) delete BYID[k]; }
@@ -376,7 +388,7 @@
     mergeEvents: function (newEvents) {
       if (!newEvents || !newEvents.length) return EVENTS;
       let added = 0;
-      newEvents.forEach(function (e) { if (!BYID[e.id]) { EVENTS.push(e); BYID[e.id] = e; added++; } });
+      newEvents.forEach(function (e) { if (hasValidCoord(e) && !BYID[e.id]) { EVENTS.push(e); BYID[e.id] = e; added++; } });
       if (added) buildClusters();
       return EVENTS;
     },
