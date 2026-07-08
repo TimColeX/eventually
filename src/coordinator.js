@@ -229,11 +229,12 @@
     const btn = this.el.querySelector('.co-publish');
     btn.disabled = true; btn.textContent = editing ? 'Saving…' : 'Publishing…';
     const action = editing && this.onUpdate ? this.onUpdate(evt) : this.onPublish(evt);
-    Promise.resolve(action).then(function (ok) {
+    Promise.resolve(action).then(function (res) {
+      const r = (res && typeof res === 'object') ? res : { ok: !!res, live: true };
       btn.disabled = false;
-      if (!ok) { btn.textContent = editing ? 'Update event' : 'Publish event ✦'; return; }
-      self._toast(editing ? 'Saved changes to ' + name + '.' : 'Published! ' + name + ' is now live on the globe.');
-      if (self.onFlyTo) self.onFlyTo(evt.lat, evt.lon);
+      if (!r.ok) { btn.textContent = editing ? 'Update event' : 'Publish event ✦'; return; }
+      self._toast(r.message || (editing ? 'Changes saved.' : 'Published!'));
+      if (r.live && self.onFlyTo) self.onFlyTo(evt.lat, evt.lon);   // only fly if it's actually on the globe
       self._resetForm();
       self._renderAnalytics();
     }).catch(function () {
@@ -324,9 +325,14 @@
         '</div><div class="an-list">';
       rows.forEach(function (e) {
         const pub = e.published !== false;
+        const mod = e.moderation || 'approved';
+        let status = '';
+        if (mod === 'pending') status = ' <span class="an-badge an-pending">⏳ pending review</span>';
+        else if (mod === 'rejected') status = ' <span class="an-badge an-rejected">✕ rejected</span>';
+        else if (!pub) status = ' <span class="an-badge">unpublished</span>';
+        const reason = (mod === 'rejected' && e.moderation_reason) ? '<small class="an-reason">Reason: ' + esc(e.moderation_reason) + '</small>' : '';
         html += '<div class="an-row2">' +
-          '<div class="an-r-main"><strong>' + esc(e.title) + '</strong>' +
-          (pub ? '' : ' <span class="an-badge">unpublished</span>') +
+          '<div class="an-r-main"><strong>' + esc(e.title) + '</strong>' + status + reason +
           '<small>' + esc(e.city || '') + ' · ★ ' + (+e.saves || 0) + ' · ♥ ' + (+e.likes || 0) + ' · ✓ ' + (+e.attends || 0) + ' going</small></div>' +
           '<div class="an-r-actions">' +
             '<button class="an-act" data-me-act="edit" data-id="' + esc(e.event_id) + '">Edit</button>' +

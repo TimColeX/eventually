@@ -57,17 +57,49 @@
   function renderDashboard() {
     main.innerHTML =
       '<div class="ad-tabs">' +
-        tabBtn('overview', 'Overview') + tabBtn('host', 'AI Host Script') +
-        tabBtn('browser', 'Browser Voice') + tabBtn('globe', 'Globe & Display') +
+        tabBtn('overview', 'Overview') + tabBtn('review', 'Review Events') +
+        tabBtn('host', 'AI Host Script') + tabBtn('browser', 'Browser Voice') +
+        tabBtn('globe', 'Globe & Display') +
       '</div><div id="ad-body"></div>';
     main.querySelectorAll('.ad-tab').forEach(function (b) {
       b.onclick = function () { tab = b.dataset.tab; renderDashboard(); };
     });
     const body = document.getElementById('ad-body');
     if (tab === 'overview') renderOverview(body);
+    else if (tab === 'review') renderReview(body);
     else if (tab === 'host') renderHost(body);
     else if (tab === 'browser') renderBrowser(body);
     else renderGlobe(body);
+  }
+
+  /* ---------------- Review / moderate pending events ---------------- */
+  function renderReview(body) {
+    body.innerHTML = '<div class="ad-center">Loading pending events…</div>';
+    sb.rpc('pending_events').then(function (r) {
+      const rows = r.data || [];
+      if (r.error) { body.innerHTML = '<div class="ad-center">Could not load (' + esc(r.error.message) + ').</div>'; return; }
+      if (!rows.length) { body.innerHTML = '<div class="ad-sec"><h2>Review events</h2><p class="ad-hint">Nothing pending — all caught up. ✓</p></div>'; return; }
+      let html = '<div class="ad-sec"><h2>Pending review (' + rows.length + ')</h2>' +
+        '<p class="ad-hint">Native events wait here until you approve them. Editing an approved event sends it back here.</p>';
+      rows.forEach(function (e) {
+        html += '<div class="rv-row" data-id="' + esc(e.event_id) + '">' +
+          '<div class="rv-main"><strong>' + esc(e.title) + '</strong>' +
+          '<small>' + esc(e.category || '') + ' · ' + esc(e.city || '') + ' · ' + (e.start_time ? new Date(e.start_time).toLocaleDateString() : '') + '</small>' +
+          (e.description ? '<p class="rv-desc">' + esc(e.description) + '</p>' : '') + '</div>' +
+          '<div class="rv-actions">' +
+            '<button class="ad-save rv-approve" data-id="' + esc(e.event_id) + '">Approve</button>' +
+            '<button class="an-act an-danger rv-reject" data-id="' + esc(e.event_id) + '">Reject</button>' +
+          '</div></div>';
+      });
+      body.innerHTML = html + '</div>';
+      function moderate(id, status, reason) {
+        sb.rpc('moderate_event', { p_id: id, p_status: status, p_reason: reason || null }).then(function () { renderReview(body); });
+      }
+      body.querySelectorAll('.rv-approve').forEach(function (b) { b.onclick = function () { moderate(b.dataset.id, 'approved'); }; });
+      body.querySelectorAll('.rv-reject').forEach(function (b) {
+        b.onclick = function () { const reason = prompt('Reason for rejection (the creator will see this):', ''); if (reason === null) return; moderate(b.dataset.id, 'rejected', reason); };
+      });
+    });
   }
 
   // Merge a partial into app_config.config and save (admin RLS).

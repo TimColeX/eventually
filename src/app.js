@@ -25,6 +25,14 @@
     RT._hidEv = {}; (RT.hiddenEvents || []).forEach(function (id) { RT._hidEv[id] = 1; });
     RT._hidCity = {}; (RT.hiddenCities || []).forEach(function (c) { RT._hidCity[String(c).toLowerCase()] = 1; });
   }
+  // "You are here" + nearby-events (within NEAR_KM of the user's chosen location).
+  let userLoc = null;
+  const NEAR_KM = 50;
+  function haversineKm(a1, o1, a2, o2) {
+    const R = 6371, d = Math.PI / 180, dLat = (a2 - a1) * d, dLon = (o2 - o1) * d;
+    const s = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(a1 * d) * Math.cos(a2 * d) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
+  }
   // Render an admin template ("{event} in {city}") from a line's data dict.
   function renderTemplate(tmpl, data) {
     return String(tmpl).replace(/\{(\w+)\}/g, function (_, k) {
@@ -103,6 +111,9 @@
       c._eligible = featured || editor || live > 0 || vis >= 10;
       // Native (Eventually-published) clusters always show their dot, at any zoom.
       c._lodMin = nat ? 0 : ((c._visible >= 14) ? 0.95 : (c._visible >= 5 ? 1.4 : 2.0));
+      // Events near the user's location are always revealed.
+      c._near = !!(userLoc && vis > 0 && haversineKm(userLoc.lat, userLoc.lon, c.lat, c.lon) <= NEAR_KM);
+      if (c._near) c._lodMin = 0;
       if (!c._continent) c._continent = continentOf(c.lat, c.lon);
     });
     selectSpikes();
@@ -321,19 +332,21 @@
     onPublish: function (evt) {
       if (acctEnabled()) {
         return A.publishEvent(evt).then(function (r) {
-          if (r && r.error) { window.EventuallyToast('Publish failed: ' + r.error.message); return false; }
-          evt._mine = true; addPublishedLocally(evt);
+          if (r && r.error) { window.EventuallyToast('Publish failed: ' + r.error.message); return { ok: false }; }
           if (evt.sponsored && billingEnabled()) handleFeature(evt);   // settle free/paid featuring
-          return true;
+          // Native events are PENDING admin review — don't show on the globe yet.
+          return { ok: true, live: false, message: 'Submitted for review — it goes live once an admin approves it.' };
         });
       }
-      evt._mine = true; addPublishedLocally(evt); return Promise.resolve(true);
+      evt._mine = true; addPublishedLocally(evt);
+      return Promise.resolve({ ok: true, live: true, message: 'Published! Live on the globe.' });
     },
     onUpdate: function (evt) {
-      if (!acctEnabled()) return Promise.resolve(false);
+      if (!acctEnabled()) return Promise.resolve({ ok: false });
       return A.updateEvent(evt).then(function (r) {
-        if (r && r.error) { window.EventuallyToast('Update failed: ' + r.error.message); return false; }
-        return refreshLiveEvents().then(function () { return true; });
+        if (r && r.error) { window.EventuallyToast('Update failed: ' + r.error.message); return { ok: false }; }
+        // Edits send the event back to pending review → refresh (it drops off the globe until re-approved).
+        return refreshLiveEvents().then(function () { return { ok: true, live: false, message: 'Changes saved — resubmitted for review.' }; });
       });
     },
     onDelete: function (id) {
@@ -749,7 +762,15 @@
   }
   function setLocation(loc) {
     P.setLocation(loc); renderLocChip(); refreshProfile(); syncProfile();
-    window.EventuallyToast('Location set to ' + loc.city + '.');
+    userLoc = { lat: loc.lat, lon: loc.lon };
+    if (globe.setUserLocation) globe.setUserLocation(loc.lat, loc.lon);   // "you are here" marker
+    globe.flyTo(loc.lat, loc.lon);
+    refreshMarkers();
+    let near = 0;
+    D.getClusters().forEach(function (c) { if (c._near) near += (c._visible || 0); });
+    window.EventuallyToast(near
+      ? 'You\'re in ' + loc.city + ' — ' + near + ' event' + (near === 1 ? '' : 's') + ' within ' + NEAR_KM + ' km.'
+      : 'Location set to ' + loc.city + ' — no events within ' + NEAR_KM + ' km yet.');
   }
   locChip.addEventListener('click', function (e) {
     e.stopPropagation();
@@ -774,6 +795,11 @@
   });
   document.addEventListener('click', function (e) { if (!e.target.closest('.loc-wrap')) locMenu.classList.remove('show'); });
   renderLocChip();
+  // Restore the "you are here" marker if a location was saved previously.
+  (function () {
+    const loc = P.get().location;
+    if (loc && loc.lat != null) { userLoc = { lat: loc.lat, lon: loc.lon }; if (globe.setUserLocation) globe.setUserLocation(loc.lat, loc.lon); }
+  })();
 
   /* ---------- profile / "You" panel (personalization + Plus + notifications) ---------- */
   const profileEl = document.getElementById('profile');

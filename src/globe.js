@@ -88,6 +88,7 @@
     this.onMarkerHover = null;
     this.hoverId = null;
     this.highlight = null;   // { lat, lon, color, id } — red search-result marker
+    this.userLoc = null;     // { lat, lon } — blue "you are here" marker
     this._buildDots();
     this._buildCoast();
     this._bind();
@@ -158,6 +159,12 @@
       : { lat: lat, lon: lon, color: (opts && opts.color) || '#ff3b30', id: opts && opts.id };
   };
   Globe.prototype.clearHighlight = function () { this.highlight = null; };
+
+  // "You are here" marker (blue), shown when the user sets their location.
+  Globe.prototype.setUserLocation = function (lat, lon) {
+    this.userLoc = (lat == null) ? null : { lat: lat, lon: lon };
+  };
+  Globe.prototype.clearUserLocation = function () { this.userLoc = null; };
   Globe.prototype.setPaused = function (p) { this.paused = p; };
   Globe.prototype.togglePaused = function () { this.paused = !this.paused; return this.paused; };
   Globe.prototype.zoomBy = function (f) {
@@ -437,6 +444,28 @@
     }
 
     this._drawHighlight(ctx, R, t);
+    this._drawUserLocation(ctx, R, t);
+  };
+
+  // Blue "you are here" marker at the user's chosen location (persistent).
+  Globe.prototype._drawUserLocation = function (ctx, R, t) {
+    const u = this.userLoc; if (!u) return;
+    const base = llToVec(u.lat, u.lon);
+    const rv = this._rotate(base);
+    if (rv[2] <= 0.02) return;                 // behind the globe
+    const p = this._project(rv, R);
+    const col = '#2e7dff';
+    const ping = (t * 0.7) % 1;
+    ctx.strokeStyle = hexA(col, (1 - ping) * 0.7); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(p.x, p.y, 7 + ping * 20, 0, Math.PI * 2); ctx.stroke();
+    const pulse = 0.5 + 0.5 * Math.sin(t * 3);
+    const r = (5 + pulse * 1.2) * p.persp;
+    ctx.shadowColor = col; ctx.shadowBlur = 14; ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.beginPath(); ctx.arc(p.x - r * 0.3, p.y - r * 0.3, r * 0.3, 0, Math.PI * 2); ctx.fill();
   };
 
   // Red search-result marker: a pulsing dot with an expanding "radar ping" ring,

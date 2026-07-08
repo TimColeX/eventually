@@ -432,6 +432,9 @@ body {
 .an-r-main strong { font-size: 14px; }
 .an-r-main small { display: block; color: var(--faint); font-family: var(--mono); font-size: 11px; margin-top: 3px; }
 .an-badge { font-family: var(--mono); font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--ember); background: #f0e0d8; border-radius: 5px; padding: 2px 5px; }
+.an-badge.an-pending { color: #8a6d1e; background: #f4ead0; }
+.an-badge.an-rejected { color: #b3402a; background: #f6ddd6; }
+.an-reason { display: block; color: #b3402a; font-size: 11px; margin-top: 2px; }
 .an-r-actions { display: flex; gap: 6px; flex: none; }
 .an-act { padding: 6px 11px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--paper); color: var(--ink); font-family: var(--font); font-size: 12px; font-weight: 600; cursor: pointer; }
 .an-act:hover { border-color: var(--clay); }

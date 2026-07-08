@@ -128,6 +128,16 @@
       if (!currentUser) return Promise.resolve([]);
       return sb.rpc('creator_event_stats').then(function (r) { return (r && r.data) || []; });
     },
+    // ---- admin moderation ----
+    pendingEvents: function () {
+      if (!currentUser) return Promise.resolve([]);
+      return sb.rpc('pending_events').then(function (r) { return (r && r.data) || []; });
+    },
+    moderateEvent: function (eventId, status, reason) {
+      if (!currentUser) return Promise.resolve({ error: { message: 'Not signed in' } });
+      return sb.rpc('moderate_event', { p_id: eventId, p_status: status, p_reason: reason || null })
+        .then(function (r) { return (r && r.data) || (r && { error: r.error }); });
+    },
     // Try to feature an event using the Plus monthly free quota (server-checked).
     // Returns { ok, remaining } or { ok:false, reason }.
     claimFreeFeature: function (eventId) {
