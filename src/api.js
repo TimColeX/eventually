@@ -126,16 +126,21 @@
       .catch(function () { return []; });
   }
 
-  // Free "Today's briefing" — LLM-authored spoken script for a city (or the
-  // world), delivered by the device's own voice. Resolves { text } or null so the
-  // caller can fall back to a locally-built briefing when the function/key isn't
-  // configured. `day` is the caller's LOCAL date (YYYY-MM-DD) so "today" matches
-  // the device.
-  function dailyBriefing(city, lang, day) {
+  // Free "Today's briefing" — LLM-authored spoken script SHARED per cluster cell,
+  // delivered by the device's own voice. The briefing is keyed server-side by the
+  // grid cell of {lat,lon} (not the geocoded city), so everyone in an area hears
+  // one script and cost stays ~one call per cell/day. Resolves { text } or null so
+  // the caller can fall back to a locally-built briefing. opts: {city,lat,lon,lang,day}
+  // (city is display-only; day is the caller's LOCAL date YYYY-MM-DD).
+  function dailyBriefing(opts) {
     if (!REMOTE) return Promise.resolve(null);
+    const o = opts || {};
     return fetch(BASE + '/functions/v1/daily-briefing', {
       method: 'POST', headers: headers(),
-      body: JSON.stringify({ city: city || null, lang: lang || 'en', day: day || null })
+      body: JSON.stringify({
+        city: o.city || null, lat: (o.lat != null ? o.lat : null), lon: (o.lon != null ? o.lon : null),
+        lang: o.lang || 'en', day: o.day || null
+      })
     }).then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) { return (d && d.text) ? d : null; })
       .catch(function () { return null; });

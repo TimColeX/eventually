@@ -324,7 +324,7 @@
       if (!window.EventuallyAPI || !window.EventuallyAPI.config.remote || !window.EventuallyAPI.dailyBriefing) {
         return Promise.resolve(fallback());
       }
-      return window.EventuallyAPI.dailyBriefing(city, lang, day)
+      return window.EventuallyAPI.dailyBriefing({ city: city, lat: loc && loc.lat, lon: loc && loc.lon, lang: lang, day: day })
         .then(function (b) { return (b && b.text) ? { text: b.text, lang: 'en-US' } : fallback(); })
         .catch(fallback);
     }
