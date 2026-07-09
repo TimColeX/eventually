@@ -23,6 +23,7 @@
     this.onSpeakEnd = opts.onSpeakEnd || function () {};
     this.synth = opts.synth || null;       // (text, lang, kind) -> Promise<url|null> (legacy per-line)
     this.getBriefing = opts.getBriefing || null;  // () -> Promise<{url,text}|null> (shared city briefing)
+    this.getDailyBriefing = opts.getDailyBriefing || null;  // () -> Promise<{text}|null> (free daily briefing, device voice)
     this.getOpener = opts.getOpener || null;      // () -> { text, lang, rtl } (personalized, browser voice)
     this.getVoiceSettings = opts.getVoiceSettings || null;  // () -> { rate, pitch } (admin-tunable)
     // Voices can load asynchronously; refresh the best-voice pick when they arrive.
@@ -61,6 +62,7 @@
         '<div class="ah-caption"><span class="ah-spon" style="display:none">SPONSORED</span>' +
         '<span class="ah-text"></span></div>' +
       '</div>' +
+      (this.getDailyBriefing ? '<button class="ah-briefing" aria-label="Play today\'s briefing">▶ Today’s briefing</button>' : '') +
       '<canvas class="ah-wave"></canvas>';
 
     this.canvas = this.el.querySelector('.ah-wave');
@@ -69,6 +71,40 @@
     this.textEl = this.el.querySelector('.ah-text');
     this.sponEl = this.el.querySelector('.ah-spon');
     this.el.querySelector('.ah-play').addEventListener('click', function () { self.toggle(); });
+    const brief = this.el.querySelector('.ah-briefing');
+    if (brief) brief.addEventListener('click', function () { self.playDailyBriefing(); });
+  };
+
+  // Free "Today's briefing": a discrete ~45–60s spoken segment via the DEVICE voice.
+  // Speech must be primed inside this click (mobile), so unlock synchronously, then
+  // fetch the text and speak. When it finishes, the ambient live rotation resumes.
+  AIHost.prototype.playDailyBriefing = function () {
+    if (!this.getDailyBriefing) return;
+    const self = this;
+    this._unlockSpeech();                    // MUST run inside the tap
+    this.speaking = true;
+    this._everPlayed = true;
+    this._openerDone = true;                 // skip the Plus opener for this path
+    this.icPlay.style.display = 'none';
+    this.icPause.style.display = '';
+    this.onPlay();                           // music bed on
+    if (this._timer) { clearInterval(this._timer); this._timer = null; }
+    clearTimeout(this._introTimer); clearTimeout(this._gapTimer);
+    const briefEl = this.el.querySelector('.ah-briefing');
+    if (briefEl) briefEl.disabled = true;
+    this._showCaption({ text: 'Preparing today’s briefing…', kind: 'briefing', lang: 'en-US' });
+    this.getDailyBriefing().then(function (b) {
+      if (briefEl) briefEl.disabled = false;
+      if (!self.speaking) return;
+      const text = b && b.text;
+      if (!text) { self._rotate(); return; }   // no briefing → fall into ambient rotation
+      self._lang = (b && b.lang) || 'en-US';
+      self._showCaption({ text: text, kind: 'briefing', lang: self._lang, rtl: !!(b && b.rtl) });
+      self._browserSpeak(text, self._afterSegment.bind(self));   // after briefing → ambient
+    }).catch(function () {
+      if (briefEl) briefEl.disabled = false;
+      if (self.speaking) self._rotate();
+    });
   };
 
   // Update the caption (no audio). Shared by line rotation + briefing mode.

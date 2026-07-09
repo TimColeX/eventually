@@ -126,6 +126,21 @@
       .catch(function () { return []; });
   }
 
+  // Free "Today's briefing" — LLM-authored spoken script for a city (or the
+  // world), delivered by the device's own voice. Resolves { text } or null so the
+  // caller can fall back to a locally-built briefing when the function/key isn't
+  // configured. `day` is the caller's LOCAL date (YYYY-MM-DD) so "today" matches
+  // the device.
+  function dailyBriefing(city, lang, day) {
+    if (!REMOTE) return Promise.resolve(null);
+    return fetch(BASE + '/functions/v1/daily-briefing', {
+      method: 'POST', headers: headers(),
+      body: JSON.stringify({ city: city || null, lang: lang || 'en', day: day || null })
+    }).then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { return (d && d.text) ? d : null; })
+      .catch(function () { return null; });
+  }
+
   global.EventuallyAPI = {
     config: { remote: REMOTE, baseUrl: BASE },
     boot: boot,
@@ -133,6 +148,7 @@
     fetchEvents: fetchEvents,
     toEvent: toEvent,
     getConfig: getConfig,
-    search: search
+    search: search,
+    dailyBriefing: dailyBriefing
   };
 })(window);

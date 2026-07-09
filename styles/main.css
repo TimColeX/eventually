@@ -303,6 +303,17 @@ body {
 .ah-text { font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: opacity .18s; }
 .ah-caption.is-sponsor .ah-text { color: var(--ember); }
 .ah-wave { width: 60px; flex: none; height: 38px; }
+.ah-briefing {
+  flex: none; cursor: pointer; border: 1px solid var(--line-2); border-radius: 999px;
+  background: var(--cream); color: var(--ink); font-family: var(--font); font-weight: 700;
+  font-size: 11.5px; padding: 7px 12px; white-space: nowrap;
+}
+.ah-briefing:hover { border-color: var(--clay); color: var(--clay); }
+.ah-briefing:disabled { opacity: .55; cursor: default; }
+@media (max-width: 560px) {
+  .ah-wave { display: none; }
+  .ah-briefing { font-size: 11px; padding: 6px 10px; }
+}
 
 /* ---------- auth modal ---------- */
 .auth { position: fixed; inset: 0; z-index: 60; display: none; }
