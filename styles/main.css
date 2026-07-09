@@ -483,6 +483,13 @@ body {
 .loc-menu button:hover { background: #faf3ea; }
 .loc-detect { color: var(--clay) !important; font-weight: 700; border-bottom: 1px solid var(--line) !important; }
 .loc-list button { color: var(--muted); }
+.loc-search { padding: 8px 10px; }
+.loc-input { width: 100%; padding: 8px 11px; border-radius: 9px; border: 1px solid var(--line-2);
+  background: var(--cream); color: var(--ink); font-family: var(--font); font-size: 13.5px; }
+.loc-input:focus { outline: none; border-color: var(--clay); }
+.loc-sug { display: flex; flex-direction: column; margin-top: 4px; }
+.loc-sug:empty { display: none; }
+.loc-sug .loc-pick { padding: 8px 11px; font-size: 12.5px; line-height: 1.35; color: var(--ink); }
 
 .plus-tag { font-family: var(--mono); font-size: 8px; font-weight: 700; letter-spacing: .08em; background: var(--clay); color: var(--cream); padding: 1px 5px; border-radius: 4px; margin-left: 4px; }
 

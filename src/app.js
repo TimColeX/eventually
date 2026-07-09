@@ -863,26 +863,57 @@
       ? 'You\'re in ' + loc.city + ' — ' + near + ' event' + (near === 1 ? '' : 's') + ' within ' + NEAR_KM + ' km.'
       : 'Location set to ' + loc.city + ' — no events within ' + NEAR_KM + ' km yet.');
   }
+  // GPS → the REAL city name (reverse-geocoded), falling back to the nearest
+  // loaded-event city, then "Your area", if the geocoder is unavailable.
+  function setFromGPS(loc) {
+    const done = function (city) { setLocation({ city: city, lat: loc.lat, lon: loc.lon, source: 'gps' }); };
+    if (window.EventuallyGeo && window.EventuallyGeo.reverse) {
+      window.EventuallyGeo.reverse(loc.lat, loc.lon)
+        .then(function (r) { done((r && r.city) || (nearestCity(loc.lat, loc.lon) || {}).city || 'Your area'); })
+        .catch(function () { done((nearestCity(loc.lat, loc.lon) || {}).city || 'Your area'); });
+    } else { done((nearestCity(loc.lat, loc.lon) || {}).city || 'Your area'); }
+  }
   locChip.addEventListener('click', function (e) {
     e.stopPropagation();
-    let html = '<button class="loc-detect" data-detect="1">⌖ Use my current location</button><div class="loc-list">';
-    uniqueCities().forEach(function (c) {
-      html += '<button data-city="' + esc(c.city) + '" data-lat="' + c.lat + '" data-lon="' + c.lon + '">' + esc(c.city) + '</button>';
-    });
-    locMenu.innerHTML = html + '</div>';
-    locMenu.classList.toggle('show');
+    // Primary: current location. Fallback: type your city (any city, geocoded) —
+    // covers GPS denial / desktop, and lets any place be "home" (not just loaded ones).
+    locMenu.innerHTML =
+      '<button class="loc-detect" data-detect="1">⌖ Use my current location</button>' +
+      '<div class="loc-search"><input class="loc-input" type="text" placeholder="Or search your city…" autocomplete="off">' +
+      '<div class="loc-sug"></div></div>';
+    const open = !locMenu.classList.contains('show');
+    locMenu.classList.toggle('show', open);
+    if (open) { const inp = locMenu.querySelector('.loc-input'); if (inp) setTimeout(function () { inp.focus(); }, 30); }
   });
   locMenu.addEventListener('click', function (e) {
     if (e.target.closest('[data-detect]')) {
       window.EventuallyToast('Asking your browser for location…');
       P.detectLocation(function (loc) {
-        if (loc) { const c = nearestCity(loc.lat, loc.lon); setLocation({ city: c ? c.city : 'Your area', lat: loc.lat, lon: loc.lon, source: 'gps' }); }
-        else window.EventuallyToast('Location unavailable — pick a city below.');
+        if (loc) setFromGPS(loc);
+        else window.EventuallyToast('Location unavailable — search your city instead.');
       });
-      locMenu.classList.remove('show'); return;
+      const inp = locMenu.querySelector('.loc-input'); if (inp) setTimeout(function () { inp.focus(); }, 30);
+      return;
     }
-    const cb = e.target.closest('[data-city]');
-    if (cb) { setLocation({ city: cb.dataset.city, lat: +cb.dataset.lat, lon: +cb.dataset.lon, source: 'manual' }); locMenu.classList.remove('show'); }
+    const pick = e.target.closest('.loc-pick');
+    if (pick) { setLocation({ city: pick.dataset.city, lat: +pick.dataset.lat, lon: +pick.dataset.lon, source: 'manual' }); locMenu.classList.remove('show'); }
+  });
+  // Debounced city autocomplete (Nominatim) inside the location menu.
+  let _locTimer = null;
+  locMenu.addEventListener('input', function (e) {
+    if (!e.target.classList || !e.target.classList.contains('loc-input')) return;
+    const q = e.target.value.trim();
+    const sug = locMenu.querySelector('.loc-sug');
+    clearTimeout(_locTimer);
+    if (q.length < 3 || !window.EventuallyGeo) { if (sug) sug.innerHTML = ''; return; }
+    _locTimer = setTimeout(function () {
+      window.EventuallyGeo.search(q, 5).then(function (list) {
+        if (!sug) return;
+        sug.innerHTML = (list || []).map(function (r) {
+          return '<button class="loc-pick" data-city="' + esc(r.city) + '" data-lat="' + r.lat + '" data-lon="' + r.lon + '">' + esc(r.label) + '</button>';
+        }).join('');
+      });
+    }, 350);
   });
   document.addEventListener('click', function (e) { if (!e.target.closest('.loc-wrap')) locMenu.classList.remove('show'); });
   renderLocChip();
