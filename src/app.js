@@ -865,7 +865,144 @@
     profileEl.querySelector('.pf-filter').style.display = p.plus ? '' : 'none';
     profileEl.querySelector('.pf-plus-btn').textContent = p.plus ? 'Cancel Plus (demo)' : 'Go Plus — $7/mo';
     profileEl.querySelector('.pf-logout').style.display = user ? '' : 'none';
+    renderAccount();
     renderIdentities();
+  }
+
+  /* ---------- account details (name / phone / emails / address / comms) ---------- */
+  let acctEditing = null;   // which field is currently in edit mode (null = none)
+
+  function fmtAddress(a) {
+    if (!a) return '';
+    return [a.line1, a.line2, a.city, a.region, a.postcode, a.country].filter(Boolean).join(', ');
+  }
+
+  function renderAccount() {
+    const box = profileEl.querySelector('.pf-acct');
+    if (!box) return;
+    const p = P.get();
+
+    if (!user) {
+      box.innerHTML = '<p class="pf-hint">Sign in to view and manage your name, contact details and address.</p>' +
+        '<button class="pf-acct-signin">Sign in</button>';
+      return;
+    }
+
+    // A read row, or an edit row when acctEditing === field.
+    function row(field, label, value, opts) {
+      opts = opts || {};
+      if (acctEditing === field) {
+        return '<div class="pf-acct-row is-edit" data-field="' + field + '">' +
+          '<label class="pf-acct-k">' + esc(label) + '</label>' +
+          '<input class="pf-acct-in" type="' + (opts.type || 'text') + '" value="' + esc(value || '') +
+            '" placeholder="' + esc(opts.ph || '') + '">' +
+          '<div class="pf-acct-btns"><button class="pf-acct-save" data-save="' + field + '">Save</button>' +
+          '<button class="pf-acct-cancel" type="button">Cancel</button></div>' +
+          (opts.note ? '<p class="pf-hint">' + esc(opts.note) + '</p>' : '') + '</div>';
+      }
+      const action = (opts.action != null) ? opts.action
+        : '<button class="pf-acct-edit" data-edit="' + field + '">' + (value ? 'Edit' : 'Add') + '</button>';
+      return '<div class="pf-acct-row" data-field="' + field + '">' +
+        '<span class="pf-acct-k">' + esc(label) + '</span>' +
+        '<span class="pf-acct-v">' + (value ? esc(value) : '<i>not set</i>') + '</span>' + action + '</div>';
+    }
+
+    let h = '';
+    h += row('name', 'Name', p.name, { ph: 'Your name' });
+    h += row('phone', 'Phone', p.phone, { type: 'tel', ph: '+1 555 123 4567' });
+
+    // Login email — editable only for email/magic-link accounts (Google owns its own).
+    if (acctEditing === 'loginEmail') {
+      h += row('loginEmail', 'Login email', user.email, { type: 'email',
+        note: "We'll email a confirmation link to the new address — the change applies once you click it." });
+    } else {
+      h += row('loginEmail', 'Login email', user.email, {
+        action: user.provider === 'google'
+          ? '<span class="pf-acct-note">Managed by Google</span>'
+          : '<button class="pf-acct-edit" data-edit="loginEmail">Change</button>'
+      });
+    }
+
+    h += row('contactEmail', 'Contact email', p.contactEmail, { type: 'email', ph: 'you@email.com' });
+
+    // Home address — composite; editing opens a sub-form with autocomplete.
+    if (acctEditing === 'address') {
+      const a = p.address || {};
+      const f = function (k, ph) { return '<input class="pf-addr-f" data-k="' + k + '" placeholder="' + ph + '" value="' + esc(a[k] || '') + '">'; };
+      h += '<div class="pf-acct-addr" data-field="address">' +
+        '<label class="pf-acct-k">Home address</label>' +
+        '<input class="pf-addr-search" placeholder="Search your address…" autocomplete="off">' +
+        '<div class="pf-addr-sug"></div>' +
+        f('line1', 'Address line 1') + f('line2', 'Address line 2 (optional)') +
+        f('city', 'City') + f('region', 'Region / state') + f('postcode', 'Postcode') + f('country', 'Country') +
+        '<div class="pf-acct-btns"><button class="pf-acct-save" data-save="address">Save address</button>' +
+        '<button class="pf-acct-cancel" type="button">Cancel</button></div></div>';
+    } else {
+      h += row('address', 'Home address', fmtAddress(p.address), {});
+    }
+
+    // Communication preferences (always-interactive toggles).
+    const comms = p.comms || {};
+    h += '<div class="pf-acct-comms"><div class="pf-acct-k">Communication preferences</div>' +
+      [['reminders', 'Event reminders'], ['marketing', 'Offers & news'], ['sms', 'SMS updates']].map(function (d) {
+        return '<button class="pf-toggle pf-comm' + (comms[d[0]] ? ' on' : '') + '" data-comm="' + d[0] + '">' +
+          '<span>' + d[1] + '</span><span class="tg-state">' + (comms[d[0]] ? 'On' : 'Off') + '</span></button>';
+      }).join('') + '</div>';
+
+    box.innerHTML = h;
+    if (acctEditing && acctEditing !== 'address') {
+      const inp = box.querySelector('.pf-acct-in'); if (inp) { inp.focus(); inp.select(); }
+    }
+  }
+
+  function applyAddrSuggestion(r) {
+    const box = profileEl.querySelector('.pf-acct');
+    const set = function (k, v) { const el = box.querySelector('.pf-addr-f[data-k="' + k + '"]'); if (el && v) el.value = v; };
+    set('line1', r.line1); set('city', r.city); set('region', r.region); set('postcode', r.postcode); set('country', r.country);
+    const form = box.querySelector('.pf-acct-addr');
+    if (form && r.lat != null) { form.dataset.lat = r.lat; form.dataset.lon = r.lon; }
+    const sug = box.querySelector('.pf-addr-sug'); if (sug) sug.innerHTML = '';
+  }
+
+  const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+  function saveAccountField(field) {
+    const box = profileEl.querySelector('.pf-acct');
+
+    if (field === 'address') {
+      const a = {};
+      box.querySelectorAll('.pf-addr-f').forEach(function (el) { const v = el.value.trim(); if (v) a[el.dataset.k] = v; });
+      const form = box.querySelector('.pf-acct-addr');
+      if (Object.keys(a).length && form && form.dataset.lat) { a.lat = +form.dataset.lat; a.lon = +form.dataset.lon; }
+      P.set({ address: Object.keys(a).length ? a : null });
+      acctEditing = null; renderAccount(); syncProfile();
+      window.EventuallyToast(Object.keys(a).length ? 'Address saved.' : 'Address cleared.');
+      return;
+    }
+
+    const inp = box.querySelector('.pf-acct-in');
+    if (!inp) return;
+    const v = inp.value.trim();
+
+    if (field === 'loginEmail') {
+      if (!EMAIL_RE.test(v)) { window.EventuallyToast('Enter a valid email address.'); return; }
+      if (v === user.email) { acctEditing = null; renderAccount(); return; }
+      A.updateEmail(v).then(function (r) {
+        if (r && r.error) { window.EventuallyToast('Could not change email: ' + r.error.message); return; }
+        window.EventuallyToast('Confirmation link sent to ' + v + '. Click it to finish changing your sign-in email.');
+      });
+      acctEditing = null; renderAccount();
+      return;
+    }
+    if (field === 'contactEmail' && v && !EMAIL_RE.test(v)) { window.EventuallyToast('Enter a valid email address.'); return; }
+
+    if (field === 'name') { P.setName(v || 'You'); renderMenuTrigger(); }
+    else if (field === 'phone') { P.set({ phone: v || null }); }
+    else if (field === 'contactEmail') { P.set({ contactEmail: v || null }); }
+
+    acctEditing = null;
+    if (field === 'name') renderProfile(); else renderAccount();
+    syncProfile();
+    window.EventuallyToast('Saved.');
   }
   // Show linked sign-in methods + let the user attach Google to this account so
   // Google and the magic link open ONE account (real auth only).
@@ -914,7 +1051,46 @@
       A.linkGoogle().then(function (r) {
         if (r && r.error) window.EventuallyToast('Could not link Google: ' + r.error.message);
       });
+      return;
     }
+    // ---- account details ----
+    if (e.target.closest('.pf-acct-signin')) { openAuth(); return; }
+    const aEdit = e.target.closest('.pf-acct-edit');
+    if (aEdit) { acctEditing = aEdit.dataset.edit; renderAccount(); return; }
+    if (e.target.closest('.pf-acct-cancel')) { acctEditing = null; renderAccount(); return; }
+    const aSave = e.target.closest('.pf-acct-save');
+    if (aSave) { saveAccountField(aSave.dataset.save); return; }
+    const pick = e.target.closest('.pf-addr-pick');
+    if (pick) { try { applyAddrSuggestion(JSON.parse(pick.dataset.r)); } catch (err) {} return; }
+    const comm = e.target.closest('.pf-comm');
+    if (comm) {
+      const c = Object.assign({}, P.get().comms); const k = comm.dataset.comm;
+      c[k] = !c[k]; P.set({ comms: c }); renderAccount(); syncProfile();
+      return;
+    }
+  });
+  // Save-on-Enter for single-field account edits.
+  profileEl.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('pf-acct-in')) {
+      e.preventDefault(); if (acctEditing) saveAccountField(acctEditing);
+    }
+  });
+  // Debounced address autocomplete (Nominatim) inside the address editor.
+  let _addrTimer = null;
+  profileEl.addEventListener('input', function (e) {
+    if (!e.target.classList || !e.target.classList.contains('pf-addr-search')) return;
+    const q = e.target.value.trim();
+    const sug = profileEl.querySelector('.pf-addr-sug');
+    clearTimeout(_addrTimer);
+    if (q.length < 3 || !window.EventuallyGeo) { if (sug) sug.innerHTML = ''; return; }
+    _addrTimer = setTimeout(function () {
+      window.EventuallyGeo.search(q, 5).then(function (list) {
+        if (!sug) return;
+        sug.innerHTML = (list || []).map(function (r) {
+          return '<button type="button" class="pf-addr-pick" data-r="' + esc(JSON.stringify(r)) + '">' + esc(r.label) + '</button>';
+        }).join('');
+      });
+    }, 350);
   });
   profileEl.querySelector('.pf-plus-btn').addEventListener('click', goPlus);
   profileEl.querySelector('.pf-notify').addEventListener('click', enableNotifications);
@@ -1077,10 +1253,14 @@
   function syncProfile() {
     if (!acctEnabled()) return;
     const p = P.get();
-    const patch = { name: p.name, location: p.location, interests: p.interests,
+    const patch = { name: p.name, phone: p.phone, location: p.location, interests: p.interests,
                     notify: p.notify, language: p.language };
     if (!billingEnabled()) patch.is_plus = p.plus;   // when billing is live, is_plus is server-only
     A.saveProfile(patch);
+    // Columns from 20_profile_details.sql — saved in a SEPARATE update so that if
+    // that migration hasn't been run yet, the missing-column error can't block the
+    // core fields above.
+    A.saveProfile({ contact_email: p.contactEmail, address: p.address, comms: p.comms });
   }
   function goPlus() {
     if (billingEnabled()) {
@@ -1166,6 +1346,10 @@
         const saved = Array.from(new Set(rSaved.concat(local.saved || [])));
         const attended = Array.from(new Set(rAttended.concat(local.attended || [])));
         if (pr) P.set({ name: user.name,
+                        phone: (pr.phone != null) ? pr.phone : local.phone,
+                        contactEmail: (pr.contact_email != null) ? pr.contact_email : local.contactEmail,
+                        address: pr.address || local.address,
+                        comms: pr.comms || local.comms,
                         interests: (pr.interests && pr.interests.length) ? pr.interests : local.interests,
                         location: pr.location || local.location, plus: !!pr.is_plus,
                         notify: !!pr.notify, language: pr.language || local.language });

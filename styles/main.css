@@ -516,6 +516,35 @@ body {
 .pf-id-link { align-self: flex-start; padding: 9px 14px; border-radius: 10px; cursor: pointer;
   background: var(--paper); border: 1px solid var(--line-2); color: var(--ink); font-family: var(--font); font-weight: 600; font-size: 13px; }
 .pf-id-link:hover { border-color: var(--clay); }
+/* account details (view + inline edit) */
+.pf-acct { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.pf-acct-row { display: flex; align-items: center; gap: 10px; font-size: 13.5px; }
+.pf-acct-row .pf-acct-k { color: var(--muted); flex: none; min-width: 92px; }
+.pf-acct-row .pf-acct-v { color: var(--ink); font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pf-acct-row .pf-acct-v i { color: var(--faint); font-weight: 400; font-style: normal; }
+.pf-acct-edit { flex: none; padding: 5px 11px; border-radius: 8px; cursor: pointer; background: var(--paper);
+  border: 1px solid var(--line-2); color: var(--ink); font-family: var(--font); font-weight: 600; font-size: 12px; }
+.pf-acct-edit:hover { border-color: var(--clay); }
+.pf-acct-note { flex: none; font-size: 11px; color: var(--faint); font-family: var(--mono); }
+.pf-acct-row.is-edit, .pf-acct-addr { display: flex; flex-direction: column; gap: 7px; padding: 12px; border-radius: 12px;
+  background: var(--paper); border: 1px solid var(--line-2); }
+.pf-acct-row.is-edit .pf-acct-k, .pf-acct-addr .pf-acct-k { min-width: 0; }
+.pf-acct-in, .pf-addr-f, .pf-addr-search { width: 100%; padding: 9px 11px; border-radius: 9px; border: 1px solid var(--line-2);
+  background: var(--cream); color: var(--ink); font-family: var(--font); font-size: 13.5px; }
+.pf-acct-in:focus, .pf-addr-f:focus, .pf-addr-search:focus { outline: none; border-color: var(--clay); }
+.pf-acct-btns { display: flex; gap: 8px; margin-top: 2px; }
+.pf-acct-save { padding: 8px 14px; border-radius: 9px; cursor: pointer; background: var(--clay); border: 1px solid var(--clay);
+  color: var(--cream); font-family: var(--font); font-weight: 700; font-size: 13px; }
+.pf-acct-cancel { padding: 8px 14px; border-radius: 9px; cursor: pointer; background: transparent; border: 1px solid var(--line-2);
+  color: var(--muted); font-family: var(--font); font-weight: 600; font-size: 13px; }
+.pf-addr-sug { display: flex; flex-direction: column; gap: 4px; }
+.pf-addr-sug:empty { display: none; }
+.pf-addr-pick { text-align: left; padding: 8px 10px; border-radius: 8px; cursor: pointer; background: var(--cream);
+  border: 1px solid var(--line); color: var(--ink); font-family: var(--font); font-size: 12.5px; line-height: 1.35; }
+.pf-addr-pick:hover { border-color: var(--clay); }
+.pf-acct-comms { display: flex; flex-direction: column; gap: 7px; margin-top: 4px; }
+.pf-acct-signin { align-self: flex-start; margin-top: 8px; padding: 9px 16px; border-radius: 10px; cursor: pointer;
+  background: var(--clay); border: 1px solid var(--clay); color: var(--cream); font-family: var(--font); font-weight: 700; font-size: 13px; }
 .chip {
   padding: 6px 12px; border-radius: 999px; cursor: pointer; font-family: var(--font); font-size: 12.5px; font-weight: 600;
   background: var(--paper); border: 1px solid var(--line-2); color: var(--muted);

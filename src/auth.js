@@ -45,6 +45,16 @@
     },
     signOut: function () { return sb.auth.signOut(); },
 
+    // Change the account's LOGIN email. Supabase sends a confirmation link to the
+    // new (and old) address; the change only takes effect once confirmed. Fails
+    // for Google-managed identities (the UI shows those read-only). Returns the
+    // supabase-js result ({ data, error }).
+    updateEmail: function (email) {
+      if (!currentUser) return Promise.resolve({ error: { message: 'Not signed in' } });
+      return sb.auth.updateUser({ email: email }, { emailRedirectTo: redirectTo() })
+        .then(logErr('updateEmail'));
+    },
+
     // ---- identity linking (so Google + email open one account) ----
     // List the providers currently attached to the signed-in account.
     listIdentities: function () {

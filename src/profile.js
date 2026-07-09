@@ -7,6 +7,10 @@
   const KEY = 'eventually.profile.v1';
   const defaults = {
     name: null,
+    phone: null,           // contact phone
+    contactEmail: null,    // preferred contact email (separate from login email)
+    address: null,         // { line1, line2, city, region, postcode, country, lat, lon }
+    comms: {},             // { reminders, marketing, sms } opt-ins
     location: null,        // { city, lat, lon, source:'gps'|'manual' }
     interests: [],         // explicit category interests
     saved: [],             // saved event ids

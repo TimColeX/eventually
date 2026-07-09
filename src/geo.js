@@ -14,7 +14,18 @@
     return a.city || a.town || a.village || a.municipality || a.county || a.state || a.country || null;
   }
   function toResult(r) {
-    return { lat: +r.lat, lon: +r.lon, city: shortPlace(r.address) || (r.display_name || '').split(',')[0], label: r.display_name || '' };
+    const a = r.address || {};
+    const line1 = [a.house_number, a.road].filter(Boolean).join(' ') || null;
+    return {
+      lat: +r.lat, lon: +r.lon,
+      city: shortPlace(a) || (r.display_name || '').split(',')[0],
+      label: r.display_name || '',
+      // Structured postal parts (used by the Profile address autocomplete).
+      line1: line1,
+      region: a.state || a.region || a.county || null,
+      postcode: a.postcode || null,
+      country: a.country || null
+    };
   }
 
   global.EventuallyGeo = {
