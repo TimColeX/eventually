@@ -20,6 +20,7 @@
   const SOURCES = {
     eventbrite:  { label: 'Eventbrite',   color: '#CB5A3C', badge: 'Official listing' },
     ticketmaster:{ label: 'Ticketmaster', color: '#8A3B1E', badge: 'Official listing' },
+    predicthq:   { label: 'PredictHQ',    color: '#2E7D8A', badge: 'Verified listing' },
     meetup:      { label: 'Meetup',       color: '#B5722F', badge: 'Community event' },
     native:      { label: 'Eventually',   color: '#21d4fd', badge: '' },
     orbit:       { label: 'Eventually Native', color: '#21d4fd', badge: '' }
