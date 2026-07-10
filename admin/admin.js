@@ -184,10 +184,18 @@
 
   /* ---------------- AI Host Script ---------------- */
   let scripts = [];   // host_script rows
+  let dbCfg = {};     // app_config.config.dailyBriefing
+  let dbRows = [];    // recent daily_briefings (cache view)
   function renderHost(body) {
     body.innerHTML = '<div class="ad-center">Loading script…</div>';
-    sb.from('host_script').select('*').order('scope').then(function (r) {
-      scripts = r.data || [];
+    Promise.all([
+      sb.from('host_script').select('*').order('scope'),
+      sb.from('app_config').select('config').eq('id', 1).maybeSingle(),
+      sb.from('daily_briefings').select('scope,day,text,generated_at').order('generated_at', { ascending: false }).limit(20)
+    ]).then(function (res) {
+      scripts = res[0].data || [];
+      dbCfg = (res[1].data && res[1].data.config && res[1].data.config.dailyBriefing) || {};
+      dbRows = res[2].data || [];
       drawHost(body, 'global');
     });
   }
@@ -209,9 +217,11 @@
       '<div class="ad-field"><label>Sponsor message (optional — appended)</label><textarea id="hs-spon">' + esc(cur.sponsor_message) + '</textarea></div>' +
       '<label class="ad-toggle"><input type="checkbox" id="hs-en"' + (cur.enabled === false ? '' : ' checked') + '> Enabled</label>' +
       '<div><button class="ad-save" id="hs-save">Save script</button><span class="ad-saved" id="hs-msg"></span></div>' +
-      '<div class="ad-field" style="margin-top:16px"><label>Live preview (sample data)</label><div class="ad-preview" id="hs-prev"></div></div></div>';
+      '<div class="ad-field" style="margin-top:16px"><label>Live preview (sample data)</label><div class="ad-preview" id="hs-prev"></div></div></div>' +
+      dailySectionHTML();
 
     const $ = function (id) { return document.getElementById(id); };
+    bindDailySection($, body);
     $('hs-scope').onchange = function () { drawHost(body, this.value); };
     $('hs-add').onclick = function () {
       const c = $('hs-new').value.trim().toLowerCase(); if (!c) return;
@@ -243,6 +253,58 @@
         $('hs-msg').textContent = 'Saved ✓'; $('hs-msg').style.color = '#3a7d44';
       });
     };
+  }
+
+  /* -------- Daily briefing (AI) — free device-voice, admin-controlled -------- */
+  function todayStr() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function dailySectionHTML() {
+    const enabled = dbCfg.enabled !== false;
+    let rows = dbRows.map(function (r) {
+      const prev = (r.text || '').slice(0, 70);
+      return '<div class="ad-li"><span>' + esc(r.scope) + ' · ' + esc(String(r.day)) + ' — ' + esc(prev) + '…</span>' +
+        '<button class="ad-regen" data-scope="' + esc(r.scope) + '" data-day="' + esc(String(r.day)) + '">Regenerate</button></div>';
+    }).join('');
+    if (!rows) rows = '<div class="ad-li"><span class="ad-hint">No briefings cached yet.</span></div>';
+    return '<div class="ad-sec"><h2>Daily briefing (AI) — free, device voice</h2>' +
+      '<p class="ad-hint">The free “Today’s briefing” is written by Claude per cluster area and spoken by the phone’s own voice (no ElevenLabs). Steer it here; changes apply to briefings generated after you save — use “Clear” / “Regenerate” to refresh existing ones.</p>' +
+      '<label class="ad-toggle"><input type="checkbox" id="db-en"' + (enabled ? ' checked' : '') + '> Enabled</label>' +
+      '<div class="ad-field"><label>AI persona / tone (system prompt — blank = built-in default)</label>' +
+      '<textarea id="db-persona" placeholder="e.g. You are the Eventually radio host — warm, upbeat, concise. Write a ~120-word spoken briefing…">' + esc(dbCfg.persona || '') + '</textarea></div>' +
+      '<div class="ad-field"><label>Announcement / sponsor line (appended verbatim to every briefing)</label>' +
+      '<textarea id="db-ann">' + esc(dbCfg.announcement || '') + '</textarea></div>' +
+      '<div><button class="ad-save" id="db-save">Save daily briefing</button><span class="ad-saved" id="db-msg"></span></div>' +
+      '<div class="ad-field" style="margin-top:16px"><label>Cached briefings (' + dbRows.length + ')</label>' +
+      '<div class="ad-list" id="db-list">' + rows + '</div>' +
+      '<div style="margin-top:8px"><button class="ad-save ad-danger" id="db-clear">Clear today’s briefings</button></div></div></div>';
+  }
+  function bindDailySection($, body) {
+    const save = $('db-save');
+    if (save) save.onclick = function () {
+      const patch = { dailyBriefing: { enabled: $('db-en').checked, persona: $('db-persona').value, announcement: $('db-ann').value } };
+      save.disabled = true;
+      patchConfig(patch).then(function (r) {
+        save.disabled = false;
+        const m = $('db-msg');
+        if (r && r.error) { m.textContent = 'Error: ' + r.error.message; m.style.color = '#b3402a'; return; }
+        dbCfg = patch.dailyBriefing;
+        m.textContent = 'Saved ✓'; m.style.color = '#3a7d44';
+      });
+    };
+    const clear = $('db-clear');
+    if (clear) clear.onclick = function () {
+      if (!confirm('Clear all of today’s cached briefings? They’ll regenerate on the next listen.')) return;
+      sb.rpc('admin_clear_daily_briefings', { p_scope: null, p_day: todayStr() }).then(function () { renderHost(body); });
+    };
+    const list = $('db-list');
+    if (list) list.addEventListener('click', function (e) {
+      const b = e.target.closest('.ad-regen'); if (!b) return;
+      sb.rpc('admin_clear_daily_briefings', { p_scope: b.dataset.scope, p_day: b.dataset.day }).then(function () {
+        const row = b.closest('.ad-li'); if (row) row.remove();
+      });
+    });
   }
 
   /* ---------------- Browser-voice scripts (free rotation, EN) ---------------- */

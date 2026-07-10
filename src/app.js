@@ -1503,6 +1503,10 @@
         if (cfg.pinnedLocations) RT.pinned = cfg.pinnedLocations;
         if (cfg.hiddenCities) RT.hiddenCities = cfg.hiddenCities;
         if (cfg.hiddenEvents) RT.hiddenEvents = cfg.hiddenEvents;
+        // Admin can disable the free daily briefing → hide the "Today's briefing" button.
+        if (cfg.dailyBriefing && cfg.dailyBriefing.enabled === false) {
+          const bb = document.querySelector('.ah-briefing'); if (bb) bb.style.display = 'none';
+        }
         applyHidden();
         refreshMarkers(); applyMonetization();
       });

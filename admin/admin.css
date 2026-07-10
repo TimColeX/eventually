@@ -51,6 +51,10 @@ body{margin:0;background:#efe7da;color:var(--ink);font-family:var(--font);font-s
 .ad-row .ad-field{flex:1;min-width:120px}
 .ad-save{padding:10px 20px;border-radius:10px;border:0;background:var(--clay);color:var(--cream);font-weight:700;cursor:pointer;font-family:var(--font);font-size:13.5px}
 .ad-save:hover{background:#b94e32}
+.ad-danger{background:transparent;border:1px solid #cb5a3c;color:#cb5a3c}
+.ad-danger:hover{background:rgba(203,90,60,.08)}
+.ad-regen{border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;font-family:var(--font);flex:none}
+.ad-regen:hover{border-color:#cb5a3c;color:#cb5a3c}
 .ad-saved{color:#3a7d44;font-size:12.5px;margin-left:10px}
 .ad-toggle{display:flex;align-items:center;gap:9px;font-size:14px;margin-bottom:10px;cursor:pointer}
 .ad-toggle input{width:auto}
