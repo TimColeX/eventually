@@ -142,8 +142,41 @@
       }).join('') + '</div>';
       html += '</div>';
       html += '<div class="ad-sec" id="ad-dq"><h2>Data quality</h2><p class="ad-hint">Checking event coordinates…</p></div>';
+      html += '<div class="ad-sec" id="ad-bu"><h2>Daily briefing usage</h2><p class="ad-hint">Counting Claude calls…</p></div>';
       body.innerHTML = html;
       renderDataQuality();
+      renderBriefingUsage();
+    });
+  }
+
+  // Daily-briefing spend at a glance: each daily_briefings row = one Claude call
+  // (one cluster cell generated that day, shared by everyone there). Cost is an
+  // estimate for Claude Haiku 4.5 at ~150 words per briefing.
+  const BRIEFING_COST_PER_CALL = 0.0015;   // ≈ $ (Haiku 4.5: ~500 in + ~180 out tokens)
+  function renderBriefingUsage() {
+    const box = document.getElementById('ad-bu');
+    if (!box) return;
+    const today = todayStr();
+    const wa = new Date(); wa.setDate(wa.getDate() - 6);
+    const weekAgo = wa.getFullYear() + '-' + String(wa.getMonth() + 1).padStart(2, '0') + '-' + String(wa.getDate()).padStart(2, '0');
+    const cnt = function (q) { return q.then(function (r) { return (r && r.count) || 0; }); };
+    Promise.all([
+      cnt(sb.from('daily_briefings').select('scope', { count: 'exact', head: true }).eq('day', today)),
+      cnt(sb.from('daily_briefings').select('scope', { count: 'exact', head: true }).gte('day', weekAgo)),
+      cnt(sb.from('daily_briefings').select('scope', { count: 'exact', head: true }))
+    ]).then(function (res) {
+      const tday = res[0], wk = res[1], total = res[2];
+      const money = function (n) { const v = n * BRIEFING_COST_PER_CALL; return '≈ $' + v.toFixed(v < 1 ? 3 : 2); };
+      const kpi = function (v, l) { return '<div class="ad-kpi"><b>' + v + '</b><span>' + l + '</span></div>'; };
+      box.innerHTML = '<h2>Daily briefing usage</h2>' +
+        '<p class="ad-hint">Each Claude call generates one briefing for a cluster cell that day, shared by everyone there — so this is the whole free-briefing spend. Cost is estimated for Claude Haiku 4.5 (~150-word briefings); check your Anthropic Console for exact billing.</p>' +
+        '<div class="ad-grid">' +
+        kpi(tday, 'Claude calls · today') + kpi(money(tday), 'Est. cost · today') +
+        kpi(wk, 'Calls · last 7 days') + kpi(money(wk), 'Est. cost · 7 days') +
+        kpi(total, 'Cached briefings (total)') +
+        '</div>';
+    }).catch(function () {
+      box.innerHTML = '<h2>Daily briefing usage</h2><p class="ad-hint">Unavailable (run backend/21_daily_briefing.sql).</p>';
     });
   }
 
