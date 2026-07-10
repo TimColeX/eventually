@@ -141,12 +141,45 @@
         return '<div class="ad-li"><span>' + esc(c.city) + '</span><span>' + c.n + '</span></div>';
       }).join('') + '</div>';
       html += '</div>';
+      html += '<div class="ad-sec" id="ad-src"><h2>Event sources</h2><p class="ad-hint">Counting per source…</p></div>';
       html += '<div class="ad-sec" id="ad-dq"><h2>Data quality</h2><p class="ad-hint">Checking event coordinates…</p></div>';
       html += '<div class="ad-sec" id="ad-bu"><h2>Daily briefing usage</h2><p class="ad-hint">Counting Claude calls…</p></div>';
       body.innerHTML = html;
+      renderSourceBreakdown();
       renderDataQuality();
       renderBriefingUsage();
     });
+  }
+
+  // Per-source breakdown (live). Dynamic — any new source appears automatically.
+  const SRC_LABELS = { ticketmaster: 'Ticketmaster', predicthq: 'PredictHQ', native: 'Eventually', meetup: 'Meetup', eventbrite: 'Eventbrite', seatgeek: 'SeatGeek' };
+  function renderSourceBreakdown() {
+    const box = document.getElementById('ad-src');
+    if (!box) return;
+    sb.rpc('admin_source_breakdown').then(function (r) {
+      const d = r.data;
+      if (!d || (r.error && r.error.message)) {
+        box.innerHTML = '<h2>Event sources</h2><p class="ad-hint">Unavailable (' +
+          esc((r.error && r.error.message) || 'run backend/27_source_breakdown.sql') + ').</p>';
+        return;
+      }
+      const srcs = d.sources || [];
+      const max = Math.max.apply(null, srcs.map(function (s) { return s.share || 0; }).concat([1]));
+      const nm = function (k) { return SRC_LABELS[k] || (k ? k.charAt(0).toUpperCase() + k.slice(1) : '—'); };
+      let h = '<h2>Event sources</h2>' +
+        '<p class="ad-hint">Where the ' + (d.total_events || 0).toLocaleString() + ' events on the globe come from. ' +
+        '“events” counts each event once (its primary source); “listings” counts every source an event appears on. New sources appear here automatically.</p>' +
+        '<div class="ad-bars">' + srcs.map(function (s) {
+          return '<div class="ad-bar"><span>' + esc(nm(s.source)) + '</span>' +
+            '<i style="width:' + ((s.share || 0) / max * 100) + '%"></i>' +
+            '<span>' + (s.primary_events || 0).toLocaleString() + ' events · ' +
+            (s.listings || 0).toLocaleString() + ' listings · ' + (s.share || 0) + '%</span></div>';
+        }).join('') + '</div>' +
+        '<div class="ad-grid" style="margin-top:12px">' +
+          '<div class="ad-kpi"><b>' + (d.multi_source || 0).toLocaleString() + '</b><span>On 2+ sources</span></div>' +
+        '</div>';
+      box.innerHTML = h;
+    }).catch(function () { box.innerHTML = '<h2>Event sources</h2><p class="ad-hint">Unavailable.</p>'; });
   }
 
   // Daily-briefing spend at a glance: each daily_briefings row = one Claude call
