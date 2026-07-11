@@ -81,6 +81,10 @@
   AIHost.prototype.playDailyBriefing = function () {
     if (!this.getDailyBriefing) return;
     const self = this;
+    // Generation token: if the active location changes mid-play we call this again;
+    // stale fetches / speech-end callbacks from the previous call then no-op.
+    const gen = (this._briefingGen = (this._briefingGen || 0) + 1);
+    this.briefingPlaying = true;
     this._unlockSpeech();                    // MUST run inside the tap
     this.speaking = true;
     this._everPlayed = true;
@@ -94,17 +98,30 @@
     if (briefEl) briefEl.disabled = true;
     this._showCaption({ text: 'Preparing today’s briefing…', kind: 'briefing', lang: 'en-US' });
     this.getDailyBriefing().then(function (b) {
+      if (gen !== self._briefingGen) return;   // superseded by a newer location
       if (briefEl) briefEl.disabled = false;
-      if (!self.speaking) return;
+      if (!self.speaking) { self.briefingPlaying = false; return; }
       const text = b && b.text;
-      if (!text) { self._rotate(); return; }   // no briefing → fall into ambient rotation
+      if (!text) { self.briefingPlaying = false; self._rotate(); return; }   // → ambient rotation
       self._lang = (b && b.lang) || 'en-US';
       self._showCaption({ text: text, kind: 'briefing', lang: self._lang, rtl: !!(b && b.rtl) });
-      self._browserSpeak(text, self._afterSegment.bind(self));   // after briefing → ambient
+      self._browserSpeak(text, function () {
+        if (gen !== self._briefingGen) return;   // a swap started; let the newer one finish
+        self.briefingPlaying = false;
+        self._afterSegment();                    // after briefing → ambient rotation
+      });
     }).catch(function () {
+      if (gen !== self._briefingGen) return;
       if (briefEl) briefEl.disabled = false;
+      self.briefingPlaying = false;
       if (self.speaking) self._rotate();
     });
+  };
+
+  // Relabel the "Today's briefing" button with the active location (Phase 1).
+  AIHost.prototype.setBriefingLabel = function (city) {
+    const b = this.el.querySelector('.ah-briefing');
+    if (b) b.textContent = '▶ Today’s briefing' + (city ? ' · ' + city : '');
   };
 
   // Update the caption (no audio). Shared by line rotation + briefing mode.
@@ -324,6 +341,7 @@
   };
   AIHost.prototype.stop = function () {
     this.speaking = false;
+    this.briefingPlaying = false;
     this.icPlay.style.display = '';
     this.icPause.style.display = 'none';
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();

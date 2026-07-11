@@ -266,7 +266,10 @@
   });
   const music = new window.EventuallyMusic();   // duckable bed, swaps to a real file if provided
   const I18n = window.EventuallyI18n;
-  new window.EventuallyAIHost(document.getElementById('ai-host'), {
+  // The location the AI host briefs — follows the ACTIVE (viewed) location, not just
+  // home: set by the location chip (home) AND by searching/navigating to a city.
+  let activeBriefingLocation = null;
+  const aiHost = new window.EventuallyAIHost(document.getElementById('ai-host'), {
     getLine: function () {                       // localize the structured line to the user's language
       let line = narrator.next();
       // Skip admin-disabled line types (cap attempts to avoid loops).
@@ -313,7 +316,7 @@
     // script (local-first, worldwide fallback); if unavailable, build one locally
     // from the loaded events so the feature always works.
     getDailyBriefing: function () {
-      const loc = P.get().location;
+      const loc = activeBriefingLocation || P.get().location;   // brief the location you're viewing
       const city = (loc && loc.city) ? loc.city : null;
       const lang = P.get().language || 'en';
       const localDay = new Date();
@@ -329,6 +332,17 @@
         .catch(fallback);
     }
   });
+
+  // Point the AI host at a location (home OR a searched/navigated city). Relabels
+  // the "Today's briefing" button, and if a briefing is already playing, swaps it
+  // to the new location on the fly. (Browsers block auto-STARTING audio without a
+  // tap, so when idle we just relabel — the next tap plays the new location.)
+  function setActiveBriefingLocation(loc) {
+    activeBriefingLocation = loc || null;
+    const city = (loc && loc.city) ? loc.city : null;
+    if (aiHost && aiHost.setBriefingLabel) aiHost.setBriefingLabel(city);
+    if (aiHost && aiHost.briefingPlaying && aiHost.playDailyBriefing) aiHost.playDailyBriefing();
+  }
 
   // Compile a short spoken daily briefing locally from the loaded events — the
   // free fallback when the LLM briefing isn't available. Local-first (events in
@@ -743,6 +757,8 @@
   // events that weren't on the loaded globe appear), then open it.
   function goToSearchResult(o) {
     searchResults.classList.remove('show'); searchInput.value = '';
+    // The AI host now follows the place you navigated to.
+    if (o.lat != null && o.lon != null) setActiveBriefingLocation({ city: o.city || null, lat: +o.lat, lon: +o.lon });
     function finish() {
       globe.flyTo(o.lat, o.lon);
       globe.setHighlight(o.lat, o.lon, { color: '#ff3b30', id: o.eventId });
@@ -761,11 +777,11 @@
   }
   function renderSearchResults(cities, events) {
     let html = cities.map(function (c) {
-      return '<button class="sr-city" data-lat="' + c.lat + '" data-lon="' + c.lon + '"><span class="dot city">📍</span>' +
+      return '<button class="sr-city" data-lat="' + c.lat + '" data-lon="' + c.lon + '" data-city="' + esc(c.city) + '"><span class="dot city">📍</span>' +
         esc(c.city) + '<small>' + c.n + ' event' + (c.n === 1 ? '' : 's') + '</small></button>';
     }).join('');
     html += events.map(function (e) {
-      return '<button data-ev="' + esc(e.id) + '" data-lat="' + e.lat + '" data-lon="' + e.lon + '"><span class="dot" style="background:' +
+      return '<button data-ev="' + esc(e.id) + '" data-lat="' + e.lat + '" data-lon="' + e.lon + '" data-city="' + esc(e.city || '') + '"><span class="dot" style="background:' +
         (e.color || '#CB5A3C') + '"></span>' + esc(e.name) + '<small>' + esc(e.city || '') + '</small></button>';
     }).join('');
     searchResults.innerHTML = html || '<div class="no-hits">No events found.</div>';
@@ -773,7 +789,7 @@
     searchResults.querySelectorAll('button').forEach(function (b) {
       b.addEventListener('click', function () {
         P.addSearch(searchInput.value);
-        goToSearchResult({ lat: +b.dataset.lat, lon: +b.dataset.lon, eventId: b.dataset.ev });
+        goToSearchResult({ lat: +b.dataset.lat, lon: +b.dataset.lon, eventId: b.dataset.ev, city: b.dataset.city });
       });
     });
   }
@@ -854,6 +870,7 @@
   function setLocation(loc) {
     P.setLocation(loc); renderLocChip(); refreshProfile(); syncProfile();
     userLoc = { lat: loc.lat, lon: loc.lon };
+    setActiveBriefingLocation(loc);                                       // host briefs your home location
     if (globe.setUserLocation) globe.setUserLocation(loc.lat, loc.lon);   // "you are here" marker
     globe.flyTo(loc.lat, loc.lon);
     refreshMarkers();
@@ -917,10 +934,11 @@
   });
   document.addEventListener('click', function (e) { if (!e.target.closest('.loc-wrap')) locMenu.classList.remove('show'); });
   renderLocChip();
-  // Restore the "you are here" marker if a location was saved previously.
+  // Restore the "you are here" marker + brief the saved location on startup.
   (function () {
     const loc = P.get().location;
     if (loc && loc.lat != null) { userLoc = { lat: loc.lat, lon: loc.lon }; if (globe.setUserLocation) globe.setUserLocation(loc.lat, loc.lon); }
+    setActiveBriefingLocation(loc || null);   // button reflects home; briefing follows it
   })();
 
   /* ---------- profile / "You" panel (personalization + Plus + notifications) ---------- */
