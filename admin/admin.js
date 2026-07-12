@@ -249,19 +249,22 @@
   }
 
   /* ---------------- AI Host Script ---------------- */
-  let scripts = [];   // host_script rows
-  let dbCfg = {};     // app_config.config.dailyBriefing
-  let dbRows = [];    // recent daily_briefings (cache view)
+  let scripts = [];    // host_script rows
+  let dbCfg = {};      // app_config.config.dailyBriefing
+  let dbRows = [];     // recent daily_briefings (cache view)
+  let dbSponsors = []; // briefing_sponsors rows
   function renderHost(body) {
     body.innerHTML = '<div class="ad-center">Loading script…</div>';
     Promise.all([
       sb.from('host_script').select('*').order('scope'),
       sb.from('app_config').select('config').eq('id', 1).maybeSingle(),
-      sb.from('daily_briefings').select('scope,day,text,generated_at').order('generated_at', { ascending: false }).limit(20)
+      sb.from('daily_briefings').select('scope,day,text,generated_at').order('generated_at', { ascending: false }).limit(20),
+      sb.from('briefing_sponsors').select('*').order('scope')
     ]).then(function (res) {
       scripts = res[0].data || [];
       dbCfg = (res[1].data && res[1].data.config && res[1].data.config.dailyBriefing) || {};
       dbRows = res[2].data || [];
+      dbSponsors = (res[3] && res[3].data) || [];
       drawHost(body, 'global');
     });
   }
@@ -334,14 +337,38 @@
         '<button class="ad-regen" data-scope="' + esc(r.scope) + '" data-day="' + esc(String(r.day)) + '">Regenerate</button></div>';
     }).join('');
     if (!rows) rows = '<div class="ad-li"><span class="ad-hint">No briefings cached yet.</span></div>';
+
+    // Sponsors manager (Phase 2): worldwide + city-targeted, appended verbatim.
+    let sponRows = dbSponsors.map(function (s) {
+      const prev = (s.message || '').slice(0, 60);
+      const win = (s.active_from || s.active_to) ? (' · ' + (s.active_from || '…') + '→' + (s.active_to || '…')) : '';
+      return '<div class="ad-li"><span>' + (s.enabled === false ? '⏸ ' : '') + '<b>' + esc(s.scope) + '</b> · w' + (s.weight || 1) + win +
+        ' — ' + esc(prev) + '…</span><span>' +
+        '<button class="ad-regen ad-spon-tog" data-id="' + esc(s.id) + '" data-en="' + (s.enabled === false ? '0' : '1') + '">' + (s.enabled === false ? 'Enable' : 'Disable') + '</button> ' +
+        '<button class="ad-regen ad-spon-del" data-id="' + esc(s.id) + '">Delete</button></span></div>';
+    }).join('');
+    if (!sponRows) sponRows = '<div class="ad-li"><span class="ad-hint">No sponsors yet.</span></div>';
+    const sponsors =
+      '<div class="ad-field" style="margin-top:20px"><label>Sponsors (' + dbSponsors.length + ') — appended verbatim; worldwide + city-targeted</label>' +
+      '<p class="ad-hint">Scope <b>world</b> plays everywhere; a city name (e.g. <b>toronto</b>) plays only there. One worldwide + one city sponsor are read per briefing, rotated by weight. These are DB templates — not written by Claude, and edits apply instantly (no regeneration).</p>' +
+      '<div class="ad-list" id="db-spon-list">' + sponRows + '</div>' +
+      '<div class="ad-row" style="margin-top:10px">' +
+        '<div class="ad-field"><label>Scope</label><input id="db-spon-scope" placeholder="world   or   toronto"></div>' +
+        '<div class="ad-field"><label>Weight</label><input id="db-spon-weight" type="number" min="1" value="1"></div></div>' +
+      '<div class="ad-field"><label>Message (read aloud verbatim)</label><textarea id="db-spon-msg" placeholder="e.g. This briefing is brought to you by Acme Coffee — grab a cup on King Street."></textarea></div>' +
+      '<div class="ad-row"><div class="ad-field"><label>Active from (optional)</label><input id="db-spon-from" type="date"></div>' +
+        '<div class="ad-field"><label>Active to (optional)</label><input id="db-spon-to" type="date"></div></div>' +
+      '<div><button class="ad-save" id="db-spon-add">Add sponsor</button><span class="ad-saved" id="db-spon-ok"></span></div></div>';
+
     return '<div class="ad-sec"><h2>Daily briefing (AI) — free, device voice</h2>' +
       '<p class="ad-hint">The free “Today’s briefing” is written by Claude per cluster area and spoken by the phone’s own voice (no ElevenLabs). Steer it here; changes apply to briefings generated after you save — use “Clear” / “Regenerate” to refresh existing ones.</p>' +
       '<label class="ad-toggle"><input type="checkbox" id="db-en"' + (enabled ? ' checked' : '') + '> Enabled</label>' +
       '<div class="ad-field"><label>AI persona / tone (system prompt — blank = built-in default)</label>' +
       '<textarea id="db-persona" placeholder="e.g. You are the Eventually radio host — warm, upbeat, concise. Write a ~120-word spoken briefing…">' + esc(dbCfg.persona || '') + '</textarea></div>' +
-      '<div class="ad-field"><label>Announcement / sponsor line (appended verbatim to every briefing)</label>' +
+      '<div class="ad-field"><label>Global announcement (appended verbatim to every briefing)</label>' +
       '<textarea id="db-ann">' + esc(dbCfg.announcement || '') + '</textarea></div>' +
       '<div><button class="ad-save" id="db-save">Save daily briefing</button><span class="ad-saved" id="db-msg"></span></div>' +
+      sponsors +
       '<div class="ad-field" style="margin-top:16px"><label>Cached briefings (' + dbRows.length + ')</label>' +
       '<div class="ad-list" id="db-list">' + rows + '</div>' +
       '<div style="margin-top:8px"><button class="ad-save ad-danger" id="db-clear">Clear today’s briefings</button></div></div></div>';
@@ -370,6 +397,36 @@
       sb.rpc('admin_clear_daily_briefings', { p_scope: b.dataset.scope, p_day: b.dataset.day }).then(function () {
         const row = b.closest('.ad-li'); if (row) row.remove();
       });
+    });
+    // Sponsors: add / toggle / delete.
+    const addS = $('db-spon-add');
+    if (addS) addS.onclick = function () {
+      const scope = ($('db-spon-scope').value || '').trim().toLowerCase();
+      const message = ($('db-spon-msg').value || '').trim();
+      const ok = $('db-spon-ok');
+      if (!scope || !message) { ok.textContent = 'Scope + message required'; ok.style.color = '#b3402a'; return; }
+      const row = {
+        scope: scope, message: message,
+        weight: Math.max(1, parseInt($('db-spon-weight').value, 10) || 1),
+        active_from: $('db-spon-from').value || null, active_to: $('db-spon-to').value || null, enabled: true
+      };
+      addS.disabled = true;
+      sb.from('briefing_sponsors').insert(row).then(function (r) {
+        addS.disabled = false;
+        if (r.error) { ok.textContent = 'Error: ' + r.error.message; ok.style.color = '#b3402a'; return; }
+        renderHost(body);
+      });
+    };
+    const sList = $('db-spon-list');
+    if (sList) sList.addEventListener('click', function (e) {
+      const del = e.target.closest('.ad-spon-del');
+      const tog = e.target.closest('.ad-spon-tog');
+      if (del) {
+        if (!confirm('Delete this sponsor?')) return;
+        sb.from('briefing_sponsors').delete().eq('id', del.dataset.id).then(function () { renderHost(body); });
+      } else if (tog) {
+        sb.from('briefing_sponsors').update({ enabled: tog.dataset.en === '0' }).eq('id', tog.dataset.id).then(function () { renderHost(body); });
+      }
     });
   }
 

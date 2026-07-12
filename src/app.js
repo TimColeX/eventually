@@ -609,7 +609,15 @@
       shown = list.slice(0, PLACE_TOP);
       more = '<button class="see-all" data-seeall="1">See all ' + list.length + ' events ↓</button>';
     }
-    placeList.innerHTML = shown.map(eventCardHTML).join('') + more + partnerCardHTML(c);
+    // Interleave a native in-feed ad slot every AD_EVERY cards (non-Plus only).
+    const AD_EVERY = 4;
+    let cardsHtml = '';
+    shown.forEach(function (ev, i) {
+      cardsHtml += eventCardHTML(ev);
+      if (adsOn() && (i + 1) % AD_EVERY === 0 && i < shown.length - 1) cardsHtml += adSlot('infeed');
+    });
+    placeList.innerHTML = cardsHtml + more + partnerCardHTML(c);
+    M.mountAdSense(placeList);
     if (focusEventId) {
       const el = placeList.querySelector('.ev[data-id="' + focusEventId + '"]');
       if (el) { el.classList.add('focus'); el.scrollIntoView({ block: 'center' }); }
@@ -702,8 +710,9 @@
           '<button class="ev-like' + (ev.userLiked ? ' on' : '') + '" data-act="like">♥ <span class="n">' + ev.likes.toLocaleString() + '</span></button>' +
           '<button class="ev-attend' + (ev.userAttending ? ' on' : '') + '" data-act="attend">✓ <span class="n">' + ev.attending.toLocaleString() + '</span></button>' +
           '<button class="ev-save' + (P.isSaved(ev.id) ? ' on' : '') + '" data-act="save">' + (P.isSaved(ev.id) ? '★' : '☆') + '</button>' +
-        '</div>' + avail +
+        '</div>' + avail + adSlot('panel') +
       '</div>';
+    M.mountAdSense(eventScroll);
     eventEl.classList.add('open');
   }
   function closeEvent() { eventEl.classList.remove('open'); activeEventId = null; }
@@ -771,14 +780,19 @@
       window.EventuallyAPI.fetchEvents({ minLat: o.lat - 0.4, maxLat: o.lat + 0.4, minLon: o.lon - 0.6, maxLon: o.lon + 0.6 })
         .then(function (evs) {
           if (evs && evs.length) { D.mergeEvents(evs); markMine(); globe.setClusters(D.getClusters()); refreshMarkers(); updateStats(); }
+          else if (o.explore && o.city) window.EventuallyToast('No events in ' + o.city + ' yet — showing the map. Check back soon.');
           finish();
         }).catch(finish);
     } else { finish(); }
   }
   function renderSearchResults(cities, events) {
     let html = cities.map(function (c) {
-      return '<button class="sr-city" data-lat="' + c.lat + '" data-lon="' + c.lon + '" data-city="' + esc(c.city) + '"><span class="dot city">📍</span>' +
-        esc(c.city) + '<small>' + c.n + ' event' + (c.n === 1 ? '' : 's') + '</small></button>';
+      // `explore` cities come from the geocoder (any place on Earth, even with no
+      // events yet) — jump there on the globe instead of showing an event count.
+      const sub = c.explore ? 'Explore on the map' : (c.n + ' event' + (c.n === 1 ? '' : 's'));
+      return '<button class="sr-city' + (c.explore ? ' sr-explore' : '') + '" data-lat="' + c.lat + '" data-lon="' + c.lon +
+        '" data-city="' + esc(c.city) + '"' + (c.explore ? ' data-explore="1"' : '') + '><span class="dot city">📍</span>' +
+        esc(c.city) + '<small>' + sub + '</small></button>';
     }).join('');
     html += events.map(function (e) {
       return '<button data-ev="' + esc(e.id) + '" data-lat="' + e.lat + '" data-lon="' + e.lon + '" data-city="' + esc(e.city || '') + '"><span class="dot" style="background:' +
@@ -789,7 +803,7 @@
     searchResults.querySelectorAll('button').forEach(function (b) {
       b.addEventListener('click', function () {
         P.addSearch(searchInput.value);
-        goToSearchResult({ lat: +b.dataset.lat, lon: +b.dataset.lon, eventId: b.dataset.ev, city: b.dataset.city });
+        goToSearchResult({ lat: +b.dataset.lat, lon: +b.dataset.lon, eventId: b.dataset.ev, city: b.dataset.city, explore: b.dataset.explore === '1' });
       });
     });
   }
@@ -823,6 +837,19 @@
           const cities = Object.keys(byCity).map(function (k) { return byCity[k]; }).sort(function (a, b) { return b.n - a.n; }).slice(0, 4);
           const events = rows.slice(0, 6).map(function (e) { return { id: e.event_id, name: e.title, city: e.city, lat: e.lat, lon: e.lon, color: D.CATEGORIES[e.category] || '#CB5A3C' }; });
           renderSearchResults(cities, events);
+          // Geocoder fallback: when the DB has few/no matches for this query, let the
+          // user jump to ANY city on Earth (even with no events yet). Only fires on
+          // sparse results to keep Nominatim usage light; guarded against stale input.
+          if (cities.length < 3 && window.EventuallyGeo && q.length >= 3) {
+            window.EventuallyGeo.search(q, 1).then(function (list) {
+              if (searchInput.value.trim() !== q) return;                 // user kept typing
+              const g = (list || [])[0]; if (!g || !g.city) return;
+              const key = g.city.toLowerCase();
+              if (RT._hidCity[key] || cities.some(function (c) { return (c.city || '').toLowerCase() === key; })) return;
+              cities.push({ city: g.city, lat: g.lat, lon: g.lon, n: 0, explore: true });
+              renderSearchResults(cities, events);
+            }).catch(function () { /* geocoder unavailable — keep DB results */ });
+          }
         });
       }, 250);
     } else {
@@ -1238,12 +1265,20 @@
 
   /* ---------- display ads + premium visibility ---------- */
   const adbar = document.getElementById('adbar');
+  // Show ads only to non-Plus users when the admin has ads enabled.
+  function adsOn() { return RT.adsEnabled && !P.get().plus; }
+  // A reserved ad container (banner | infeed | panel). Empty string when ads are
+  // off so nothing renders/reserves space. Provider-agnostic (house creative now,
+  // AdSense later) — see monetize.js adSlotHTML/mountAdSense.
+  function adSlot(kind) {
+    if (!adsOn()) return '';
+    return '<div class="ad-slot ad-' + kind + '" data-ad="' + kind + '">' + M.adSlotHTML(kind) + '</div>';
+  }
   function renderAd() {
-    const ad = M.randomAd();
-    adbar.innerHTML = '<span class="ad-tag">Ad</span>' +
-      '<div class="ad-body"><strong>' + esc(ad.brand) + '</strong><span>' + esc(ad.text) + '</span></div>' +
-      '<button class="ad-plus">Remove ads</button>';
-    adbar.querySelector('.ad-plus').addEventListener('click', openProfile);
+    adbar.innerHTML = M.adSlotHTML('banner');
+    M.mountAdSense(adbar);
+    const plus = adbar.querySelector('.ad-plus');
+    if (plus) plus.addEventListener('click', openProfile);
   }
   function applyMonetization() {
     const showAds = RT.adsEnabled && !P.get().plus;   // admin can disable ads globally
