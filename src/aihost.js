@@ -24,6 +24,7 @@
     this.synth = opts.synth || null;       // (text, lang, kind) -> Promise<url|null> (legacy per-line)
     this.getBriefing = opts.getBriefing || null;  // () -> Promise<{url,text}|null> (shared city briefing)
     this.getDailyBriefing = opts.getDailyBriefing || null;  // () -> Promise<{text}|null> (free daily briefing, device voice)
+    this.onHomeReset = opts.onHomeReset || null;  // () -> void ("back to my area" clicked)
     this.getOpener = opts.getOpener || null;      // () -> { text, lang, rtl } (personalized, browser voice)
     this.getVoiceSettings = opts.getVoiceSettings || null;  // () -> { rate, pitch } (admin-tunable)
     // Voices can load asynchronously; refresh the best-voice pick when they arrive.
@@ -62,6 +63,7 @@
         '<div class="ah-caption"><span class="ah-spon" style="display:none">SPONSORED</span>' +
         '<span class="ah-text"></span></div>' +
       '</div>' +
+      '<button class="ah-home" style="display:none" aria-label="Back to my area">↩ My area</button>' +
       (this.getDailyBriefing ? '<button class="ah-briefing" aria-label="Play today\'s briefing">▶ Today’s briefing</button>' : '') +
       '<canvas class="ah-wave"></canvas>';
 
@@ -73,6 +75,18 @@
     this.el.querySelector('.ah-play').addEventListener('click', function () { self.toggle(); });
     const brief = this.el.querySelector('.ah-briefing');
     if (brief) brief.addEventListener('click', function () { self.playDailyBriefing(); });
+    const home = this.el.querySelector('.ah-home');
+    if (home) home.addEventListener('click', function () { if (self.onHomeReset) self.onHomeReset(); });
+  };
+
+  // Show/hide the "back to my area" reset. Visible only when the Host is focused on
+  // a place other than the user's home (so there's somewhere to return to).
+  AIHost.prototype.setExploring = function (exploring, homeCity) {
+    const b = this.el.querySelector('.ah-home');
+    if (!b) return;
+    b.style.display = exploring ? '' : 'none';
+    b.textContent = '↩ My area';
+    if (homeCity) b.title = 'Back to ' + homeCity;
   };
 
   // Free "Today's briefing": a discrete ~45–60s spoken segment via the DEVICE voice.
@@ -116,6 +130,19 @@
       self.briefingPlaying = false;
       if (self.speaking) self._rotate();
     });
+  };
+
+  // Live DJ: the focus city changed. The narrator has queued a station ident as the
+  // next line — if we're currently in a music gap (between spoken segments), bring
+  // that next line forward so the switch feels responsive. If we're mid-sentence,
+  // do nothing: the ident plays naturally right after the current line finishes.
+  AIHost.prototype.transitionTo = function () {
+    if (!this.speaking || this.briefingPlaying) return;
+    if (this._gapTimer) {
+      clearTimeout(this._gapTimer);
+      const self = this;
+      this._gapTimer = setTimeout(function () { if (self.speaking && !self.briefingPlaying) self._rotate(); }, 1400);
+    }
   };
 
   // Relabel the "Today's briefing" button with the active location (Phase 1).

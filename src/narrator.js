@@ -30,9 +30,18 @@
   function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
 
   function create(ctx) {
-    // ctx: { data, profile, monetize, selectedDate() }
+    // ctx: { data, profile, monetize, selectedDate(), getFocus() }
+    // getFocus() → { loc, city, exploring }: the location the Host is currently
+    // focused on — a searched/tapped city, else the user's home location. Drives
+    // the DJ so it "leads local, then world".
     let i = 0;
     let sinceSponsor = 0;
+    let pendingIdent = null;                 // a city to announce as a station ident
+
+    function getFocus() {
+      const f = ctx.getFocus ? ctx.getFocus() : null;
+      return f || { loc: (ctx.profile.get().location || null), city: null, exploring: false };
+    }
 
     function liveEvents() {
       const d = ctx.data, sel = ctx.selectedDate();
@@ -46,49 +55,66 @@
       // believable global figure (the dataset is a sample) that drifts slightly
       return 1180 + liveEvents().length * 7 + (new Date().getMinutes());
     }
-    function nearby(interests, loc) {
+    // Events near the CURRENT FOCUS (live+upcoming, popularity-sorted). Falls back
+    // to worldwide when the focus is unknown or nothing is nearby, so the DJ never
+    // goes silent ("lead local, then world").
+    const FOCUS_KM = 160;
+    function focusPool() {
+      const f = getFocus();
       const all = liveEvents().concat(upcomingEvents());
-      return all
-        .map(function (e) {
-          const dist = loc ? haversineKm(loc.lat, loc.lon, e.lat, e.lon) : null;
-          return { e: e, dist: dist };
-        })
-        .filter(function (x) { return !interests.length || interests.indexOf(x.e.category) > -1; })
-        .sort(function (a, b) { return (a.dist == null ? 0 : a.dist) - (b.dist == null ? 0 : b.dist); });
+      if (!f.loc) return { list: all, scoped: false };
+      const near = all
+        .map(function (e) { return { e: e, dist: haversineKm(f.loc.lat, f.loc.lon, e.lat, e.lon) }; })
+        .filter(function (x) { return x.dist <= FOCUS_KM; })
+        .sort(function (a, b) { return ctx.data.popularity(b.e) - ctx.data.popularity(a.e); });
+      return near.length ? { list: near.map(function (x) { return x.e; }), scoped: true }
+                         : { list: all, scoped: false };
+    }
+    function focusLive() {
+      const sel = ctx.selectedDate(), d = ctx.data;
+      return focusPool().list.filter(function (e) { return d.typeForDate(e, sel) === 'live'; });
     }
 
+    // LEAD LOCAL (focus city) → THEN WORLD. Voices 0–2 are scoped to the focus
+    // location; voices 3–5 are the worldwide pulse for variety.
     const voices = [
-      // Concierge — LEAD with the user's area (geolocation/chosen city); prompt if unknown
+      // Concierge — LEAD with the focus city (searched/tapped, else home). When the
+      // focus is a place you're exploring (not home), the greeting reframes to
+      // "You're exploring <city>"; prompt to set a location if none is known.
       function () {
+        const f = getFocus();
         const p = ctx.profile.get();
         const interests = ctx.profile.effectiveInterests(ctx.data.getById);
-        const recs = nearby(interests, p.location).slice(0, 3);
-        if (recs.length && p.location) {
+        const pool = focusPool();
+        const recs = pool.list.filter(function (e) { return !interests.length || interests.indexOf(e.category) > -1; });
+        if (recs.length && f.loc) {
           const top = recs[0];
+          const mi = Math.max(1, km2mi(haversineKm(f.loc.lat, f.loc.lon, top.lat, top.lon)));
           return { kind: 'greeting', data: {
             part: partOfDay(), name: p.name || null, hasRecs: true,
-            k: recs.length, cat: interests.length ? interests[0] : top.e.category,
-            mi: Math.max(1, km2mi(recs[2] ? recs[2].dist : top.dist)),
-            event: top.e.name, city: top.e.city } };
+            exploring: !!f.exploring, city: f.city || top.city,
+            k: Math.min(recs.length, 9), cat: interests.length ? interests[0] : top.category,
+            mi: mi, event: top.name } };
         }
         return { kind: 'greeting', data: { part: partOfDay(), name: p.name || null, hasRecs: false } };
       },
-      // News anchor — the worldwide pulse
-      function () { return { kind: 'welcome', data: { count: worldwideLive() } }; },
-      // Radio DJ — spotlight
+      // Radio DJ — spotlight an event in the focus city (falls back to worldwide)
       function () {
-        const live = liveEvents().sort(function (a, b) { return ctx.data.popularity(b) - ctx.data.popularity(a); });
-        if (!live.length) return { kind: 'tip', data: {} };
-        const e = pick(live.slice(0, 5));
+        const live = focusLive().sort(function (a, b) { return ctx.data.popularity(b) - ctx.data.popularity(a); });
+        const pool = live.length ? live : focusPool().list;
+        if (!pool.length) return { kind: 'tip', data: {} };
+        const e = pick(pool.slice(0, 5));
         return { kind: 'spotlight', data: { event: e.name, city: e.city, going: e.attending } };
       },
-      // Tour guide — countdown
+      // Tour guide — countdown for a live event in the focus city
       function () {
-        const live = liveEvents();
+        const live = focusLive();
         if (!live.length) return { kind: 'tip', data: {} };
         const e = pick(live);
         return { kind: 'countdown', data: { event: e.name, min: e.startsInMin, city: e.city } };
       },
+      // News anchor — the worldwide pulse
+      function () { return { kind: 'welcome', data: { count: worldwideLive() } }; },
       // News anchor — regional roundup
       function () {
         const live = liveEvents();
@@ -114,8 +140,12 @@
 
     return {
       reset: function () { i = 0; sinceSponsor = 0; },   // so the Host leads with the location greeting
+      // Queue a station ident ("Now taking you to <city>") and re-lead with the
+      // local greeting on the next rotation. Called when the focus city changes.
+      announceFocus: function (city) { pendingIdent = city || null; i = 0; },
       // Emits a STRUCTURED line: { kind, data, sponsor? }. The i18n layer renders text.
       next: function () {
+        if (pendingIdent) { const c = pendingIdent; pendingIdent = null; return { kind: 'ident', data: { city: c } }; }
         sinceSponsor++;
         if (sinceSponsor >= 4) {
           const s = ctx.monetize.nextSponsorLine(ctx.profile.get().plus);

@@ -311,9 +311,15 @@ body {
 }
 .ah-briefing:hover { border-color: var(--clay); color: var(--clay); }
 .ah-briefing:disabled { opacity: .55; cursor: default; }
+.ah-home {
+  flex: none; cursor: pointer; border: 1px solid var(--line-2); border-radius: 999px;
+  background: transparent; color: var(--muted); font-family: var(--font); font-weight: 700;
+  font-size: 11.5px; padding: 7px 12px; white-space: nowrap;
+}
+.ah-home:hover { border-color: var(--clay); color: var(--clay); }
 @media (max-width: 560px) {
   .ah-wave { display: none; }
-  .ah-briefing { font-size: 11px; padding: 6px 10px; }
+  .ah-briefing, .ah-home { font-size: 11px; padding: 6px 10px; }
 }
 
 /* ---------- auth modal ---------- */

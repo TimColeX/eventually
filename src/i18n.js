@@ -37,9 +37,12 @@
   const T = {
     en: {
       welcome: d => `Welcome to Eventually! Right now, there are ${n(d.count, 'en')} events happening live around the world.`,
-      greeting: d => d.hasRecs
-        ? `${GREET.en[d.part]}, ${nm(d, 'en')}! Based on what you love, I've found ${d.k} live ${c('en', d.cat)} events within ${d.mi} miles — including ${d.event}, over in ${d.city}.`
-        : `${GREET.en[d.part]}, ${nm(d, 'en')}! Set your location and a few interests, and I'll line up events made just for you.`,
+      greeting: d => !d.hasRecs
+        ? `${GREET.en[d.part]}, ${nm(d, 'en')}! Set your location and a few interests, and I'll line up events made just for you.`
+        : d.exploring
+          ? `${GREET.en[d.part]}! You're exploring ${d.city}. There are ${d.k} ${c('en', d.cat)} events on here right now — including ${d.event}.`
+          : `${GREET.en[d.part]}, ${nm(d, 'en')}! Based on what you love, I've found ${d.k} live ${c('en', d.cat)} events within ${d.mi} miles — including ${d.event}, over in ${d.city}.`,
+      ident: d => `Now taking you to ${d.city} — here's what's happening there right now.`,
       spotlight: d => `Here's one to watch: ${d.event}, in ${d.city}. ${n(d.going, 'en')} people are heading there right now.`,
       countdown: d => `Heads up — ${d.event} in ${d.city} kicks off in just ${d.min} minutes.`,
       region: d => `Over in ${d.region}, ${d.n} big ${c('en', d.cat)} events are underway right now.`,
@@ -49,9 +52,12 @@
     },
     es: {
       welcome: d => `Bienvenido a Eventually. Ahora mismo hay ${n(d.count, 'es')} eventos en directo en todo el mundo.`,
-      greeting: d => d.hasRecs
-        ? `${GREET.es[d.part]}, ${nm(d, 'es')}. Según tus intereses, encontré ${d.k} eventos de ${c('es', d.cat)} en directo a menos de ${d.mi} millas, incluido ${d.event} en ${d.city}.`
-        : `${GREET.es[d.part]}, ${nm(d, 'es')}. Configura tu ubicación e intereses y te prepararé eventos a tu medida.`,
+      greeting: d => !d.hasRecs
+        ? `${GREET.es[d.part]}, ${nm(d, 'es')}. Configura tu ubicación e intereses y te prepararé eventos a tu medida.`
+        : d.exploring
+          ? `${GREET.es[d.part]}. Estás explorando ${d.city}. Ahora mismo hay ${d.k} eventos de ${c('es', d.cat)} aquí, incluido ${d.event}.`
+          : `${GREET.es[d.part]}, ${nm(d, 'es')}. Según tus intereses, encontré ${d.k} eventos de ${c('es', d.cat)} en directo a menos de ${d.mi} millas, incluido ${d.event} en ${d.city}.`,
+      ident: d => `Ahora te llevamos a ${d.city}: esto es lo que está pasando allí.`,
       spotlight: d => `Ponemos el foco en ${d.event} en ${d.city}: ${n(d.going, 'es')} personas asistirán.`,
       countdown: d => `${d.event} comienza en ${d.min} minutos en ${d.city}.`,
       region: d => `Hay ${d.n} grandes eventos de ${c('es', d.cat)} en curso en ${d.region}.`,
@@ -61,9 +67,12 @@
     },
     fr: {
       welcome: d => `Bienvenue sur Eventually. Il y a actuellement ${n(d.count, 'fr')} événements en direct dans le monde.`,
-      greeting: d => d.hasRecs
-        ? `${GREET.fr[d.part]}, ${nm(d, 'fr')}. D'après vos centres d'intérêt, j'ai trouvé ${d.k} événements ${c('fr', d.cat)} en direct à moins de ${d.mi} miles, dont ${d.event} à ${d.city}.`
-        : `${GREET.fr[d.part]}, ${nm(d, 'fr')}. Indiquez votre position et vos centres d'intérêt, et je vous proposerai des événements sur mesure.`,
+      greeting: d => !d.hasRecs
+        ? `${GREET.fr[d.part]}, ${nm(d, 'fr')}. Indiquez votre position et vos centres d'intérêt, et je vous proposerai des événements sur mesure.`
+        : d.exploring
+          ? `${GREET.fr[d.part]} ! Vous explorez ${d.city}. Il y a ${d.k} événements ${c('fr', d.cat)} ici en ce moment, dont ${d.event}.`
+          : `${GREET.fr[d.part]}, ${nm(d, 'fr')}. D'après vos centres d'intérêt, j'ai trouvé ${d.k} événements ${c('fr', d.cat)} en direct à moins de ${d.mi} miles, dont ${d.event} à ${d.city}.`,
+      ident: d => `Direction ${d.city} — voici ce qui s'y passe en ce moment.`,
       spotlight: d => `Coup de projecteur sur ${d.event} à ${d.city} — ${n(d.going, 'fr')} personnes y vont en ce moment.`,
       countdown: d => `${d.event} commence dans ${d.min} minutes à ${d.city}.`,
       region: d => `${d.n} grands événements ${c('fr', d.cat)} sont en cours en ${d.region}.`,
@@ -73,9 +82,12 @@
     },
     ar: {
       welcome: d => `مرحبًا بك في Eventually. هناك حاليًا ${n(d.count, 'ar')} فعالية مباشرة حول العالم.`,
-      greeting: d => d.hasRecs
-        ? `${GREET.ar[d.part]}، ${nm(d, 'ar')}. بناءً على اهتماماتك، وجدت ${d.k} فعاليات ${c('ar', d.cat)} مباشرة على بُعد ${d.mi} ميل، منها ${d.event} في ${d.city}.`
-        : `${GREET.ar[d.part]}، ${nm(d, 'ar')}. حدّد موقعك واهتماماتك وسأجهّز لك فعاليات مخصصة.`,
+      greeting: d => !d.hasRecs
+        ? `${GREET.ar[d.part]}، ${nm(d, 'ar')}. حدّد موقعك واهتماماتك وسأجهّز لك فعاليات مخصصة.`
+        : d.exploring
+          ? `${GREET.ar[d.part]}! أنت تستكشف ${d.city}. توجد الآن ${d.k} فعاليات ${c('ar', d.cat)} هنا، منها ${d.event}.`
+          : `${GREET.ar[d.part]}، ${nm(d, 'ar')}. بناءً على اهتماماتك، وجدت ${d.k} فعاليات ${c('ar', d.cat)} مباشرة على بُعد ${d.mi} ميل، منها ${d.event} في ${d.city}.`,
+      ident: d => `ننتقل بك الآن إلى ${d.city} — إليك ما يحدث هناك الآن.`,
       spotlight: d => `الضوء الآن على ${d.event} في ${d.city} — ${n(d.going, 'ar')} شخص سيحضرون الآن.`,
       countdown: d => `يبدأ ${d.event} خلال ${d.min} دقيقة في ${d.city}.`,
       region: d => `هناك ${d.n} فعاليات ${c('ar', d.cat)} كبرى جارية الآن في ${d.region}.`,
@@ -85,9 +97,12 @@
     },
     zh: {
       welcome: d => `欢迎来到 Eventually。目前全球有 ${n(d.count, 'zh')} 场正在进行的活动。`,
-      greeting: d => d.hasRecs
-        ? `${GREET.zh[d.part]}，${nm(d, 'zh')}。根据你的兴趣，我在 ${d.mi} 英里内找到了 ${d.k} 场正在进行的${c('zh', d.cat)}活动，包括 ${d.city} 的 ${d.event}。`
-        : `${GREET.zh[d.part]}，${nm(d, 'zh')}。设置你的位置和兴趣，我会为你推荐合适的活动。`,
+      greeting: d => !d.hasRecs
+        ? `${GREET.zh[d.part]}，${nm(d, 'zh')}。设置你的位置和兴趣，我会为你推荐合适的活动。`
+        : d.exploring
+          ? `${GREET.zh[d.part]}！你正在探索 ${d.city}。这里现在有 ${d.k} 场${c('zh', d.cat)}活动，包括 ${d.event}。`
+          : `${GREET.zh[d.part]}，${nm(d, 'zh')}。根据你的兴趣，我在 ${d.mi} 英里内找到了 ${d.k} 场正在进行的${c('zh', d.cat)}活动，包括 ${d.city} 的 ${d.event}。`,
+      ident: d => `现在带你前往 ${d.city} —— 看看那里正在发生什么。`,
       spotlight: d => `本场焦点：${d.city} 的 ${d.event} —— 目前有 ${n(d.going, 'zh')} 人参加。`,
       countdown: d => `${d.event} 将在 ${d.min} 分钟后于 ${d.city} 开始。`,
       region: d => `${d.region}目前有 ${d.n} 场大型${c('zh', d.cat)}活动正在进行。`,

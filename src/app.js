@@ -260,15 +260,26 @@
   /* ---------- AI host ("eventually" Host) ---------- */
   // Captions rotate continuously; pressing play speaks them. The narrator pulls
   // from live events + the user's profile, with rate-limited sponsor reads.
+  // The location the AI host focuses on — follows the ACTIVE (viewed) location, not
+  // just home: set by the location chip (home), by searching, AND by tapping a city
+  // cluster. null → not yet set (fall back to home / worldwide).
+  let activeBriefingLocation = null;
   const narrator = window.EventuallyNarrator.create({
     data: D, profile: P, monetize: M,
-    selectedDate: function () { return selectedDate; }
+    selectedDate: function () { return selectedDate; },
+    // What the live DJ leads with: a searched/tapped city if set, else the user's
+    // home. `exploring` is true when that focus is a place other than home.
+    getFocus: function () {
+      const home = P.get().location || null;
+      const loc = activeBriefingLocation || home;
+      const city = (loc && loc.city) ? loc.city : null;
+      const exploring = !!(activeBriefingLocation && loc && (!home ||
+        (loc.city || '').toLowerCase() !== (home.city || '').toLowerCase()));
+      return { loc: loc, city: city, exploring: exploring };
+    }
   });
   const music = new window.EventuallyMusic();   // duckable bed, swaps to a real file if provided
   const I18n = window.EventuallyI18n;
-  // The location the AI host briefs — follows the ACTIVE (viewed) location, not just
-  // home: set by the location chip (home) AND by searching/navigating to a city.
-  let activeBriefingLocation = null;
   const aiHost = new window.EventuallyAIHost(document.getElementById('ai-host'), {
     getLine: function () {                       // localize the structured line to the user's language
       let line = narrator.next();
@@ -280,8 +291,9 @@
       const lang = P.get().language || 'en';
       const ov = RT.hostLines && RT.hostLines[line.kind];
       let text;
-      // English admin override (skip the greeting's no-recs form — it lacks the data).
-      if (lang === 'en' && ov && ov.text && !(line.kind === 'greeting' && line.data && !line.data.hasRecs)) {
+      // English admin override (skip the greeting's no-recs + exploring forms — the
+      // template has no override slot for those).
+      if (lang === 'en' && ov && ov.text && !(line.kind === 'greeting' && line.data && (!line.data.hasRecs || line.data.exploring))) {
         text = renderTemplate(ov.text, line.data || {});
       } else {
         text = I18n.format(line, lang);
@@ -297,8 +309,8 @@
     getBriefing: function () {
       if (!window.EventuallyHostVoice || !window.EventuallyHostVoice.enabled) return Promise.resolve(null);
       if (!P.get().plus) return Promise.resolve(null);
-      const loc = P.get().location;
-      const city = (loc && loc.city) ? loc.city : null;   // null → worldwide briefing
+      const loc = activeBriefingLocation || P.get().location;   // follows the searched/viewed city
+      const city = (loc && loc.city) ? loc.city : null;         // null → worldwide briefing
       return window.EventuallyHostVoice.getBriefing(city, P.get().language || 'en');
     },
     // Personalized opener spoken in the FREE browser voice (no ElevenLabs cost).
@@ -312,6 +324,8 @@
     },
     // Admin-tunable delivery for the free browser voice (rate/pitch).
     getVoiceSettings: function () { return RT.hostVoice || {}; },
+    // "Back to my area" — return the Host (and the map) to the user's home location.
+    onHomeReset: function () { backToMyArea(); },
     // Free "Today's briefing" (device voice): prefer the LLM-authored server
     // script (local-first, worldwide fallback); if unavailable, build one locally
     // from the loaded events so the feature always works.
@@ -338,10 +352,34 @@
   // to the new location on the fly. (Browsers block auto-STARTING audio without a
   // tap, so when idle we just relabel — the next tap plays the new location.)
   function setActiveBriefingLocation(loc) {
+    const prevCity = (activeBriefingLocation && activeBriefingLocation.city) || null;
     activeBriefingLocation = loc || null;
     const city = (loc && loc.city) ? loc.city : null;
     if (aiHost && aiHost.setBriefingLabel) aiHost.setBriefingLabel(city);
-    if (aiHost && aiHost.briefingPlaying && aiHost.playDailyBriefing) aiHost.playDailyBriefing();
+    if (aiHost && aiHost.setExploring) aiHost.setExploring(isExploringNow(), (homeLoc() || {}).city || null);
+    if (aiHost && aiHost.briefingPlaying && aiHost.playDailyBriefing) {
+      aiHost.playDailyBriefing();                              // briefing already playing → swap it
+    } else if (city && city !== prevCity && aiHost && aiHost.speaking && !aiHost.briefingPlaying) {
+      // Live DJ is on air → announce the city change like a radio station ident,
+      // then re-lead with that city's local segment.
+      if (narrator.announceFocus) narrator.announceFocus(city);
+      if (aiHost.transitionTo) aiHost.transitionTo(city);
+    }
+  }
+  function homeLoc() { return P.get().location || null; }
+  // Exploring = the Host is focused on a place other than the user's home.
+  function isExploringNow() {
+    const home = homeLoc(), a = activeBriefingLocation;
+    return !!(a && home && (a.city || '').toLowerCase() !== (home.city || '').toLowerCase());
+  }
+  // Return the Host + globe to the user's home area, clearing the searched focus.
+  function backToMyArea() {
+    const home = homeLoc();
+    if (!home) { window.EventuallyToast('Set your location first to use “my area”.'); return; }
+    setActiveBriefingLocation({ city: home.city, lat: home.lat, lon: home.lon });
+    globe.flyTo(home.lat, home.lon);
+    if (globe.setUserLocation) globe.setUserLocation(home.lat, home.lon);
+    window.EventuallyToast('Back in your area — ' + home.city + '.');
   }
 
   // Compile a short spoken daily briefing locally from the loaded events — the
@@ -627,6 +665,7 @@
   function openPlace(clusterId, focusId) {
     const c = clusterById(clusterId);
     if (!c) return;
+    setActiveBriefingLocation({ city: c.city, lat: c.lat, lon: c.lon });   // tapping a cluster focuses the Host
     activeClusterId = clusterId; focusEventId = focusId || null;
     placeCat = 'all'; placeSort = 'soon'; placeExpanded = !!focusId;   // expand if jumping to a specific event
     const all = visibleEvents(c), n = all.length;
@@ -825,7 +864,12 @@
   let _searchTimer = null;
   searchInput.addEventListener('input', function () {
     const q = searchInput.value.trim();
-    if (!q) { searchResults.classList.remove('show'); return; }
+    if (!q) {
+      searchResults.classList.remove('show');
+      clearTimeout(_searchTimer);                    // drop any pending search
+      if (isExploringNow()) backToMyArea();          // clearing the box snaps back to your area
+      return;
+    }
     clearTimeout(_searchTimer);
     if (window.EventuallyAPI && window.EventuallyAPI.config.remote && window.EventuallyAPI.search) {
       // Backend search: finds ANY approved event in the database (not just loaded).
