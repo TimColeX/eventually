@@ -34,26 +34,32 @@
 
   global.EventuallyHostVoice = {
     enabled: ENABLED,
-    // Shared, cached premium briefing (rich Claude script + ElevenLabs, keyed by
-    // cluster cell — same location model as the free tier). opts: {city,lat,lon,lang,day}
-    // -> Promise<{url, text}|null>
+    // Premium briefing from the UNIFIED provider (rich Claude script → ElevenLabs,
+    // keyed by cluster cell; audio:true → Plus audio segments). Returns normalized
+    // { segments:[{url,text}], text } (body + any verbatim promo clips), or null.
+    // opts: {city,lat,lon,lang,day}
     getBriefing: function (opts) {
       if (!ENABLED) return Promise.resolve(null);
       const o = opts || {};
       return accessToken().then(function (tk) {
         if (!tk) return null;
-        return fetch(BASE + '/functions/v1/host-briefing', {
+        return fetch(BASE + '/functions/v1/briefing', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'apikey': ANON, 'Authorization': 'Bearer ' + tk },
           body: JSON.stringify({
-            city: o.city || null,
+            audio: true, city: o.city || null,
             lat: (o.lat != null ? o.lat : null), lon: (o.lon != null ? o.lon : null),
             lang: (o.lang || 'en').slice(0, 2), day: o.day || null
           })
         }).then(function (r) {
-          if (!r.ok) { r.json().then(function (e) { console.warn('[HostVoice] host-briefing ' + r.status, e); }).catch(function () {}); return null; }
+          if (!r.ok) { r.json().then(function (e) { console.warn('[HostVoice] briefing ' + r.status, e); }).catch(function () {}); return null; }
           return r.json();
-        }).then(function (j) { return (j && j.url) ? { url: j.url, text: j.text || '' } : null; });
+        }).then(function (j) {
+          if (!j) return null;
+          if (j.segments && j.segments.length) return { segments: j.segments, text: j.text || j.segments[0].text || '' };
+          if (j.url) return { segments: [{ url: j.url, text: j.text || '' }], text: j.text || '' };   // legacy single-url
+          return null;
+        });
       }).catch(function () { return null; });
     },
     // -> Promise<string|null> (audio URL, or null to use the browser voice)

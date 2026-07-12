@@ -249,79 +249,28 @@
   }
 
   /* ---------------- AI Host Script ---------------- */
-  let scripts = [];    // host_script rows
   let dbCfg = {};      // app_config.config.dailyBriefing
   let dbRows = [];     // recent daily_briefings (cache view)
   let dbSponsors = []; // briefing_sponsors rows
   function renderHost(body) {
     body.innerHTML = '<div class="ad-center">Loading script…</div>';
     Promise.all([
-      sb.from('host_script').select('*').order('scope'),
       sb.from('app_config').select('config').eq('id', 1).maybeSingle(),
       sb.from('daily_briefings').select('scope,day,text,generated_at').order('generated_at', { ascending: false }).limit(20),
       sb.from('briefing_sponsors').select('*').order('scope')
     ]).then(function (res) {
-      scripts = res[0].data || [];
-      dbCfg = (res[1].data && res[1].data.config && res[1].data.config.dailyBriefing) || {};
-      dbRows = res[2].data || [];
-      dbSponsors = (res[3] && res[3].data) || [];
-      drawHost(body, 'global');
+      dbCfg = (res[0].data && res[0].data.config && res[0].data.config.dailyBriefing) || {};
+      dbRows = res[1].data || [];
+      dbSponsors = (res[2] && res[2].data) || [];
+      drawHost(body);
     });
   }
-  function findScope(scope) { return scripts.find(function (s) { return s.scope === scope; }) || { scope: scope, template: '', announcement: '', sponsor_message: '', enabled: true }; }
-
-  function drawHost(body, scope) {
-    const opts = [{ scope: 'global' }].concat(scripts.filter(function (s) { return s.scope !== 'global'; }))
-      .map(function (s) { return '<option value="' + esc(s.scope) + '"' + (s.scope === scope ? ' selected' : '') + '>' + (s.scope === 'global' ? 'Global (default)' : esc(s.scope)) + '</option>'; }).join('');
-    const cur = findScope(scope);
-    body.innerHTML =
-      '<div class="ad-sec"><h2>AI Host script</h2>' +
-      '<p class="ad-hint">Edit what the Host says. The city briefing uses this template; a city/region override replaces the global one for that place. Changes apply on the next ~20-min refresh window.</p>' +
-      '<div class="ad-row"><div class="ad-field"><label>Scope</label><select id="hs-scope">' + opts + '</select></div>' +
-      '<div class="ad-field"><label>Add city/region override (lowercase, e.g. toronto)</label>' +
-      '<div style="display:flex;gap:8px"><input id="hs-new" placeholder="city name…"><button class="ad-save" id="hs-add" type="button">Add</button></div></div></div>' +
-      '<div class="ad-field"><label>Template</label><textarea id="hs-tmpl">' + esc(cur.template) + '</textarea>' +
-      '<div class="ad-chips">' + ['{city}', '{count}', '{top}', '{featured}'].map(function (t) { return '<span class="ad-chip" data-ins="' + t + '">' + t + '</span>'; }).join('') + '</div></div>' +
-      '<div class="ad-field"><label>Announcement (optional — appended)</label><textarea id="hs-ann">' + esc(cur.announcement) + '</textarea></div>' +
-      '<div class="ad-field"><label>Sponsor message (optional — appended)</label><textarea id="hs-spon">' + esc(cur.sponsor_message) + '</textarea></div>' +
-      '<label class="ad-toggle"><input type="checkbox" id="hs-en"' + (cur.enabled === false ? '' : ' checked') + '> Enabled</label>' +
-      '<div><button class="ad-save" id="hs-save">Save script</button><span class="ad-saved" id="hs-msg"></span></div>' +
-      '<div class="ad-field" style="margin-top:16px"><label>Live preview (sample data)</label><div class="ad-preview" id="hs-prev"></div></div></div>' +
-      dailySectionHTML();
-
+  // The old fill-in-the-blank template editor (host_script) is retired — Claude now
+  // authors BOTH tiers, so everything lives in the one "AI Host briefing" section.
+  function drawHost(body) {
+    body.innerHTML = dailySectionHTML();
     const $ = function (id) { return document.getElementById(id); };
     bindDailySection($, body);
-    $('hs-scope').onchange = function () { drawHost(body, this.value); };
-    $('hs-add').onclick = function () {
-      const c = $('hs-new').value.trim().toLowerCase(); if (!c) return;
-      if (!scripts.find(function (s) { return s.scope === c; })) scripts.push({ scope: c, template: findScope('global').template, announcement: '', sponsor_message: '', enabled: true });
-      drawHost(body, c);
-    };
-    body.querySelectorAll('.ad-chip').forEach(function (ch) {
-      ch.onclick = function () { const ta = $('hs-tmpl'); ta.value += (ta.value && !/\s$/.test(ta.value) ? ' ' : '') + ch.dataset.ins; preview(); };
-    });
-    ['hs-tmpl', 'hs-ann', 'hs-spon'].forEach(function (id) { $(id).addEventListener('input', preview); });
-    function preview() {
-      let s = ($('hs-tmpl').value || '')
-        .replace(/\{city\}/g, scope === 'global' ? 'Toronto' : scope)
-        .replace(/\{count\}/g, '42').replace(/\{top\}/g, 'Summer Jazz Festival').replace(/\{featured\}/g, 'Night Market');
-      s = s.replace(/\s{2,}/g, ' ').trim();
-      if ($('hs-ann').value.trim()) s += ' ' + $('hs-ann').value.trim();
-      if ($('hs-spon').value.trim()) s += ' ' + $('hs-spon').value.trim();
-      $('hs-prev').textContent = s;
-    }
-    preview();
-    $('hs-save').onclick = function () {
-      const row = { scope: scope, template: $('hs-tmpl').value, announcement: $('hs-ann').value, sponsor_message: $('hs-spon').value, enabled: $('hs-en').checked, updated_at: new Date().toISOString() };
-      $('hs-save').disabled = true;
-      sb.from('host_script').upsert(row, { onConflict: 'scope' }).then(function (r) {
-        $('hs-save').disabled = false;
-        if (r.error) { $('hs-msg').textContent = 'Error: ' + r.error.message; $('hs-msg').style.color = '#b3402a'; return; }
-        const i = scripts.findIndex(function (s) { return s.scope === scope; });
-        if (i > -1) scripts[i] = row; else scripts.push(row);
-        $('hs-msg').textContent = 'Saved ✓'; $('hs-msg').style.color = '#3a7d44';
-      });
-    };
   }
 
   /* -------- Daily briefing (AI) — free device-voice, admin-controlled -------- */
@@ -349,8 +298,8 @@
     }).join('');
     if (!sponRows) sponRows = '<div class="ad-li"><span class="ad-hint">No sponsors yet.</span></div>';
     const sponsors =
-      '<div class="ad-field" style="margin-top:20px"><label>Sponsors (' + dbSponsors.length + ') — appended verbatim; worldwide + city-targeted</label>' +
-      '<p class="ad-hint">Scope <b>world</b> plays everywhere; a city name (e.g. <b>toronto</b>) plays only there. One worldwide + one city sponsor are read per briefing, rotated by weight. These are DB templates — not written by Claude, and edits apply instantly (no regeneration).</p>' +
+      '<div class="ad-field" style="margin-top:20px"><label>Sponsors (' + dbSponsors.length + ') — FREE tier only, verbatim; worldwide + city-targeted</label>' +
+      '<p class="ad-hint">Paid sponsors play on the <b>free</b> tier only (Plus is ad-free). Scope <b>world</b> plays everywhere; a city name (e.g. <b>toronto</b>) plays only there. One worldwide + one city sponsor per briefing, rotated by weight. Verbatim — not written by Claude, edits apply instantly (no regeneration). For a message on BOTH tiers, use the Announcement above.</p>' +
       '<div class="ad-list" id="db-spon-list">' + sponRows + '</div>' +
       '<div class="ad-row" style="margin-top:10px">' +
         '<div class="ad-field"><label>Scope</label><input id="db-spon-scope" placeholder="world   or   toronto"></div>' +
@@ -360,14 +309,16 @@
         '<div class="ad-field"><label>Active to (optional)</label><input id="db-spon-to" type="date"></div></div>' +
       '<div><button class="ad-save" id="db-spon-add">Add sponsor</button><span class="ad-saved" id="db-spon-ok"></span></div></div>';
 
-    return '<div class="ad-sec"><h2>Daily briefing (AI) — free, device voice</h2>' +
-      '<p class="ad-hint">The free “Today’s briefing” is written by Claude per cluster area and spoken by the phone’s own voice (no ElevenLabs). Steer it here; changes apply to briefings generated after you save — use “Clear” / “Regenerate” to refresh existing ones.</p>' +
-      '<label class="ad-toggle"><input type="checkbox" id="db-en"' + (enabled ? ' checked' : '') + '> Enabled</label>' +
-      '<div class="ad-field"><label>AI persona / tone (system prompt — blank = built-in default)</label>' +
+    return '<div class="ad-sec"><h2>AI Host briefing (Claude) — Free &amp; Plus</h2>' +
+      '<p class="ad-hint">One script provider for both tiers: Claude authors the briefing per cluster area. <b>Free</b> is spoken by the phone’s own voice; <b>Plus</b> is the same idea, longer &amp; richer, in the ElevenLabs premium voice. Steer both here — changes apply to briefings generated after you save.</p>' +
+      '<label class="ad-toggle"><input type="checkbox" id="db-en"' + (enabled ? ' checked' : '') + '> Enabled (both tiers)</label>' +
+      '<div class="ad-field"><label>Free persona / tone (system prompt — blank = built-in ~120-word default)</label>' +
       '<textarea id="db-persona" placeholder="e.g. You are the Eventually radio host — warm, upbeat, concise. Write a ~120-word spoken briefing…">' + esc(dbCfg.persona || '') + '</textarea></div>' +
-      '<div class="ad-field"><label>Global announcement (appended verbatim to every briefing)</label>' +
+      '<div class="ad-field"><label>Plus premium persona (blank = built-in ~250-word default)</label>' +
+      '<textarea id="db-premium" placeholder="e.g. You are the Eventually premium host — warm, vivid, energetic. Write a ~250-word spoken briefing, 5–8 events grouped by vibe…">' + esc(dbCfg.premiumPersona || '') + '</textarea></div>' +
+      '<div class="ad-field"><label>Global announcement (read on BOTH tiers, verbatim)</label>' +
       '<textarea id="db-ann">' + esc(dbCfg.announcement || '') + '</textarea></div>' +
-      '<div><button class="ad-save" id="db-save">Save daily briefing</button><span class="ad-saved" id="db-msg"></span></div>' +
+      '<div><button class="ad-save" id="db-save">Save briefing settings</button><span class="ad-saved" id="db-msg"></span></div>' +
       sponsors +
       '<div class="ad-field" style="margin-top:16px"><label>Cached briefings (' + dbRows.length + ')</label>' +
       '<div class="ad-list" id="db-list">' + rows + '</div>' +
@@ -376,7 +327,7 @@
   function bindDailySection($, body) {
     const save = $('db-save');
     if (save) save.onclick = function () {
-      const patch = { dailyBriefing: { enabled: $('db-en').checked, persona: $('db-persona').value, announcement: $('db-ann').value } };
+      const patch = { dailyBriefing: { enabled: $('db-en').checked, persona: $('db-persona').value, premiumPersona: ($('db-premium') ? $('db-premium').value : (dbCfg.premiumPersona || '')), announcement: $('db-ann').value } };
       save.disabled = true;
       patchConfig(patch).then(function (r) {
         save.disabled = false;

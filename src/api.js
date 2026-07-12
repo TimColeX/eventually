@@ -135,7 +135,7 @@
   function dailyBriefing(opts) {
     if (!REMOTE) return Promise.resolve(null);
     const o = opts || {};
-    return fetch(BASE + '/functions/v1/daily-briefing', {
+    return fetch(BASE + '/functions/v1/briefing', {           // unified provider (free = text)
       method: 'POST', headers: headers(),
       body: JSON.stringify({
         city: o.city || null, lat: (o.lat != null ? o.lat : null), lon: (o.lon != null ? o.lon : null),

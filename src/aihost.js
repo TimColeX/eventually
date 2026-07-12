@@ -226,9 +226,8 @@
       }
       this.getBriefing().then(function (b) {
         if (!self.speaking || self.briefingPlaying) return;   // briefing took over → don't start premium
-        if (b && b.url) {
-          self._showCaption({ text: b.text, kind: 'briefing', lang: 'en-US' });
-          self._audioSpeak(b.url, b.text, self._afterSegment.bind(self));
+        if (b && b.segments && b.segments.length) {
+          self._playPremiumSegments(b.segments, 0);           // body + verbatim promo clips, back-to-back
         } else {
           self._freeSegment();   // not Plus / unavailable → device-voice show (opening then ambient)
         }
@@ -236,6 +235,16 @@
       return;
     }
     this._rotateLine();
+  };
+
+  // Plus: play the cached premium audio segments (briefing body + any verbatim promo
+  // clips) back-to-back, then a music GAP. Each clip is a pre-rendered ElevenLabs mp3.
+  AIHost.prototype._playPremiumSegments = function (segs, i) {
+    if (!this.speaking || this.briefingPlaying) return;
+    if (i >= segs.length) { this._afterSegment(); return; }   // done → GAP → refresh on next rotate
+    const seg = segs[i], self = this;
+    this._showCaption({ text: seg.text || '', kind: 'briefing', lang: 'en-US' });
+    this._audioSpeak(seg.url, seg.text || '', function () { self._playPremiumSegments(segs, i + 1); });
   };
 
   // Classic per-line rotation (free browser voice, or per-line synth if provided).
