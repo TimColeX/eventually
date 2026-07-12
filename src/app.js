@@ -355,15 +355,17 @@
     const prevCity = (activeBriefingLocation && activeBriefingLocation.city) || null;
     activeBriefingLocation = loc || null;
     const city = (loc && loc.city) ? loc.city : null;
-    if (aiHost && aiHost.setBriefingLabel) aiHost.setBriefingLabel(city);
+    if (aiHost && aiHost.setFocusCity) aiHost.setFocusCity(city);
     if (aiHost && aiHost.setExploring) aiHost.setExploring(isExploringNow(), (homeLoc() || {}).city || null);
-    if (aiHost && aiHost.briefingPlaying && aiHost.playDailyBriefing) {
-      aiHost.playDailyBriefing();                              // briefing already playing → swap it
-    } else if (city && city !== prevCity && aiHost && aiHost.speaking && !aiHost.briefingPlaying) {
-      // Live DJ is on air → announce the city change like a radio station ident,
-      // then re-lead with that city's local segment.
-      if (narrator.announceFocus) narrator.announceFocus(city);
-      if (aiHost.transitionTo) aiHost.transitionTo(city);
+    if (!city || city === prevCity || !aiHost) return;
+    if (aiHost.speaking) {
+      // Listening → finish the current sentence, play a station ident, then this
+      // city's fresh briefing, then continue. One continuous experience.
+      if (narrator.announceFocus) narrator.announceFocus(city);   // queue the device-voice ident (free path)
+      if (aiHost.switchLocation) aiHost.switchLocation(city);
+    } else if (aiHost.setNewBriefingCue) {
+      // Stopped → browsers block autostarting audio, so cue a tap instead of playing.
+      aiHost.setNewBriefingCue(true, city);
     }
   }
   function homeLoc() { return P.get().location || null; }
@@ -1600,9 +1602,9 @@
         if (cfg.pinnedLocations) RT.pinned = cfg.pinnedLocations;
         if (cfg.hiddenCities) RT.hiddenCities = cfg.hiddenCities;
         if (cfg.hiddenEvents) RT.hiddenEvents = cfg.hiddenEvents;
-        // Admin can disable the free daily briefing → hide the "Today's briefing" button.
-        if (cfg.dailyBriefing && cfg.dailyBriefing.enabled === false) {
-          const bb = document.querySelector('.ah-briefing'); if (bb) bb.style.display = 'none';
+        // Admin can disable the free daily briefing → the show skips the briefing segment.
+        if (cfg.dailyBriefing && aiHost.setDailyBriefingEnabled) {
+          aiHost.setDailyBriefingEnabled(cfg.dailyBriefing.enabled !== false);
         }
         applyHidden();
         refreshMarkers(); applyMonetization();

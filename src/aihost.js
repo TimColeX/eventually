@@ -57,14 +57,14 @@
       '<button class="ah-play" aria-label="Play the Host aloud">' +
         '<svg viewBox="0 0 24 24" class="ic-play"><path d="M8 5v14l11-7z"/></svg>' +
         '<svg viewBox="0 0 24 24" class="ic-pause" style="display:none"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>' +
+        '<span class="ah-cue" style="display:none" aria-hidden="true"></span>' +
       '</button>' +
       '<div class="ah-body">' +
-        '<div class="ah-label">eventually Host <span class="ah-live">● LIVE</span></div>' +
+        '<div class="ah-label">eventually Host <span class="ah-live">● LIVE</span><span class="ah-focus"></span></div>' +
         '<div class="ah-caption"><span class="ah-spon" style="display:none">SPONSORED</span>' +
         '<span class="ah-text"></span></div>' +
       '</div>' +
       '<button class="ah-home" style="display:none" aria-label="Back to my area">↩ My area</button>' +
-      (this.getDailyBriefing ? '<button class="ah-briefing" aria-label="Play today\'s briefing">▶ Today’s briefing</button>' : '') +
       '<canvas class="ah-wave"></canvas>';
 
     this.canvas = this.el.querySelector('.ah-wave');
@@ -73,8 +73,6 @@
     this.textEl = this.el.querySelector('.ah-text');
     this.sponEl = this.el.querySelector('.ah-spon');
     this.el.querySelector('.ah-play').addEventListener('click', function () { self.toggle(); });
-    const brief = this.el.querySelector('.ah-briefing');
-    if (brief) brief.addEventListener('click', function () { self.playDailyBriefing(); });
     const home = this.el.querySelector('.ah-home');
     if (home) home.addEventListener('click', function () { if (self.onHomeReset) self.onHomeReset(); });
   };
@@ -89,66 +87,103 @@
     if (homeCity) b.title = 'Back to ' + homeCity;
   };
 
-  // Free "Today's briefing": a discrete ~45–60s spoken segment via the DEVICE voice.
-  // Speech must be primed inside this click (mobile), so unlock synchronously, then
-  // fetch the text and speak. When it finishes, the ambient live rotation resumes.
-  AIHost.prototype.playDailyBriefing = function () {
-    if (!this.getDailyBriefing) return;
+  // The free show's OPENING: a short spoken intro (the narrator's greeting — or, on
+  // a location switch, the queued station ident) via the device voice, then Today's
+  // Briefing, then it flows into the ambient live rotation. One continuous listen.
+  AIHost.prototype._playOpening = function () {
     const self = this;
-    // Generation token: if the active location changes mid-play we call this again;
-    // stale fetches / speech-end callbacks from the previous call then no-op.
-    const gen = (this._briefingGen = (this._briefingGen || 0) + 1);
-    this.briefingPlaying = true;
-    this._unlockSpeech();                    // MUST run inside the tap
-    this.speaking = true;
-    this._everPlayed = true;
-    this._openerDone = true;                 // skip the Plus opener for this path
-    this.icPlay.style.display = 'none';
-    this.icPause.style.display = '';
-    this.onPlay();                           // music bed on
-    if (this._timer) { clearInterval(this._timer); this._timer = null; }
-    clearTimeout(this._introTimer); clearTimeout(this._gapTimer);
-    const briefEl = this.el.querySelector('.ah-briefing');
-    if (briefEl) briefEl.disabled = true;
-    this._showCaption({ text: 'Preparing today’s briefing…', kind: 'briefing', lang: 'en-US' });
-    this.getDailyBriefing().then(function (b) {
-      if (gen !== self._briefingGen) return;   // superseded by a newer location
-      if (briefEl) briefEl.disabled = false;
-      if (!self.speaking) { self.briefingPlaying = false; return; }
-      const text = b && b.text;
-      if (!text) { self.briefingPlaying = false; self._rotate(); return; }   // → ambient rotation
-      self._lang = (b && b.lang) || 'en-US';
-      self._showCaption({ text: text, kind: 'briefing', lang: self._lang, rtl: !!(b && b.rtl) });
-      self._browserSpeak(text, function () {
-        if (gen !== self._briefingGen) return;   // a swap started; let the newer one finish
-        self.briefingPlaying = false;
-        self._afterSegment();                    // after briefing → ambient rotation
-      });
-    }).catch(function () {
-      if (gen !== self._briefingGen) return;
-      if (briefEl) briefEl.disabled = false;
-      self.briefingPlaying = false;
-      if (self.speaking) self._rotate();
-    });
-  };
-
-  // Live DJ: the focus city changed. The narrator has queued a station ident as the
-  // next line — if we're currently in a music gap (between spoken segments), bring
-  // that next line forward so the switch feels responsive. If we're mid-sentence,
-  // do nothing: the ident plays naturally right after the current line finishes.
-  AIHost.prototype.transitionTo = function () {
-    if (!this.speaking || this.briefingPlaying) return;
-    if (this._gapTimer) {
-      clearTimeout(this._gapTimer);
-      const self = this;
-      this._gapTimer = setTimeout(function () { if (self.speaking && !self.briefingPlaying) self._rotate(); }, 1400);
+    const line = this.getLine ? this.getLine() : null;   // greeting, or a queued 'ident' on a switch
+    const briefingThenAmbient = function () {
+      if (!self.speaking) return;
+      if (self._dailyBriefingDisabled) { self._afterSegment(); return; }   // admin-disabled → skip to ambient
+      self._speakDailyBriefing(function () { self._afterSegment(); });      // → GAP → ambient rotation
+    };
+    if (line && line.text) {
+      this._lang = line.lang || 'en-US';
+      this._showCaption(line);
+      this._browserSpeak(line.text, briefingThenAmbient);
+    } else {
+      briefingThenAmbient();
     }
   };
 
-  // Relabel the "Today's briefing" button with the active location (Phase 1).
-  AIHost.prototype.setBriefingLabel = function (city) {
-    const b = this.el.querySelector('.ah-briefing');
-    if (b) b.textContent = '▶ Today’s briefing' + (city ? ' · ' + city : '');
+  // Speak Today's Briefing via the DEVICE voice (free path). ~45–60s, Claude-authored
+  // server script (local-first) with a procedural fallback. Takes exclusive audio
+  // control so it never overlaps the live host. Calls onDone when finished.
+  AIHost.prototype._speakDailyBriefing = function (onDone) {
+    if (!this.getDailyBriefing) { if (onDone) onDone(); return; }
+    const self = this;
+    // Generation token: a mid-play location switch supersedes this fetch/speech.
+    const gen = (this._briefingGen = (this._briefingGen || 0) + 1);
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();   // exclusive audio
+    try { this._audio.pause(); } catch (e) {}
+    clearInterval(this._ampTimer);
+    this.briefingPlaying = true;
+    this._showCaption({ text: 'Preparing today’s briefing…', kind: 'briefing', lang: 'en-US' });
+    this.getDailyBriefing().then(function (b) {
+      if (gen !== self._briefingGen) return;                 // superseded
+      if (!self.speaking) { self.briefingPlaying = false; return; }
+      const text = b && b.text;
+      if (!text) { self.briefingPlaying = false; if (onDone) onDone(); return; }
+      self._lang = (b && b.lang) || 'en-US';
+      self._showCaption({ text: text, kind: 'briefing', lang: self._lang, rtl: !!(b && b.rtl) });
+      self._browserSpeak(text, function () {
+        if (gen !== self._briefingGen) return;
+        self.briefingPlaying = false;
+        if (onDone) onDone();
+      });
+    }).catch(function () {
+      if (gen !== self._briefingGen) return;
+      self.briefingPlaying = false;
+      if (onDone) onDone();
+    });
+  };
+
+  // Free path per rotation: play the opening (intro + briefing) once per show, then
+  // fall into the ambient narrator rotation.
+  AIHost.prototype._freeSegment = function () {
+    if (!this._openingDone) { this._openingDone = true; this._playOpening(); }
+    else this._rotateLine();
+  };
+
+  // The focus city changed WHILE LISTENING. Finish the current sentence, then flow
+  // into the new city's opening (station ident → fresh briefing → live). Checked
+  // between sentences in _browserSpeak; if we're in a music gap, bring it forward.
+  AIHost.prototype.switchLocation = function () {
+    if (!this.speaking) return;
+    this._switchPending = true;
+    if (this._gapTimer) {                       // in a music gap → apply soon
+      clearTimeout(this._gapTimer);
+      const self = this;
+      this._gapTimer = setTimeout(function () { if (self.speaking) self._applySwitch(); }, 1200);
+    }
+  };
+  AIHost.prototype._applySwitch = function () {
+    this._switchPending = false;
+    this.briefingPlaying = false;
+    this._openingDone = false;                  // replay the opening (ident → briefing) for the new city
+    if (this.speaking) this._rotate();
+  };
+
+  // Admin toggle: when the daily briefing is disabled, the show plays intro → live
+  // (the briefing segment is skipped).
+  AIHost.prototype.setDailyBriefingEnabled = function (on) { this._dailyBriefingDisabled = (on === false); };
+
+  // Show the focus city in the Host label (" · Toronto").
+  AIHost.prototype.setFocusCity = function (city) {
+    const f = this.el.querySelector('.ah-focus');
+    if (f) f.textContent = city ? ' · ' + city : '';
+  };
+  // Idle "new briefing ready" cue on the Play button (browsers block autoplay, so a
+  // location search while stopped can't start sound — it prompts a tap instead).
+  AIHost.prototype.setNewBriefingCue = function (on, city) {
+    const c = this.el.querySelector('.ah-cue');
+    if (c) c.style.display = on ? '' : 'none';
+    const play = this.el.querySelector('.ah-play');
+    if (play) {
+      play.classList.toggle('has-cue', !!on);
+      play.title = on ? ('New briefing for ' + (city || 'your area') + ' — tap to listen') : 'Play the Host aloud';
+    }
   };
 
   // Update the caption (no audio). Shared by line rotation + briefing mode.
@@ -174,6 +209,7 @@
 
   AIHost.prototype._rotate = function () {
     if (!this.getLine) return;
+    if (this.briefingPlaying) return;          // the briefing owns the audio right now
     const self = this;
     // Briefing mode (Plus): a personalized opener in the browser voice, then the
     // SHARED, cached city briefing in the premium voice (cost-optimized "radio").
@@ -189,14 +225,14 @@
         }
       }
       this.getBriefing().then(function (b) {
-        if (!self.speaking) return;
+        if (!self.speaking || self.briefingPlaying) return;   // briefing took over → don't start premium
         if (b && b.url) {
           self._showCaption({ text: b.text, kind: 'briefing', lang: 'en-US' });
           self._audioSpeak(b.url, b.text, self._afterSegment.bind(self));
         } else {
-          self._rotateLine();    // not Plus / unavailable → free browser rotation
+          self._freeSegment();   // not Plus / unavailable → device-voice show (opening then ambient)
         }
-      }).catch(function () { self._rotateLine(); });
+      }).catch(function () { self._freeSegment(); });
       return;
     }
     this._rotateLine();
@@ -230,6 +266,8 @@
   // Premium voice: play the returned audio URL via the (gesture-unlocked) element.
   AIHost.prototype._audioSpeak = function (url, text, afterSegment) {
     const self = this, a = this._audio;
+    if (this.briefingPlaying) return;                                  // never play premium over the briefing
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();  // enforce one voice: silence browser TTS
     try {
       a.onended = function () { afterSegment(); };
       a.onerror = function () { self._browserSpeak(text, afterSegment); };
@@ -250,6 +288,7 @@
   // a radio presenter), using the best available device voice + tuned rate/pitch.
   AIHost.prototype._browserSpeak = function (text, afterSegment) {
     const self = this;
+    try { this._audio.pause(); } catch (e) {}   // enforce one voice: silence the premium element first
     if (!('speechSynthesis' in window)) {
       self.amp = 0.5;
       const read = Math.min(9000, 2600 + text.length * 45);
@@ -266,6 +305,7 @@
     let i = 0;
     function next() {
       if (!self.speaking) return;
+      if (self._switchPending) { self._applySwitch(); return; }   // finish this sentence, then switch city
       if (i >= sentences.length) { afterSegment(); return; }
       const u = new SpeechSynthesisUtterance(sentences[i]);
       u.lang = self._lang || 'en-US'; u.rate = rate; u.pitch = pitch; u.volume = 1.0;
@@ -294,6 +334,9 @@
   AIHost.prototype.play = function () {
     this.speaking = true;
     this._openerDone = false;              // personalized opener plays once per session
+    this._openingDone = false;             // replay the show opening (intro → briefing) on each Play
+    this._switchPending = false;
+    this.setNewBriefingCue(false);         // pressing Play consumes any "new briefing" cue
     this.icPlay.style.display = 'none';
     this.icPause.style.display = '';
     this._unlockSpeech();                   // MUST run inside the tap to enable mobile TTS
@@ -369,6 +412,7 @@
   AIHost.prototype.stop = function () {
     this.speaking = false;
     this.briefingPlaying = false;
+    this._switchPending = false;
     this.icPlay.style.display = '';
     this.icPause.style.display = 'none';
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
