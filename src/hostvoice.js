@@ -34,16 +34,22 @@
 
   global.EventuallyHostVoice = {
     enabled: ENABLED,
-    // Shared, cached city briefing (the cost-optimized path).
+    // Shared, cached premium briefing (rich Claude script + ElevenLabs, keyed by
+    // cluster cell — same location model as the free tier). opts: {city,lat,lon,lang,day}
     // -> Promise<{url, text}|null>
-    getBriefing: function (city, lang) {
+    getBriefing: function (opts) {
       if (!ENABLED) return Promise.resolve(null);
+      const o = opts || {};
       return accessToken().then(function (tk) {
         if (!tk) return null;
         return fetch(BASE + '/functions/v1/host-briefing', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'apikey': ANON, 'Authorization': 'Bearer ' + tk },
-          body: JSON.stringify({ city: city || null, lang: (lang || 'en').slice(0, 2) })
+          body: JSON.stringify({
+            city: o.city || null,
+            lat: (o.lat != null ? o.lat : null), lon: (o.lon != null ? o.lon : null),
+            lang: (o.lang || 'en').slice(0, 2), day: o.day || null
+          })
         }).then(function (r) {
           if (!r.ok) { r.json().then(function (e) { console.warn('[HostVoice] host-briefing ' + r.status, e); }).catch(function () {}); return null; }
           return r.json();

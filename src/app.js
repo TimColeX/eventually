@@ -304,14 +304,19 @@
     onPause: function () { music.stop(); },
     onSpeakStart: function () { music.duck(true); },   // duck under the voice
     onSpeakEnd: function () { music.duck(false); },    // swell between segments
-    // Cost-optimized "radio" model: a SHARED, cached ElevenLabs briefing per city
-    // (Plus only). null → the host uses the free browser-voice rotation.
+    // Cost-optimized "radio" model: a SHARED, cached ElevenLabs briefing keyed by
+    // CLUSTER CELL (Plus only) — a RICHER Claude script than the free tier, same
+    // location model. null → the host uses the free browser-voice rotation.
     getBriefing: function () {
       if (!window.EventuallyHostVoice || !window.EventuallyHostVoice.enabled) return Promise.resolve(null);
       if (!P.get().plus) return Promise.resolve(null);
-      const loc = activeBriefingLocation || P.get().location;   // follows the searched/viewed city
-      const city = (loc && loc.city) ? loc.city : null;         // null → worldwide briefing
-      return window.EventuallyHostVoice.getBriefing(city, P.get().language || 'en');
+      const loc = activeBriefingLocation || P.get().location;   // follows the searched/viewed cell
+      const city = (loc && loc.city) ? loc.city : null;
+      const now = new Date();
+      const day = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+      return window.EventuallyHostVoice.getBriefing({
+        city: city, lat: loc && loc.lat, lon: loc && loc.lon, lang: P.get().language || 'en', day: day
+      });
     },
     // Personalized opener spoken in the FREE browser voice (no ElevenLabs cost).
     getOpener: function () {
