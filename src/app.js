@@ -589,6 +589,35 @@
       });
   }
 
+  // Live countdown to an event start. Format adapts to how far off it is; under an
+  // hour it turns urgent. A single ticker (below) refreshes every second.
+  function fmtCountdown(delta) {
+    if (delta <= 0) return 'starting now';
+    const s = Math.floor(delta / 1000);
+    const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    const p = function (n) { return n < 10 ? '0' + n : '' + n; };
+    return (d > 0 ? d + 'd ' : '') + p(h) + ':' + p(m) + ':' + p(sec);
+  }
+  // Countdown chip for the date line — only for still-upcoming events.
+  function countdownChip(ev) {
+    if (D.typeForDate(ev, selectedDate) !== 'upcoming') return '';
+    const ms = ev.date.getTime(), delta = ms - Date.now();
+    const urgent = delta > 0 && delta < 3600000 ? ' urgent' : '';
+    return ' <span class="ev-cd' + urgent + '" data-start="' + ms + '">⏳ ' + esc(fmtCountdown(delta)) + '</span>';
+  }
+  // One shared per-second ticker updates every countdown currently in the DOM
+  // (cards + detail) — no per-card timers. Only touches elements that exist.
+  function tickCountdowns() {
+    const now = Date.now();
+    document.querySelectorAll('.ev-cd[data-start]').forEach(function (el) {
+      const delta = (+el.dataset.start) - now;
+      el.textContent = '⏳ ' + fmtCountdown(delta);
+      el.classList.toggle('urgent', delta > 0 && delta < 3600000);
+      el.classList.toggle('now', delta <= 0);
+    });
+  }
+  setInterval(tickCountdowns, 1000);
+
   function eventCardHTML(ev) {
     const type = D.typeForDate(ev, selectedDate);
     const dateLabel = ev.date.toLocaleDateString(undefined,
@@ -609,7 +638,7 @@
             featured + badge +
           '</div>' +
           '<h4 class="ev-title">' + esc(ev.name) + '</h4>' +
-          '<p class="ev-date">' + dateLabel + '  ·  ' + esc(ev.city) + '</p>' +
+          '<p class="ev-date">' + dateLabel + '  ·  ' + esc(ev.city) + countdownChip(ev) + '</p>' +
           '<p class="ev-desc">' + esc(ev.description) + '</p>' +
           '<div class="ev-foot">' + srcs + '<span class="ev-view">View ›</span></div>' +
         '</div>' +
@@ -761,6 +790,7 @@
         '<div class="evd-badges">' + featured + badge + '</div>' +
         '<h2 class="evd-title">' + esc(ev.name) + '</h2>' +
         '<p class="evd-meta">' + esc(dateLabel) + ' · ' + timeLabel + '  —  ' + esc(ev.city) + '</p>' +
+        (type === 'upcoming' ? '<div class="evd-cd"><span class="cd-label">Starts in</span><span class="ev-cd" data-start="' + ev.date.getTime() + '">⏳ ' + esc(fmtCountdown(ev.date.getTime() - Date.now())) + '</span></div>' : '') +
         transparency +
         '<p class="evd-desc">' + esc(ev.description) + '</p>' +
         '<div class="evd-actions">' +

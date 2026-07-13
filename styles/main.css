@@ -82,7 +82,8 @@ body {
 /* ---------- top bar ---------- */
 .topbar {
   position: fixed; top: 0; left: 0; right: 0; z-index: 30;
-  display: flex; align-items: center; gap: 18px; padding: 16px 22px;
+  display: flex; align-items: center; gap: 18px;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 22px 16px;
 }
 .brand { display: flex; align-items: center; gap: 10px; }
 .brand-dots { display: flex; align-items: center; gap: 5px; }
@@ -226,6 +227,13 @@ body {
 .ev-cat { font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
 .ev-title { margin: 0 0 4px; font-size: 16px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.2; }
 .ev-date { margin: 0 0 8px; font-family: var(--mono); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--faint); }
+/* live countdown chip (event cards + detail) */
+.ev-cd { text-transform: none; letter-spacing: 0; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ev-cd.urgent, .ev-cd.now { color: var(--clay); font-weight: 700; }
+.evd-cd { display: flex; align-items: baseline; gap: 9px; margin: 2px 0 14px; }
+.evd-cd .cd-label { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); }
+.evd-cd .ev-cd { font-family: var(--mono); font-size: 20px; font-weight: 700; color: var(--ink); }
+.evd-cd .ev-cd.urgent, .evd-cd .ev-cd.now { color: var(--clay); }
 .ev-desc {
   margin: 0 0 11px; font-size: 12.5px; line-height: 1.5; color: var(--muted);
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
@@ -286,7 +294,7 @@ body {
 
 /* ---------- AI host ---------- */
 .ai-host {
-  position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
+  position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
   z-index: 28; display: flex; align-items: center; gap: 13px;
   width: min(620px, calc(100vw - 36px)); height: 58px; padding: 0 14px 0 8px;
   background: var(--paper); border: 1px solid var(--line); border-radius: 999px; box-shadow: var(--shadow-lg);
@@ -631,8 +639,8 @@ body {
 
 /* ---------- display ad bar (Revenue 1) ---------- */
 .adbar {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 26; height: 56px;
-  display: flex; align-items: center; gap: 12px; padding: 0 16px;
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 26; height: calc(56px + env(safe-area-inset-bottom, 0px));
+  display: flex; align-items: center; gap: 12px; padding: 0 16px env(safe-area-inset-bottom, 0px);
   background: rgba(244,236,226,0.94); border-top: 1px solid var(--line-2); backdrop-filter: blur(8px);
 }
 .ad-tag { font-family: var(--mono); font-size: 9px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); border: 1px solid var(--line-2); padding: 3px 6px; border-radius: 5px; flex: none; }
@@ -862,7 +870,21 @@ body.has-ad .toast { bottom: 144px; }
   .timeline { bottom: 82px; }
   .globe-controls { bottom: 138px; right: 14px; }
   .ctl { width: 38px; height: 38px; }
-  .place.open, .profile.open, .evdetail.open { right: 50%; transform: translateX(50%); top: 70px; bottom: 130px; max-height: none; width: calc(100vw - 24px); }
+  /* Mobile drawers: pin to BOTH edges (always fit) + slide via TRANSFORM. The old
+     rule animated `right` from -460px (closed) to 50% (open); browsers can't
+     interpolate px↔%, so the transition silently failed and the panel stayed parked
+     off-screen. Transform/opacity interpolate cleanly and the panel can't overflow. */
+  /* Mobile drawers keep the desktop side-slide — a px→px `right` transition, which
+     works reliably. Only the open offset + top/bottom change. The original bug was
+     animating `right` across px↔% units (-460px → 50%), which browsers can't
+     interpolate, so the transition silently failed and parked the panel off-screen. */
+  .place, .profile, .evdetail {
+    top: calc(70px + env(safe-area-inset-top, 0px));
+    bottom: calc(124px + env(safe-area-inset-bottom, 0px)); max-height: none;
+    transition: none;   /* animating position on these fixed drawers freezes mid-transition
+                           on mobile, leaving them parked off-screen — snap into place instead */
+  }
+  .place.open, .profile.open, .evdetail.open { right: 12px; }
   body.has-ad .ai-host { bottom: 66px; }
   body.has-ad .timeline { bottom: 128px; }
   body.has-ad .globe-controls { bottom: 188px; }
