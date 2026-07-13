@@ -28,7 +28,7 @@
     this.onMuteToggle = opts.onMuteToggle || null;  // () -> bool (new muted state)
     this.initialMuted = !!opts.initialMuted;
     this._premiumPlaying = false;
-    this.getOpener = opts.getOpener || null;      // () -> { text, lang, rtl } (personalized, browser voice)
+    this.getStinger = opts.getStinger || null;    // () -> Promise<{url,text}|null> (cached ElevenLabs intro, Plus)
     this.getVoiceSettings = opts.getVoiceSettings || null;  // () -> { rate, pitch } (admin-tunable)
     // Voices can load asynchronously; refresh the best-voice pick when they arrive.
     if ('speechSynthesis' in global && global.speechSynthesis.addEventListener) {
@@ -386,29 +386,28 @@
     if (!this.getLine) return;
     if (this.briefingPlaying) return;          // the briefing owns the audio right now
     const self = this;
-    // Briefing mode (Plus): a personalized opener in the browser voice, then the
-    // SHARED, cached city briefing in the premium voice (cost-optimized "radio").
+    // Briefing mode: Plus = SHARED, cached ElevenLabs briefing (premium voice from the
+    // very first word — a cached stinger covers synth latency at the start). Free = the
+    // browser-voice show. getBriefing() resolves null for Free → the free show runs.
     if (this.speaking && this.getBriefing) {
-      if (!this._openerDone) {
+      // Start of the show (once per Play): play a cached ElevenLabs stinger IMMEDIATELY
+      // while the full briefing synthesizes in parallel — no browser-voice greeting.
+      if (!this._openerDone && this.getStinger) {
         this._openerDone = true;
-        const op = this.getOpener ? this.getOpener() : null;
-        if (op && op.text) {
-          this._showCaption({ text: op.text, kind: 'greeting', lang: op.lang, rtl: op.rtl });
-          this._lang = op.lang || 'en-US';
-          this._browserSpeak(op.text, function () { if (self.speaking) self._rotate(); });
-          return;
-        }
+        this._pendingBriefing = this.getBriefing();          // kick off the heavy fetch now (parallel)
+        this._setBuffering(true);
+        this.getStinger().then(function (s) {
+          if (!self.speaking || self.briefingPlaying) return;
+          if (s && s.url) { self._setBuffering(false); self._audioSpeak(s.url, s.text, function () { self._playPendingBriefing(); }); }
+          else self._playPendingBriefing();                  // no stinger (Free / unavailable) → straight to briefing
+        }).catch(function () { self._playPendingBriefing(); });
+        return;
       }
-      this._setBuffering(true);                               // "preparing your briefing…"
-      this.getBriefing().then(function (b) {
-        self._setBuffering(false);
-        if (!self.speaking || self.briefingPlaying) return;   // briefing took over → don't start premium
-        if (b && b.segments && b.segments.length) {
-          self._playPremiumSegments(b.segments, 0);           // body + verbatim promo clips, back-to-back
-        } else {
-          self._freeSegment();   // not Plus / unavailable → device-voice show (opening then ambient)
-        }
-      }).catch(function () { self._setBuffering(false); self._freeSegment(); });
+      // Refreshes / subsequent rotations: fetch + play the briefing (no stinger).
+      this._openerDone = true;
+      this._setBuffering(true);
+      this.getBriefing().then(function (b) { self._setBuffering(false); self._playBriefingResult(b); })
+        .catch(function () { self._setBuffering(false); self._freeSegment(); });
       return;
     }
     this._rotateLine();
@@ -422,6 +421,22 @@
     const seg = segs[i], self = this;
     this._showCaption({ text: seg.text || '', kind: 'briefing', lang: 'en-US' });
     this._audioSpeak(seg.url, seg.text || '', function () { self._playPremiumSegments(segs, i + 1); });
+  };
+
+  // Play a resolved briefing result: Plus audio segments, else the free browser show.
+  AIHost.prototype._playBriefingResult = function (b) {
+    if (!this.speaking || this.briefingPlaying) return;
+    if (b && b.segments && b.segments.length) this._playPremiumSegments(b.segments, 0);
+    else this._freeSegment();               // Free / unavailable / failed → browser-voice fallback
+  };
+  // After the premium stinger, play the full briefing. If it isn't ready yet, hold on
+  // the music bed + buffering cue until it resolves (no browser voice in between).
+  AIHost.prototype._playPendingBriefing = function () {
+    if (!this.speaking) return;
+    const self = this, p = this._pendingBriefing; this._pendingBriefing = null;
+    this._setBuffering(true);
+    Promise.resolve(p).then(function (b) { self._setBuffering(false); self._playBriefingResult(b); })
+      .catch(function () { self._setBuffering(false); self._freeSegment(); });
   };
 
   // Classic per-line rotation (free browser voice, or per-line synth if provided).
@@ -532,7 +547,7 @@
 
   AIHost.prototype.play = function () {
     this.speaking = true;
-    this._openerDone = false;              // personalized opener plays once per session
+    this._openerDone = false;              // premium stinger plays once per Play session
     this._openingDone = false;             // replay the show opening (intro → briefing) on each Play
     this._switchPending = false;
     this.setNewBriefingCue(false);         // pressing Play consumes any "new briefing" cue
@@ -613,6 +628,7 @@
     this.briefingPlaying = false;
     this._switchPending = false;
     this._premiumPlaying = false;
+    this._pendingBriefing = null;
     this._setBuffering(false);
     this.icPlay.style.display = '';
     this.icPause.style.display = 'none';

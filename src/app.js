@@ -322,14 +322,14 @@
         city: city, lat: loc && loc.lat, lon: loc && loc.lon, lang: P.get().language || 'en', day: day
       });
     },
-    // Personalized opener spoken in the FREE browser voice (no ElevenLabs cost).
-    getOpener: function () {
-      if (!P.get().plus) return null;
-      const p = P.get();
-      const h = new Date().getHours();
-      const part = h < 12 ? 'morning' : (h < 18 ? 'afternoon' : 'evening');
-      return { text: 'Good ' + part + (p.name ? ', ' + p.name : '') + ". Here's your Eventually briefing.",
-               lang: 'en-US', rtl: false };
+    // Premium (Plus) is ElevenLabs from the very first word: a short, cached
+    // ElevenLabs stinger plays instantly while the full briefing synthesizes — no
+    // browser-voice greeting. (Free is browser voice throughout; Plus is premium
+    // throughout.) Returns null for Free → the free browser-voice show runs instead.
+    getStinger: function () {
+      if (!window.EventuallyHostVoice || !window.EventuallyHostVoice.enabled) return Promise.resolve(null);
+      if (!P.get().plus) return Promise.resolve(null);
+      return window.EventuallyHostVoice.getStinger(P.get().language || 'en');
     },
     // Admin-tunable delivery for the free browser voice (rate/pitch).
     getVoiceSettings: function () { return RT.hostVoice || {}; },

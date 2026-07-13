@@ -62,6 +62,21 @@
         });
       }).catch(function () { return null; });
     },
+    // Short, generic, cached ElevenLabs intro clip — played instantly at the start of
+    // a Plus show while the full briefing synthesizes (keeps Premium all-ElevenLabs).
+    // -> Promise<{url,text}|null>
+    getStinger: function (lang) {
+      if (!ENABLED) return Promise.resolve(null);
+      return accessToken().then(function (tk) {
+        if (!tk) return null;
+        return fetch(BASE + '/functions/v1/briefing', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': ANON, 'Authorization': 'Bearer ' + tk },
+          body: JSON.stringify({ stinger: true, lang: (lang || 'en').slice(0, 2) })
+        }).then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (j) { return (j && j.url) ? { url: j.url, text: j.text || '' } : null; });
+      }).catch(function () { return null; });
+    },
     // -> Promise<string|null> (audio URL, or null to use the browser voice)
     synthesize: function (text, lang) {
       if (!ENABLED || !text) return Promise.resolve(null);
