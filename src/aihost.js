@@ -75,6 +75,19 @@
     this.el.querySelector('.ah-play').addEventListener('click', function () { self.toggle(); });
     const home = this.el.querySelector('.ah-home');
     if (home) home.addEventListener('click', function () { if (self.onHomeReset) self.onHomeReset(); });
+    // Tap the caption to open a readable "Now playing" transcript.
+    const cap = this.el.querySelector('.ah-caption');
+    if (cap) { cap.classList.add('ah-tappable'); cap.title = 'Tap to read the full transcript'; cap.addEventListener('click', function () { self._toggleExpand(); }); }
+    // Transcript panel (appended to body; overlays above the host bar).
+    const panel = document.createElement('div');
+    panel.className = 'ah-expand'; panel.style.display = 'none';
+    panel.innerHTML = '<div class="ah-exp-card"><div class="ah-exp-head"><span>Now playing — transcript</span>' +
+      '<button class="ah-exp-x" aria-label="Close">✕</button></div><div class="ah-exp-body" tabindex="0"></div></div>';
+    document.body.appendChild(panel);
+    this._panel = panel;
+    this._expBody = panel.querySelector('.ah-exp-body');
+    panel.querySelector('.ah-exp-x').addEventListener('click', function () { self._toggleExpand(false); });
+    panel.addEventListener('click', function (e) { if (e.target === panel) self._toggleExpand(false); });
   };
 
   // Show/hide the "back to my area" reset. Visible only when the Host is focused on
@@ -186,15 +199,120 @@
     }
   };
 
-  // Update the caption (no audio). Shared by line rotation + briefing mode.
+  function escHtml(s) {
+    return String(s).replace(/[&<>"]/g, function (m) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[m]; });
+  }
+  // Tokenize text into word spans tagged with their char offsets (so speech word-
+  // boundary events can highlight the right word). Returns {html, meta:[{s,e}]}.
+  function wordsHTML(text) {
+    const parts = String(text).split(/(\s+)/);
+    let idx = 0, html = '';
+    const meta = [];
+    for (const p of parts) {
+      if (!p) continue;
+      if (/^\s+$/.test(p)) { html += p.replace(/ /g, '&nbsp;').replace(/\t/g, '&nbsp;&nbsp;'); idx += p.length; }
+      else { const s = idx, e = idx + p.length; meta.push({ s: s, e: e }); html += '<span class="ah-w" data-s="' + s + '">' + escHtml(p) + '</span>'; idx = e; }
+    }
+    return { html: html, meta: meta };
+  }
+  AIHost.prototype._reducedMotion = function () {
+    return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  };
+
+  // Update the caption (no audio). Renders the line as word spans so it can scroll
+  // and highlight the current word in sync with the narration. Shared by line
+  // rotation + briefing mode.
   AIHost.prototype._showCaption = function (line) {
     this.current = line;
     this.sponEl.style.display = line.kind === 'sponsor' ? '' : 'none';
     this.el.querySelector('.ah-caption').classList.toggle('is-sponsor', line.kind === 'sponsor');
-    this.textEl.setAttribute('dir', line.rtl ? 'rtl' : 'ltr');   // Arabic etc.
+    const rtl = !!line.rtl, text = line.text || '';
+    this.textEl.setAttribute('dir', rtl ? 'rtl' : 'ltr');
+    this._capText = text; this._words = null; this._activeWord = -1; this._synced = false;
+    this._stopMarquee();
     this.textEl.style.opacity = 0;
     const self = this;
-    setTimeout(function () { self.textEl.textContent = line.text; self.textEl.style.opacity = 1; }, 180);
+    clearTimeout(this._capTimer);
+    this._capTimer = setTimeout(function () {
+      const w = wordsHTML(text);
+      self.textEl.innerHTML = '<span class="ah-run">' + w.html + '</span>';
+      self._runEl = self.textEl.querySelector('.ah-run');
+      const spans = self._runEl.querySelectorAll('.ah-w');
+      self._words = w.meta.map(function (m, i) { m.el = spans[i]; return m; });
+      self._runEl.style.transform = 'translateX(0)';
+      self.textEl.style.opacity = 1;
+      self._maybeMarquee();
+      if (self._expanded) self._renderExpand(text, rtl);
+    }, 180);
+  };
+
+  // If the caption overflows and nothing is word-syncing it (premium audio, or no
+  // boundary events), gently ping-pong it so the whole line is readable.
+  AIHost.prototype._stopMarquee = function () {
+    clearTimeout(this._marqueeTimer); this._marqueeTimer = null;
+    if (this._runEl) this._runEl.style.transition = 'none';
+  };
+  AIHost.prototype._maybeMarquee = function () {
+    this._stopMarquee();
+    if (this._synced || this._reducedMotion() || !this._runEl) return;
+    const clip = this.textEl.clientWidth, run = this._runEl.scrollWidth;
+    if (run <= clip + 4) return;                 // fits — no scroll needed
+    const overflow = run - clip, self = this;
+    const dur = Math.max(3, overflow / 40);      // ~40 px/s
+    let out = true;
+    const step = function () {
+      if (!self._runEl || self._synced) return;
+      self._runEl.style.transition = 'transform ' + dur + 's linear';
+      self._runEl.style.transform = 'translateX(' + (out ? -overflow : 0) + 'px)';
+      self._marqueeTimer = setTimeout(function () { out = !out; step(); }, dur * 1000 + 1100);
+    };
+    this._marqueeTimer = setTimeout(step, 800);
+  };
+
+  // Highlight the word containing `charIdx` (a global offset into the caption text)
+  // and keep it in view. Called from speech word-boundary events (browser voice).
+  AIHost.prototype._highlightWord = function (charIdx) {
+    if (!this._words || !this._words.length) return;
+    this._synced = true; this._stopMarquee();
+    let wi = this._words.length - 1;
+    for (let i = 0; i < this._words.length; i++) {
+      if (charIdx < this._words[i].e) { wi = (charIdx >= this._words[i].s) ? i : Math.max(0, i - 1); break; }
+    }
+    if (wi === this._activeWord) return;
+    if (this._activeWord >= 0 && this._words[this._activeWord].el) this._words[this._activeWord].el.classList.remove('active');
+    this._activeWord = wi;
+    const el = this._words[wi].el; if (!el) return;
+    el.classList.add('active');
+    if (this._runEl && !this._reducedMotion()) {   // scroll the bar so the active word stays visible
+      const clip = this.textEl.clientWidth;
+      const maxShift = Math.max(0, this._runEl.scrollWidth - clip);
+      const shift = Math.min(Math.max(0, el.offsetLeft - clip * 0.33), maxShift);
+      this._runEl.style.transition = 'transform 0.35s ease';
+      this._runEl.style.transform = 'translateX(' + (-shift) + 'px)';
+    }
+    if (this._expanded && this._expWords && this._expWords[wi]) {   // mirror in the transcript panel
+      if (this._expActive >= 0 && this._expWords[this._expActive]) this._expWords[this._expActive].classList.remove('active');
+      this._expActive = wi; this._expWords[wi].classList.add('active');
+      try { this._expWords[wi].scrollIntoView({ block: 'center', behavior: this._reducedMotion() ? 'auto' : 'smooth' }); } catch (e) {}
+    }
+  };
+
+  // The expandable "Now playing" transcript (full text, wrapped, auto-highlighting).
+  AIHost.prototype._toggleExpand = function (force) {
+    this._expanded = (force === undefined) ? !this._expanded : !!force;
+    if (this._panel) this._panel.style.display = this._expanded ? '' : 'none';
+    if (this._expanded) this._renderExpand(this._capText || '', this.textEl.getAttribute('dir') === 'rtl');
+  };
+  AIHost.prototype._renderExpand = function (text, rtl) {
+    if (!this._expBody) return;
+    const w = wordsHTML(text);
+    this._expBody.setAttribute('dir', rtl ? 'rtl' : 'ltr');
+    this._expBody.innerHTML = w.html || '<span class="ah-hint">Press play to start the show.</span>';
+    this._expWords = this._expBody.querySelectorAll('.ah-w');
+    this._expActive = -1;
+    if (this._activeWord >= 0 && this._expWords[this._activeWord]) {
+      this._expActive = this._activeWord; this._expWords[this._activeWord].classList.add('active');
+    }
   };
 
   // After a spoken segment: swell music back, then leave a ~GAP before the next.
@@ -277,6 +395,7 @@
     const self = this, a = this._audio;
     if (this.briefingPlaying) return;                                  // never play premium over the briefing
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();  // enforce one voice: silence browser TTS
+    this.onSpeakStart();                                               // duck the music now
     try {
       a.onended = function () { afterSegment(); };
       a.onerror = function () { self._browserSpeak(text, afterSegment); };
@@ -298,6 +417,7 @@
   AIHost.prototype._browserSpeak = function (text, afterSegment) {
     const self = this;
     try { this._audio.pause(); } catch (e) {}   // enforce one voice: silence the premium element first
+    this.onSpeakStart();                         // duck the music NOW (don't wait for onstart, which is flaky)
     if (!('speechSynthesis' in window)) {
       self.amp = 0.5;
       const read = Math.min(9000, 2600 + text.length * 45);
@@ -306,6 +426,10 @@
     }
     window.speechSynthesis.cancel();
     const sentences = self._splitSentences(text);
+    // Char offset of each sentence within `text`, so word-boundary charIndex (which
+    // is relative to the utterance) maps to a global position for caption sync.
+    const offsets = []; let cur = 0;
+    for (let s = 0; s < sentences.length; s++) { const at = text.indexOf(sentences[s], cur); offsets.push(at < 0 ? cur : at); cur = (at < 0 ? cur : at) + sentences[s].length; }
     const voice = self._voiceFor(self._lang || 'en-US');
     const cfg = self.getVoiceSettings ? (self.getVoiceSettings() || {}) : {};
     const rate = cfg.rate || 0.98;                        // slightly relaxed = more natural
@@ -316,11 +440,15 @@
       if (!self.speaking) return;
       if (self._switchPending) { self._applySwitch(); return; }   // finish this sentence, then switch city
       if (i >= sentences.length) { afterSegment(); return; }
+      const si = i;                                        // capture for the boundary closure
       const u = new SpeechSynthesisUtterance(sentences[i]);
       u.lang = self._lang || 'en-US'; u.rate = rate; u.pitch = pitch; u.volume = 1.0;
       if (voice) u.voice = voice;
       if (i === 0) u.onstart = function () { self.amp = 0.6; self.onSpeakStart(); };   // duck once
-      u.onboundary = function () { self.amp = 0.55 + Math.random() * 0.35; };
+      u.onboundary = function (e) {
+        self.amp = 0.55 + Math.random() * 0.35;
+        if (e && (e.name === 'word' || e.charIndex != null)) self._highlightWord(offsets[si] + (e.charIndex || 0));
+      };
       u.onend = function () { i++; next(); };             // gap between utterances = a natural breath
       u.onerror = function () { i++; next(); };
       self._utters.push(u);                                // GC guard

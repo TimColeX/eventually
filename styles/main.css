@@ -308,8 +308,25 @@ body {
 .ah-live { color: var(--clay); font-weight: 700; }
 .ah-caption { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .ah-spon { font-family: var(--mono); font-size: 8.5px; font-weight: 700; letter-spacing: .08em; color: var(--cream); background: var(--ember); padding: 2px 6px; border-radius: 4px; flex: none; }
-.ah-text { font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: opacity .18s; }
+.ah-caption.ah-tappable { cursor: pointer; }
+.ah-text { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; transition: opacity .18s; }
+.ah-run { display: inline-block; white-space: nowrap; will-change: transform; }
+.ah-text .ah-w.active { color: var(--clay); }
 .ah-caption.is-sponsor .ah-text { color: var(--ember); }
+/* Read-along transcript panel (tap the caption to open) */
+.ah-expand { position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-end; justify-content: center;
+  background: rgba(30,22,18,0.35); }
+.ah-exp-card { width: min(620px, calc(100vw - 24px)); max-height: 62vh; margin-bottom: 86px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow-lg);
+  display: flex; flex-direction: column; overflow: hidden; }
+.ah-exp-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px;
+  border-bottom: 1px solid var(--line); font-family: var(--mono); font-size: 11px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--faint); }
+.ah-exp-x { border: 0; background: transparent; font-size: 15px; cursor: pointer; color: var(--muted); line-height: 1; }
+.ah-exp-body { padding: 18px 20px; overflow-y: auto; font-size: 18px; line-height: 1.7; color: var(--ink); }
+.ah-exp-body .ah-w.active { color: var(--clay); background: rgba(203,90,60,0.12); border-radius: 4px; box-shadow: 0 0 0 2px rgba(203,90,60,0.12); }
+@media (max-width: 560px) { .ah-exp-body { font-size: 17px; } .ah-exp-card { margin-bottom: 78px; } }
+@media (prefers-reduced-motion: reduce) { .ah-run { transition: none !important; } }
 .ah-wave { width: 60px; flex: none; height: 38px; }
 .ah-briefing {
   flex: none; cursor: pointer; border: 1px solid var(--line-2); border-radius: 999px;

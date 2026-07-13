@@ -1,19 +1,17 @@
 /* Eventually — background music bed for the AI Host (radio-DJ style).
- * Plays while the Host is "on": ducks to a whisper under speech, swells between
- * segments.
+ * Plays while the Host is "on": ducks to a soft presence under speech, swells
+ * between segments.
  *
- * Background playback: when a real track (<audio id="bg-music" src>) is provided
- * we play it DIRECTLY as an HTML media element and control level via el.volume.
- * That keeps it playing when the app is backgrounded (like any music app). We do
- * NOT route it through a Web Audio AudioContext, because mobile browsers suspend
- * the context in the background — which would mute the music while the Host's
- * speechSynthesis keeps talking (the bug this avoids).
+ * Level control goes through the Web Audio API (a master GainNode), so ducking
+ * works on EVERY platform — including iOS, where HTMLMediaElement.volume is
+ * read-only. A real track (<audio id="bg-music" src>) is routed through the
+ * context via a MediaElementSource; with no track we synthesize an ambient bed.
  *
- * If no real track is present we synthesize an ambient bed via Web Audio (that
- * fallback does suspend in the background — provide a real track to avoid it).
- *
- * Note: iOS treats <audio>.volume as read-only (hardware-controlled), so ducking
- * is a no-op there, but the track still keeps playing in the background.
+ * Trade-off: a Web-Audio-routed element can be suspended when the app is
+ * backgrounded on some mobile browsers → we resume the context (and resume the
+ * element) whenever the app returns to the foreground. If Web Audio is
+ * unavailable we fall back to direct <audio> playback (background-safe, but no
+ * ducking).
  *
  * To use your own track: add  <audio id="bg-music" src="assets/yourtrack.mp3">
  * to index.html (no other changes needed) and it will be used automatically.
@@ -21,25 +19,42 @@
 (function (global) {
   'use strict';
 
-  const BED = 0.17;    // level between segments (music "swells" up to here)
-  const DUCK = 0.05;   // level under the Host's voice (whisper)
+  const BED = 0.18;     // normal bed level (music "swells" up to here)
+  const DUCK = 0.036;   // ~20% of the bed — soft presence under the Host's voice
+  const DOWN = 0.22;    // duck-in time (fast, so speech is clear promptly)
+  const UP = 1.2;       // swell-out time (smooth, natural)
 
   function Music() {
-    this.audioEl = null;          // real track — direct playback (background-safe)
-    this.ctx = null; this.master = null;   // synth fallback only
-    this.on = false; this._tween = null;
+    this.audioEl = null;             // real track element
+    this.ctx = null; this.master = null;
+    this.on = false; this._built = false; this._direct = false; this._tween = null;
   }
 
   Music.prototype._build = function () {
+    if (this._built) return !!(this.master || this.audioEl);
+    this._built = true;
+    const Ctx = global.AudioContext || global.webkitAudioContext;
     const el = document.getElementById('bg-music');
-    if (el && el.getAttribute('src')) {       // real track → direct HTML playback
-      el.loop = true;
-      el.setAttribute('playsinline', '');
-      try { el.volume = 0; } catch (e) {}
-      this.audioEl = el;
+    const hasTrack = el && el.getAttribute('src');
+
+    if (hasTrack && Ctx) {                      // real track through Web Audio → duck anywhere
+      try {
+        const ctx = new Ctx(); this.ctx = ctx;
+        el.loop = true; el.setAttribute('playsinline', ''); try { el.volume = 1; } catch (e) {}
+        const src = ctx.createMediaElementSource(el);
+        const master = ctx.createGain(); master.gain.value = 0;
+        src.connect(master); master.connect(ctx.destination);
+        this.master = master; this.audioEl = el;
+        this._wireResume();
+        return true;
+      } catch (e) { this.ctx = null; this.master = null; /* fall through */ }
+    }
+    if (hasTrack) {                             // Web Audio unavailable → direct playback (no ducking)
+      el.loop = true; el.setAttribute('playsinline', ''); try { el.volume = 0; } catch (e) {}
+      this.audioEl = el; this._direct = true;
       return true;
     }
-    return this._buildSynth();                 // no track → Web Audio ambient bed
+    return this._buildSynth();                  // no track → Web Audio ambient bed
   };
 
   Music.prototype._buildSynth = function () {
@@ -51,6 +66,7 @@
     master.connect(comp); comp.connect(ctx.destination);
     this.master = master;
     this._synth(ctx, master);
+    this._wireResume();
     return true;
   };
 
@@ -79,15 +95,16 @@
     const lg = ctx.createGain(); lg.gain.value = 200; lfo.connect(lg); lg.connect(lp.frequency); lfo.start();
   };
 
-  // --- synth (Web Audio) level ramp ---
+  // Master-gain level ramp (Web Audio — the normal path).
   Music.prototype._ramp = function (to, secs) {
+    if (!this.ctx || !this.master) return;
     const n = this.ctx.currentTime;
     this.master.gain.cancelScheduledValues(n);
     this.master.gain.setValueAtTime(this.master.gain.value, n);
     this.master.gain.linearRampToValueAtTime(to, n + secs);
   };
 
-  // --- real <audio> volume tween (where volume is settable; no-op effect on iOS) ---
+  // Direct <audio>.volume tween (fallback only, where Web Audio is unavailable).
   Music.prototype._tweenVol = function (to, secs) {
     const el = this.audioEl; if (!el) return;
     if (this._tween) { clearInterval(this._tween); this._tween = null; }
@@ -100,36 +117,42 @@
     }, 50);
   };
 
+  Music.prototype._level = function (to, secs) {
+    if (this._direct) this._tweenVol(to, secs); else this._ramp(to, secs);
+  };
+
   Music.prototype.start = function () {
-    if (!this.audioEl && !this.ctx && !this._build()) return;
+    if (!this._build()) return;
     this.on = true;
-    if (this.audioEl) {
-      try { this.audioEl.volume = 0; } catch (e) {}
-      this.audioEl.play().catch(function () {});
-      this._tweenVol(BED, 1.6);               // swell in
-      this._mediaSession();
-    } else if (this.ctx) {
-      if (this.ctx.state === 'suspended') this.ctx.resume();
-      this._ramp(BED, 1.6);
-    }
+    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume().catch(function () {});
+    if (this.audioEl) { try { this.audioEl.play().catch(function () {}); } catch (e) {} this._mediaSession(); }
+    this._level(BED, 1.6);                       // swell in
   };
 
   Music.prototype.stop = function () {
     this.on = false;
-    if (this.audioEl) {
-      const el = this.audioEl, self = this;
-      this._tweenVol(0, 1.0);
-      setTimeout(function () { if (!self.on) el.pause(); }, 1100);
-    } else if (this.ctx) {
-      this._ramp(0, 1.0);
-    }
+    const self = this, el = this.audioEl;
+    this._level(0, 0.9);
+    if (el) setTimeout(function () { if (!self.on) { try { el.pause(); } catch (e) {} } }, 1000);
   };
 
-  // duck(true) under speech; duck(false) swells back between segments.
+  // duck(true) → soft presence under speech; duck(false) → swell back between segments.
   Music.prototype.duck = function (d) {
     if (!this.on) return;
-    if (this.audioEl) this._tweenVol(d ? DUCK : BED, d ? 0.4 : 1.3);
-    else if (this.ctx) this._ramp(d ? DUCK : BED, d ? 0.4 : 1.3);
+    this._level(d ? DUCK : BED, d ? DOWN : UP);
+  };
+
+  // Resume the context + element when the app returns to the foreground (mobile
+  // suspends a Web-Audio-routed element in the background).
+  Music.prototype._wireResume = function () {
+    const self = this;
+    const resume = function () {
+      if (!self.on) return;
+      if (self.ctx && self.ctx.state === 'suspended') self.ctx.resume().catch(function () {});
+      if (self.audioEl && self.audioEl.paused) { try { self.audioEl.play().catch(function () {}); } catch (e) {} }
+    };
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) resume(); });
+    global.addEventListener('focus', resume);
   };
 
   // Lock-screen / background media metadata — helps the OS keep audio alive.
