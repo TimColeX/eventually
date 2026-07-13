@@ -279,6 +279,10 @@
     }
   });
   const music = new window.EventuallyMusic();   // duckable bed, swaps to a real file if provided
+  // Music mute is a per-user preference (music only — narration always plays).
+  let musicMuted = false;
+  try { musicMuted = localStorage.getItem('ev_mute_music') === '1'; } catch (e) {}
+  music.setMuted(musicMuted);
   const I18n = window.EventuallyI18n;
   const aiHost = new window.EventuallyAIHost(document.getElementById('ai-host'), {
     getLine: function () {                       // localize the structured line to the user's language
@@ -331,6 +335,13 @@
     getVoiceSettings: function () { return RT.hostVoice || {}; },
     // "Back to my area" — return the Host (and the map) to the user's home location.
     onHomeReset: function () { backToMyArea(); },
+    // Mute/unmute the music bed only (narration keeps playing). Persisted.
+    initialMuted: musicMuted,
+    onMuteToggle: function () {
+      musicMuted = !musicMuted; music.setMuted(musicMuted);
+      try { localStorage.setItem('ev_mute_music', musicMuted ? '1' : '0'); } catch (e) {}
+      return musicMuted;
+    },
     // Free "Today's briefing" (device voice): prefer the LLM-authored server
     // script (local-first, worldwide fallback); if unavailable, build one locally
     // from the loaded events so the feature always works.

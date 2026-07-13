@@ -28,6 +28,7 @@
     this.audioEl = null;             // real track element
     this.ctx = null; this.master = null;
     this.on = false; this._built = false; this._direct = false; this._tween = null;
+    this._ducked = false; this.muted = false;
   }
 
   Music.prototype._build = function () {
@@ -126,7 +127,7 @@
     this.on = true;
     if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume().catch(function () {});
     if (this.audioEl) { try { this.audioEl.play().catch(function () {}); } catch (e) {} this._mediaSession(); }
-    this._level(BED, 1.6);                       // swell in
+    this._level(this.muted ? 0 : BED, 1.6);      // swell in (silent if muted)
   };
 
   Music.prototype.stop = function () {
@@ -138,8 +139,17 @@
 
   // duck(true) → soft presence under speech; duck(false) → swell back between segments.
   Music.prototype.duck = function (d) {
-    if (!this.on) return;
+    this._ducked = d;
+    if (!this.on || this.muted) return;
     this._level(d ? DUCK : BED, d ? DOWN : UP);
+  };
+
+  // Mute/unmute ONLY the music bed — narration keeps playing. Unmuting restores the
+  // level appropriate to whether the Host is currently speaking (ducked) or not.
+  Music.prototype.setMuted = function (m) {
+    this.muted = !!m;
+    if (!this.on) return;
+    this._level(this.muted ? 0 : (this._ducked ? DUCK : BED), 0.25);
   };
 
   // Resume the context + element when the app returns to the foreground (mobile

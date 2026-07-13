@@ -25,6 +25,9 @@
     this.getBriefing = opts.getBriefing || null;  // () -> Promise<{url,text}|null> (shared city briefing)
     this.getDailyBriefing = opts.getDailyBriefing || null;  // () -> Promise<{text}|null> (free daily briefing, device voice)
     this.onHomeReset = opts.onHomeReset || null;  // () -> void ("back to my area" clicked)
+    this.onMuteToggle = opts.onMuteToggle || null;  // () -> bool (new muted state)
+    this.initialMuted = !!opts.initialMuted;
+    this._premiumPlaying = false;
     this.getOpener = opts.getOpener || null;      // () -> { text, lang, rtl } (personalized, browser voice)
     this.getVoiceSettings = opts.getVoiceSettings || null;  // () -> { rate, pitch } (admin-tunable)
     // Voices can load asynchronously; refresh the best-voice pick when they arrive.
@@ -65,6 +68,10 @@
         '<span class="ah-text"></span></div>' +
       '</div>' +
       '<button class="ah-home" style="display:none" aria-label="Back to my area">↩ My area</button>' +
+      '<button class="ah-mute" aria-label="Mute music" title="Mute music">' +
+        '<svg viewBox="0 0 24 24" class="ic-vol"><path d="M3 10v4h4l5 4V6L7 10H3z"/><path d="M15.5 8.5a4.5 4.5 0 010 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>' +
+        '<svg viewBox="0 0 24 24" class="ic-mute" style="display:none"><path d="M3 10v4h4l5 4V6L7 10H3z"/><path d="M15 9.5l5 5M20 9.5l-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>' +
+      '</button>' +
       '<canvas class="ah-wave"></canvas>';
 
     this.canvas = this.el.querySelector('.ah-wave');
@@ -75,6 +82,11 @@
     this.el.querySelector('.ah-play').addEventListener('click', function () { self.toggle(); });
     const home = this.el.querySelector('.ah-home');
     if (home) home.addEventListener('click', function () { if (self.onHomeReset) self.onHomeReset(); });
+    const mute = this.el.querySelector('.ah-mute');
+    if (mute) {
+      this._setMuteIcon(this.initialMuted);
+      mute.addEventListener('click', function (e) { e.stopPropagation(); self._setMuteIcon(self.onMuteToggle ? self.onMuteToggle() : false); });
+    }
     // Tap the caption to open a readable "Now playing" transcript.
     const cap = this.el.querySelector('.ah-caption');
     if (cap) { cap.classList.add('ah-tappable'); cap.title = 'Tap to read the full transcript'; cap.addEventListener('click', function () { self._toggleExpand(); }); }
@@ -132,9 +144,11 @@
     try { this._audio.pause(); } catch (e) {}
     clearInterval(this._ampTimer);
     this.briefingPlaying = true;
+    this._setBuffering(true);
     this._showCaption({ text: 'Preparing today’s briefing…', kind: 'briefing', lang: 'en-US' });
     this.getDailyBriefing().then(function (b) {
       if (gen !== self._briefingGen) return;                 // superseded
+      self._setBuffering(false);
       if (!self.speaking) { self.briefingPlaying = false; return; }
       const text = b && b.text;
       if (!text) { self.briefingPlaying = false; if (onDone) onDone(); return; }
@@ -147,6 +161,7 @@
       });
     }).catch(function () {
       if (gen !== self._briefingGen) return;
+      self._setBuffering(false);
       self.briefingPlaying = false;
       if (onDone) onDone();
     });
@@ -164,8 +179,18 @@
   // between sentences in _browserSpeak; if we're in a music gap, bring it forward.
   AIHost.prototype.switchLocation = function () {
     if (!this.speaking) return;
-    this._switchPending = true;
-    if (this._gapTimer) {                       // in a music gap → apply soon
+    if (this._premiumPlaying) {                 // Plus: crossfade out the current clip, then switch
+      this._voiceVol(0, 0.5);
+      const self = this;
+      clearTimeout(this._switchFade);
+      this._switchFade = setTimeout(function () {
+        try { self._audio.pause(); } catch (e) {}
+        self._premiumPlaying = false; self._applySwitch();
+      }, 520);
+      return;
+    }
+    this._switchPending = true;                 // device: finish the current sentence, then switch
+    if (this._gapTimer) {                        // in a music gap → apply soon
       clearTimeout(this._gapTimer);
       const self = this;
       this._gapTimer = setTimeout(function () { if (self.speaking) self._applySwitch(); }, 1200);
@@ -181,6 +206,38 @@
   // Admin toggle: when the daily briefing is disabled, the show plays intro → live
   // (the briefing segment is skipped).
   AIHost.prototype.setDailyBriefingEnabled = function (on) { this._dailyBriefingDisabled = (on === false); };
+
+  // Reflect the music mute state on the speaker button.
+  AIHost.prototype._setMuteIcon = function (m) {
+    const b = this.el.querySelector('.ah-mute'); if (!b) return;
+    b.classList.toggle('is-muted', !!m);
+    const v = b.querySelector('.ic-vol'), x = b.querySelector('.ic-mute');
+    if (v) v.style.display = m ? 'none' : '';
+    if (x) x.style.display = m ? '' : 'none';
+    b.title = m ? 'Unmute music' : 'Mute music'; b.setAttribute('aria-label', b.title);
+  };
+
+  // Fade the premium <audio> clip's volume (crossfades in/out). No-op ducking on iOS
+  // (volume is read-only there) — playback still switches promptly.
+  AIHost.prototype._voiceVol = function (to, secs) {
+    const a = this._audio; if (!a) return;
+    clearInterval(this._voiceTween);
+    const from = (typeof a.volume === 'number') ? a.volume : 1;
+    const steps = Math.max(1, Math.round(secs * 20)), dv = (to - from) / steps;
+    let i = 0; const self = this;
+    this._voiceTween = setInterval(function () {
+      i++; let vv = from + dv * i; vv = vv < 0 ? 0 : (vv > 1 ? 1 : vv);
+      try { a.volume = vv; } catch (e) {}
+      if (i >= steps) { try { a.volume = to < 0 ? 0 : (to > 1 ? 1 : to); } catch (e) {} clearInterval(self._voiceTween); self._voiceTween = null; }
+    }, 50);
+  };
+
+  // Buffering state (premium briefing being generated/synthesized) → the play button
+  // pulses and the caption shows a "preparing" hint, so silence never reads as a bug.
+  AIHost.prototype._setBuffering = function (on) {
+    this._buffering = !!on;
+    this.el.classList.toggle('ah-buffering', !!on);
+  };
 
   // Show the focus city in the Host label (" · Toronto").
   AIHost.prototype.setFocusCity = function (city) {
@@ -342,14 +399,16 @@
           return;
         }
       }
+      this._setBuffering(true);                               // "preparing your briefing…"
       this.getBriefing().then(function (b) {
+        self._setBuffering(false);
         if (!self.speaking || self.briefingPlaying) return;   // briefing took over → don't start premium
         if (b && b.segments && b.segments.length) {
           self._playPremiumSegments(b.segments, 0);           // body + verbatim promo clips, back-to-back
         } else {
           self._freeSegment();   // not Plus / unavailable → device-voice show (opening then ambient)
         }
-      }).catch(function () { self._freeSegment(); });
+      }).catch(function () { self._setBuffering(false); self._freeSegment(); });
       return;
     }
     this._rotateLine();
@@ -397,18 +456,21 @@
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();  // enforce one voice: silence browser TTS
     this.onSpeakStart();                                               // duck the music now
     try {
-      a.onended = function () { afterSegment(); };
-      a.onerror = function () { self._browserSpeak(text, afterSegment); };
+      a.onended = function () { self._premiumPlaying = false; afterSegment(); };
+      a.onerror = function () { self._premiumPlaying = false; self._browserSpeak(text, afterSegment); };
       a.src = url; a.currentTime = 0;
+      try { a.volume = 0; } catch (e) {}                   // start silent → fade the clip in
       const p = a.play();
       const begin = function () {
+        self._premiumPlaying = true;
+        self._voiceVol(1, 0.35);                           // crossfade the clip in
         self.onSpeakStart();                               // duck music under voice
         clearInterval(self._ampTimer);
         self._ampTimer = setInterval(function () { self.amp = 0.5 + Math.random() * 0.4; }, 180);
       };
-      if (p && p.then) p.then(begin).catch(function () { self._browserSpeak(text, afterSegment); });
+      if (p && p.then) p.then(begin).catch(function () { self._premiumPlaying = false; self._browserSpeak(text, afterSegment); });
       else begin();
-    } catch (e) { self._browserSpeak(text, afterSegment); }
+    } catch (e) { self._premiumPlaying = false; self._browserSpeak(text, afterSegment); }
   };
 
   // Free voice: browser SpeechSynthesis (or a timed simulation if unavailable).
@@ -550,12 +612,14 @@
     this.speaking = false;
     this.briefingPlaying = false;
     this._switchPending = false;
+    this._premiumPlaying = false;
+    this._setBuffering(false);
     this.icPlay.style.display = '';
     this.icPause.style.display = 'none';
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     try { this._audio.pause(); } catch (e) {}
-    clearInterval(this._ampTimer);
-    clearTimeout(this._introTimer); clearTimeout(this._gapTimer); clearTimeout(this._readTimer);
+    clearInterval(this._ampTimer); clearInterval(this._voiceTween);
+    clearTimeout(this._introTimer); clearTimeout(this._gapTimer); clearTimeout(this._readTimer); clearTimeout(this._switchFade);
     this.onPause();                         // stop the music bed
     if (!this._timer) this._timer = setInterval(this._rotate.bind(this), this.IDLE);   // resume silent ticker
   };

@@ -341,9 +341,19 @@ body {
   font-size: 11.5px; padding: 7px 12px; white-space: nowrap;
 }
 .ah-home:hover { border-color: var(--clay); color: var(--clay); }
+/* Music mute toggle (music only — narration keeps playing) */
+.ah-mute { flex: none; width: 34px; height: 34px; padding: 0; display: grid; place-items: center; cursor: pointer;
+  border: 1px solid var(--line-2); border-radius: 50%; background: transparent; color: var(--muted); }
+.ah-mute:hover { border-color: var(--clay); color: var(--clay); }
+.ah-mute.is-muted { color: var(--clay); border-color: var(--clay); }
+.ah-mute svg { width: 18px; height: 18px; fill: currentColor; display: block; }
+/* Buffering: premium briefing being prepared → pulse the play button */
+.ah-buffering .ah-play { animation: ahpulse 1.2s ease-in-out infinite; }
+.ah-buffering .ah-text { opacity: 0.75; }
 @media (max-width: 560px) {
   .ah-wave { display: none; }
   .ah-briefing, .ah-home { font-size: 11px; padding: 6px 10px; }
+  .ah-mute { width: 32px; height: 32px; }
 }
 
 /* ---------- auth modal ---------- */
