@@ -26,14 +26,16 @@
     { type: 'Transport',  name: 'GoCity Rides',      pitch: 'Get there and back, no parking stress.' }
   ];
 
+  // Benefit-led (concierge intelligence first, premium voice last) — Plus is bought
+  // for what the host KNOWS, not just how it sounds.
   const PLUS_BENEFITS = [
-    'Ad-free experience',
-    'No sponsorship messages',
-    'Advanced event filtering',
-    'A personalized AI Host',
-    'Travel planning tools',
-    'Event reminders',
-    'Early access to new features'
+    'Your personal AI event concierge',
+    'Personalized daily briefings',
+    'Intelligent, interest-based recommendations',
+    'Travel-aware city briefings',
+    'Saved-event reminders & schedule alerts',
+    'Premium AI narration',
+    'Ad-free & sponsor-free'
   ];
 
   let lastSponsorAt = 0;

@@ -318,8 +318,12 @@
       const city = (loc && loc.city) ? loc.city : null;
       const now = new Date();
       const day = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+      // Personalization inputs (assembled into reusable cached clips server-side).
+      const interests = (P.effectiveInterests(D.getById) || []).slice(0, 3);
+      const saved = (P.get().saved || []).length;
       return window.EventuallyHostVoice.getBriefing({
-        city: city, lat: loc && loc.lat, lon: loc && loc.lon, lang: P.get().language || 'en', day: day
+        city: city, lat: loc && loc.lat, lon: loc && loc.lon, lang: P.get().language || 'en', day: day,
+        interests: interests, saved: saved
       });
     },
     // Premium (Plus) is ElevenLabs from the very first word: a short, cached
@@ -1466,7 +1470,7 @@
       '<details><summary>How do I save events?</summary><p>Tap the ☆ on any event card. Saved events feed your personalized recommendations from the Host.</p></details>' +
       '<details><summary>What is the eventually Host?</summary><p>Your live AI concierge — it narrates what\'s happening worldwide and tailors picks to your location and interests. Press play to hear it, with a music bed behind it.</p></details>' +
       '<details><summary>How do I list my event?</summary><p>Open the ⋯ menu → Create an event, drop a pin on the map, and publish straight to the globe.</p></details>' +
-      '<details><summary>What is Eventually Plus?</summary><p>An ad-free, sponsor-free membership with advanced filtering, a personalized Host, reminders and early access.</p></details>' +
+      '<details><summary>What is Eventually Plus?</summary><p>Your personal AI event concierge: personalized daily briefings, intelligent interest-based recommendations, travel-aware city briefings, saved-event reminders and premium AI narration — all ad-free and sponsor-free.</p></details>' +
       '</div>');
   }
   function openContact() {

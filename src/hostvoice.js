@@ -49,7 +49,8 @@
           body: JSON.stringify({
             audio: true, city: o.city || null,
             lat: (o.lat != null ? o.lat : null), lon: (o.lon != null ? o.lon : null),
-            lang: (o.lang || 'en').slice(0, 2), day: o.day || null
+            lang: (o.lang || 'en').slice(0, 2), day: o.day || null,
+            interests: o.interests || [], saved: o.saved || 0    // personalized concierge tails
           })
         }).then(function (r) {
           if (!r.ok) { r.json().then(function (e) { console.warn('[HostVoice] briefing ' + r.status, e); }).catch(function () {}); return null; }
