@@ -144,11 +144,55 @@
       html += '<div class="ad-sec" id="ad-src"><h2>Event sources</h2><p class="ad-hint">Counting per source…</p></div>';
       html += '<div class="ad-sec" id="ad-dq"><h2>Data quality</h2><p class="ad-hint">Checking event coordinates…</p></div>';
       html += '<div class="ad-sec" id="ad-bu"><h2>Daily briefing usage</h2><p class="ad-hint">Counting Claude calls…</p></div>';
+      html += '<div class="ad-sec" id="ad-el"><h2>ElevenLabs usage (Plus voice)</h2><p class="ad-hint">Measuring cache performance…</p></div>';
       body.innerHTML = html;
       renderSourceBreakdown();
       renderDataQuality();
       renderBriefingUsage();
+      renderAudioUsage();
     });
+  }
+
+  // ElevenLabs cache performance + spend, by category. Proves the caching is working:
+  // a high hit % means we rarely pay ElevenLabs. Chars ≈ credits for eleven_multilingual_v2.
+  const EL_COST_PER_1K = 0.30;   // ≈ $ per 1,000 characters (adjust to your ElevenLabs plan)
+  function renderAudioUsage() {
+    const box = document.getElementById('ad-el');
+    if (!box) return;
+    sb.rpc('admin_audio_usage', { p_days: 30 }).then(function (r) {
+      const d = r.data;
+      if (!d || (r.error && r.error.message)) {
+        box.innerHTML = '<h2>ElevenLabs usage (Plus voice)</h2><p class="ad-hint">Unavailable (' +
+          esc((r.error && r.error.message) || 'run backend/32_audio_usage.sql') + ').</p>';
+        return;
+      }
+      const money = function (chars) { const v = (chars / 1000) * EL_COST_PER_1K; return '≈ $' + v.toFixed(v < 1 ? 3 : 2); };
+      const kpi = function (v, l) { return '<div class="ad-kpi"><b>' + v + '</b><span>' + l + '</span></div>'; };
+      const perUser = d.plus_users ? Math.round(d.chars / d.plus_users) : 0;
+      const cats = d.by_category || {};
+      let catRows = Object.keys(cats).map(function (k) {
+        var c = cats[k];
+        return '<div class="ad-li"><span><b>' + esc(k) + '</b></span><span>' + (c.requests || 0) + ' req · ' +
+          (c.misses || 0) + ' synth · ' + (c.chars || 0).toLocaleString() + ' chars</span></div>';
+      }).join('') || '<div class="ad-li"><span class="ad-hint">No requests yet.</span></div>';
+      var reused = (d.top_reused || []).map(function (t) {
+        return '<div class="ad-li"><span>' + esc(t.scope || '—') + '</span><span>' + t.hits + ' reuse</span></div>';
+      }).join('') || '<div class="ad-li"><span class="ad-hint">—</span></div>';
+      box.innerHTML = '<h2>ElevenLabs usage (Plus voice) · last ' + (d.window_days || 30) + ' days</h2>' +
+        '<p class="ad-hint">Each request either hits the cache (no ElevenLabs call) or synthesizes. A high hit % = the caching is preventing spend. Characters ≈ ElevenLabs credits; edit EL_COST_PER_1K in admin.js for your plan.</p>' +
+        '<div class="ad-grid">' +
+          kpi((d.hit_pct != null ? d.hit_pct : 0) + '%', 'Cache hit rate') +
+          kpi((d.misses || 0).toLocaleString(), 'ElevenLabs calls (synths)') +
+          kpi((d.hits || 0).toLocaleString(), 'Cache hits (free)') +
+          kpi((d.chars || 0).toLocaleString(), 'Chars synthesized') +
+          kpi(money(d.chars || 0), 'Est. spend') +
+          kpi((d.chars_saved || 0).toLocaleString(), 'Chars saved by cache') +
+          kpi((d.plus_users || 0), 'Plus listeners') +
+          kpi(perUser.toLocaleString(), 'Chars / listener') +
+        '</div>' +
+        '<div class="ad-field" style="margin-top:14px"><label>By category</label><div class="ad-list">' + catRows + '</div></div>' +
+        '<div class="ad-field" style="margin-top:10px"><label>Most reused (cache hits by area)</label><div class="ad-list">' + reused + '</div></div>';
+    }).catch(function () { box.innerHTML = '<h2>ElevenLabs usage (Plus voice)</h2><p class="ad-hint">Unavailable.</p>'; });
   }
 
   // Per-source breakdown (live). Dynamic — any new source appears automatically.
