@@ -27,7 +27,16 @@
   }
   // "You are here" + nearby-events (within NEAR_KM of the user's chosen location).
   let userLoc = null;
+  let freeIntroPlayed = false;          // the free upsell intro plays in full once per session
   const NEAR_KM = 50;
+  // "Events happening near you today" — live/upcoming within NEAR_KM of the user's
+  // location (or all upcoming if no location). Feeds the free intro's spoken count.
+  function nearCount() {
+    const loc = P.get().location || userLoc;
+    const upcoming = D.getEvents().filter(function (e) { const t = D.typeForDate(e, selectedDate); return t === 'live' || t === 'upcoming'; });
+    if (!loc) return 0;                 // no location → backend uses a generic (no-number) line
+    return upcoming.filter(function (e) { return haversineKm(loc.lat, loc.lon, e.lat, e.lon) <= NEAR_KM; }).length;
+  }
   function haversineKm(a1, o1, a2, o2) {
     const R = 6371, d = Math.PI / 180, dLat = (a2 - a1) * d, dLon = (o2 - o1) * d;
     const s = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(a1 * d) * Math.cos(a2 * d) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
@@ -335,13 +344,15 @@
       if (!P.get().plus) return Promise.resolve(null);
       return window.EventuallyHostVoice.getStinger(P.get().language || 'en');
     },
-    // FREE: one brief, cached ElevenLabs greeting, then the host stops (no radio show).
+    // FREE: a brief cached ElevenLabs intro (count + upsell first time, short after),
+    // then narration stops and the music bed continues. Never the browser voice.
     getFreeGreeting: function () {
       if (!window.EventuallyHostVoice || !window.EventuallyHostVoice.enabled) return Promise.resolve(null);
       if (P.get().plus) return Promise.resolve(null);
       const h = new Date().getHours();
       const part = h < 12 ? 'morning' : (h < 18 ? 'afternoon' : 'evening');
-      return window.EventuallyHostVoice.getFreeGreeting(part, P.get().language || 'en');
+      const full = !freeIntroPlayed; freeIntroPlayed = true;
+      return window.EventuallyHostVoice.getFreeGreeting({ part: part, lang: P.get().language || 'en', count: nearCount(), full: full });
     },
     // Admin-tunable delivery for the free browser voice (rate/pitch).
     getVoiceSettings: function () { return RT.hostVoice || {}; },

@@ -63,18 +63,23 @@
         });
       }).catch(function () { return null; });
     },
-    // FREE tier: a short, cached ElevenLabs greeting from a FIXED library (by part of
-    // day), reused by ALL free users → near-zero marginal cost. No login needed.
-    // -> Promise<{url,text}|null>
-    getFreeGreeting: function (part, lang) {
+    // FREE tier intro: cached ElevenLabs clips reused by ALL free users → near-zero
+    // marginal cost. Assembled [count]+[upsell] on the first play (`full`), else a
+    // short welcome-back. No login needed. opts: {part,lang,count,full}
+    // -> Promise<{segments:[{url,text}]}|null>
+    getFreeGreeting: function (opts) {
       if (!ENABLED) return Promise.resolve(null);
+      var o = opts || {};
       return fetch(BASE + '/functions/v1/briefing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': ANON, 'Authorization': 'Bearer ' + ANON },
-        body: JSON.stringify({ greeting: true, part: part || 'day', lang: (lang || 'en').slice(0, 2) })
+        body: JSON.stringify({ greeting: true, part: o.part || 'day', lang: (o.lang || 'en').slice(0, 2), count: o.count || 0, full: !!o.full })
       }).then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (j) { return (j && j.url) ? { url: j.url, text: j.text || '' } : null; })
-        .catch(function () { return null; });
+        .then(function (j) {
+          if (j && j.segments && j.segments.length) return { segments: j.segments };
+          if (j && j.url) return { segments: [{ url: j.url, text: j.text || '' }] };   // legacy single
+          return null;
+        }).catch(function () { return null; });
     },
     // Short, generic, cached ElevenLabs intro clip — played instantly at the start of
     // a Plus show while the full briefing synthesizes (keeps Premium all-ElevenLabs).

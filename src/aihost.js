@@ -28,6 +28,7 @@
     this.onMuteToggle = opts.onMuteToggle || null;  // () -> bool (new muted state)
     this.initialMuted = !!opts.initialMuted;
     this._premiumPlaying = false;
+    this._musicHold = false; this._freeMode = false; this._introDone = false;
     this.getStinger = opts.getStinger || null;    // () -> Promise<{url,text}|null> (cached ElevenLabs intro, Plus)
     this.getFreeGreeting = opts.getFreeGreeting || null;  // () -> Promise<{url,text}|null> (cached EL greeting, Free)
     this.getVoiceSettings = opts.getVoiceSettings || null;  // () -> { rate, pitch } (admin-tunable)
@@ -386,6 +387,7 @@
   AIHost.prototype._rotate = function () {
     if (!this.getLine) return;
     if (this.briefingPlaying) return;          // the briefing owns the audio right now
+    if (this._musicHold) return;               // free intro done → music bed only, no caption rotation
     const self = this;
     // Briefing mode: Plus = SHARED, cached ElevenLabs briefing (premium voice from the
     // very first word — a cached stinger covers synth latency at the start). Free = the
@@ -431,25 +433,41 @@
   };
 
   // FREE: play ONE brief cached ElevenLabs greeting, then STOP (no continuous show).
-  // Falls back to a single device-voice greeting if the EL greeting is unavailable.
+  // NEVER uses the browser voice. If the ElevenLabs greeting is unavailable, it skips
+  // narration entirely and just lets the music bed play (→ _endFreeIntro).
   AIHost.prototype._playFreeGreeting = function () {
     const self = this;
-    if (!this.getFreeGreeting) { this._setBuffering(false); this._briefDeviceGreeting(); return; }
+    this._freeMode = true;
+    if (!this.getFreeGreeting) { this._setBuffering(false); this._endFreeIntro(); return; }
     this.getFreeGreeting().then(function (g) {
       if (!self.speaking) return;
       self._setBuffering(false);
-      if (g && g.url) {
-        self._showCaption({ text: g.text, kind: 'greeting', lang: 'en-US' });
-        self._audioSpeak(g.url, g.text, function () { self.stop(); });   // greeting → stop
-      } else { self._briefDeviceGreeting(); }
-    }).catch(function () { self._setBuffering(false); self._briefDeviceGreeting(); });
+      if (g && g.segments && g.segments.length) self._playFreeIntro(g.segments, 0);
+      else self._endFreeIntro();                          // no clip → music only, no browser voice
+    }).catch(function () { self._setBuffering(false); self._endFreeIntro(); });
   };
-  AIHost.prototype._briefDeviceGreeting = function () {
-    const self = this;
-    const line = this.getLine ? this.getLine() : null;
-    const text = (line && line.text) || 'Welcome to Eventually.';
-    this._showCaption(line && line.text ? line : { text: text, kind: 'greeting', lang: 'en-US' });
-    this._browserSpeak(text, function () { self.stop(); });   // ONE line → stop (no radio)
+  // Play the assembled free intro clips (ElevenLabs only), then stop narration but
+  // KEEP the music bed playing.
+  AIHost.prototype._playFreeIntro = function (segs, i) {
+    if (!this.speaking) return;
+    if (i >= segs.length) { this._endFreeIntro(); return; }
+    const seg = segs[i], self = this;
+    this._showCaption({ text: seg.text || '', kind: 'greeting', lang: 'en-US' });
+    this._audioSpeak(seg.url, seg.text || '', function () { self._playFreeIntro(segs, i + 1); }, true /* no browser fallback */);
+  };
+  // Free intro finished: narration stops, but the music bed keeps playing (uninterrupted)
+  // until the user pauses or mutes. The button now controls the music, not narration.
+  AIHost.prototype._endFreeIntro = function () {
+    this.speaking = false;
+    this._musicHold = true;                               // music continues on its own
+    this._introDone = true;
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    try { this._audio.pause(); } catch (e) {}
+    clearInterval(this._voiceTween); clearTimeout(this._gapTimer); clearTimeout(this._introTimer);
+    this.onSpeakEnd();                                    // swell the music back up
+    this.icPlay.style.display = 'none';                   // button = "music playing"
+    this.icPause.style.display = '';
+    if (!this._timer) this._timer = setInterval(this._rotate.bind(this), this.IDLE);
   };
 
   // Play a resolved briefing result: Plus audio segments, else the free browser show.
@@ -494,14 +512,17 @@
   };
 
   // Premium voice: play the returned audio URL via the (gesture-unlocked) element.
-  AIHost.prototype._audioSpeak = function (url, text, afterSegment) {
+  // noFallback=true (FREE tier) → on failure, do NOT drop to the browser voice; just
+  // advance/finish (music-only). Free must never use the browser voice.
+  AIHost.prototype._audioSpeak = function (url, text, afterSegment, noFallback) {
     const self = this, a = this._audio;
     if (this.briefingPlaying) return;                                  // never play premium over the briefing
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();  // enforce one voice: silence browser TTS
     this.onSpeakStart();                                               // duck the music now
+    const fail = function () { self._premiumPlaying = false; if (noFallback) { if (afterSegment) afterSegment(); } else self._browserSpeak(text, afterSegment); };
     try {
       a.onended = function () { self._premiumPlaying = false; afterSegment(); };
-      a.onerror = function () { self._premiumPlaying = false; self._browserSpeak(text, afterSegment); };
+      a.onerror = fail;
       a.src = url; a.currentTime = 0;
       try { a.volume = 0; } catch (e) {}                   // start silent → fade the clip in
       const p = a.play();
@@ -512,9 +533,9 @@
         clearInterval(self._ampTimer);
         self._ampTimer = setInterval(function () { self.amp = 0.5 + Math.random() * 0.4; }, 180);
       };
-      if (p && p.then) p.then(begin).catch(function () { self._premiumPlaying = false; self._browserSpeak(text, afterSegment); });
+      if (p && p.then) p.then(begin).catch(fail);
       else begin();
-    } catch (e) { self._premiumPlaying = false; self._browserSpeak(text, afterSegment); }
+    } catch (e) { fail(); }
   };
 
   // Free voice: browser SpeechSynthesis (or a timed simulation if unavailable).
@@ -572,10 +593,29 @@
     return out.length ? out : [t];
   };
 
-  AIHost.prototype.toggle = function () { this.speaking ? this.stop() : this.play(); };
+  AIHost.prototype.toggle = function () {
+    if (this.speaking) return this.stop();               // narration playing → stop everything
+    if (this._musicHold) return this._musicPause();      // free: music bed playing → stop the music
+    // Fully stopped. Free with the intro already played this session → just resume the
+    // music bed (don't replay the intro). Otherwise start the show/intro.
+    if (this._freeMode && this._introDone) return this._musicResume();
+    this.play();
+  };
+  // Music-only controls (free tier, after the intro).
+  AIHost.prototype._musicPause = function () {
+    this._musicHold = false;
+    this.onPause();                                      // stop the music bed
+    this.icPlay.style.display = ''; this.icPause.style.display = 'none';
+  };
+  AIHost.prototype._musicResume = function () {
+    this._musicHold = true;
+    this.onPlay();                                       // resume the music bed (no narration)
+    this.icPlay.style.display = 'none'; this.icPause.style.display = '';
+  };
 
   AIHost.prototype.play = function () {
     this.speaking = true;
+    this._musicHold = false; this._freeMode = false;
     this._openerDone = false;              // premium stinger plays once per Play session
     this._openingDone = false;             // replay the show opening (intro → briefing) on each Play
     this._switchPending = false;
@@ -657,6 +697,7 @@
     this.briefingPlaying = false;
     this._switchPending = false;
     this._premiumPlaying = false;
+    this._musicHold = false;
     this._pendingBriefing = null;
     this._setBuffering(false);
     this.icPlay.style.display = '';
