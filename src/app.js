@@ -335,6 +335,14 @@
       if (!P.get().plus) return Promise.resolve(null);
       return window.EventuallyHostVoice.getStinger(P.get().language || 'en');
     },
+    // FREE: one brief, cached ElevenLabs greeting, then the host stops (no radio show).
+    getFreeGreeting: function () {
+      if (!window.EventuallyHostVoice || !window.EventuallyHostVoice.enabled) return Promise.resolve(null);
+      if (P.get().plus) return Promise.resolve(null);
+      const h = new Date().getHours();
+      const part = h < 12 ? 'morning' : (h < 18 ? 'afternoon' : 'evening');
+      return window.EventuallyHostVoice.getFreeGreeting(part, P.get().language || 'en');
+    },
     // Admin-tunable delivery for the free browser voice (rate/pitch).
     getVoiceSettings: function () { return RT.hostVoice || {}; },
     // "Back to my area" — return the Host (and the map) to the user's home location.

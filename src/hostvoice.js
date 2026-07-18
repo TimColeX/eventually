@@ -63,6 +63,19 @@
         });
       }).catch(function () { return null; });
     },
+    // FREE tier: a short, cached ElevenLabs greeting from a FIXED library (by part of
+    // day), reused by ALL free users → near-zero marginal cost. No login needed.
+    // -> Promise<{url,text}|null>
+    getFreeGreeting: function (part, lang) {
+      if (!ENABLED) return Promise.resolve(null);
+      return fetch(BASE + '/functions/v1/briefing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': ANON, 'Authorization': 'Bearer ' + ANON },
+        body: JSON.stringify({ greeting: true, part: part || 'day', lang: (lang || 'en').slice(0, 2) })
+      }).then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) { return (j && j.url) ? { url: j.url, text: j.text || '' } : null; })
+        .catch(function () { return null; });
+    },
     // Short, generic, cached ElevenLabs intro clip — played instantly at the start of
     // a Plus show while the full briefing synthesizes (keeps Premium all-ElevenLabs).
     // -> Promise<{url,text}|null>

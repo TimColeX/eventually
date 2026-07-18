@@ -29,6 +29,7 @@
     this.initialMuted = !!opts.initialMuted;
     this._premiumPlaying = false;
     this.getStinger = opts.getStinger || null;    // () -> Promise<{url,text}|null> (cached ElevenLabs intro, Plus)
+    this.getFreeGreeting = opts.getFreeGreeting || null;  // () -> Promise<{url,text}|null> (cached EL greeting, Free)
     this.getVoiceSettings = opts.getVoiceSettings || null;  // () -> { rate, pitch } (admin-tunable)
     // Voices can load asynchronously; refresh the best-voice pick when they arrive.
     if ('speechSynthesis' in global && global.speechSynthesis.addEventListener) {
@@ -392,15 +393,21 @@
     if (this.speaking && this.getBriefing) {
       // Start of the show (once per Play): play a cached ElevenLabs stinger IMMEDIATELY
       // while the full briefing synthesizes in parallel — no browser-voice greeting.
-      if (!this._openerDone && this.getStinger) {
+      if (!this._openerDone && (this.getStinger || this.getFreeGreeting)) {
         this._openerDone = true;
-        this._pendingBriefing = this.getBriefing();          // kick off the heavy fetch now (parallel)
         this._setBuffering(true);
-        this.getStinger().then(function (s) {
+        this._pendingBriefing = this.getBriefing ? this.getBriefing() : Promise.resolve(null);   // Plus fetch (parallel)
+        (this.getStinger ? this.getStinger() : Promise.resolve(null)).then(function (s) {
           if (!self.speaking || self.briefingPlaying) return;
-          if (s && s.url) { self._setBuffering(false); self._audioSpeak(s.url, s.text, function () { self._playPendingBriefing(); }); }
-          else self._playPendingBriefing();                  // no stinger (Free / unavailable) → straight to briefing
-        }).catch(function () { self._playPendingBriefing(); });
+          if (s && s.url) {                                   // PLUS: stinger → briefing (+ personalization)
+            self._setBuffering(false);
+            self._showCaption({ text: s.text, kind: 'greeting', lang: 'en-US' });   // stinger read-along
+            self._audioSpeak(s.url, s.text, function () { self._playPendingBriefing(); });
+          } else {                                            // FREE: one brief greeting, then STOP
+            self._pendingBriefing = null;
+            self._playFreeGreeting();
+          }
+        }).catch(function () { self._pendingBriefing = null; self._playFreeGreeting(); });
         return;
       }
       // Refreshes / subsequent rotations: fetch + play the briefing (no stinger).
@@ -421,6 +428,28 @@
     const seg = segs[i], self = this;
     this._showCaption({ text: seg.text || '', kind: 'briefing', lang: 'en-US' });
     this._audioSpeak(seg.url, seg.text || '', function () { self._playPremiumSegments(segs, i + 1); });
+  };
+
+  // FREE: play ONE brief cached ElevenLabs greeting, then STOP (no continuous show).
+  // Falls back to a single device-voice greeting if the EL greeting is unavailable.
+  AIHost.prototype._playFreeGreeting = function () {
+    const self = this;
+    if (!this.getFreeGreeting) { this._setBuffering(false); this._briefDeviceGreeting(); return; }
+    this.getFreeGreeting().then(function (g) {
+      if (!self.speaking) return;
+      self._setBuffering(false);
+      if (g && g.url) {
+        self._showCaption({ text: g.text, kind: 'greeting', lang: 'en-US' });
+        self._audioSpeak(g.url, g.text, function () { self.stop(); });   // greeting → stop
+      } else { self._briefDeviceGreeting(); }
+    }).catch(function () { self._setBuffering(false); self._briefDeviceGreeting(); });
+  };
+  AIHost.prototype._briefDeviceGreeting = function () {
+    const self = this;
+    const line = this.getLine ? this.getLine() : null;
+    const text = (line && line.text) || 'Welcome to Eventually.';
+    this._showCaption(line && line.text ? line : { text: text, kind: 'greeting', lang: 'en-US' });
+    this._browserSpeak(text, function () { self.stop(); });   // ONE line → stop (no radio)
   };
 
   // Play a resolved briefing result: Plus audio segments, else the free browser show.
