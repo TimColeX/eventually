@@ -24,6 +24,7 @@
     this.synth = opts.synth || null;       // (text, lang, kind) -> Promise<url|null> (legacy per-line)
     this.getBriefing = opts.getBriefing || null;  // () -> Promise<{url,text}|null> (shared city briefing)
     this.getDailyBriefing = opts.getDailyBriefing || null;  // () -> Promise<{text}|null> (free daily briefing, device voice)
+    this.getWelcome = opts.getWelcome || null;    // () -> Promise<{url,text}|null> (official cached "Welcome to Eventually…")
     this.onHomeReset = opts.onHomeReset || null;  // () -> void ("back to my area" clicked)
     this.onMuteToggle = opts.onMuteToggle || null;  // () -> bool (new muted state)
     this.initialMuted = !!opts.initialMuted;
@@ -274,35 +275,57 @@
     }
     return { html: html, meta: meta };
   }
+  // Normalize whitespace ONCE. The caption's word offsets and the speech engine's
+  // sentence/boundary offsets must share ONE coordinate system — previously the
+  // caption was tokenized from the raw text while sentences were split from a
+  // whitespace-collapsed copy, so any newline/double-space made every subsequent
+  // boundary map onto the wrong word (drifting highlight).
+  function normText(s) { return String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); }
+
   AIHost.prototype._reducedMotion = function () {
     return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  };
+
+  // Has the official welcome already been spoken this session? The launch splash
+  // (src/signature.js) sets this flag the moment its welcome clip starts playing, so
+  // the Host doesn't repeat it seconds later. If the splash was disabled, skipped, or
+  // its audio failed, the flag stays unset and the Host delivers the greeting instead.
+  const WELCOME_KEY = 'eventually.welcomeSpoken';
+  AIHost.prototype._needsWelcome = function () {
+    try { return sessionStorage.getItem(WELCOME_KEY) !== '1'; } catch (e) { return true; }
   };
 
   // Update the caption (no audio). Renders the line as word spans so it can scroll
   // and highlight the current word in sync with the narration. Shared by line
   // rotation + briefing mode.
-  AIHost.prototype._showCaption = function (line) {
+  AIHost.prototype._showCaption = function (line, immediate) {
     this.current = line;
     this.sponEl.style.display = line.kind === 'sponsor' ? '' : 'none';
     this.el.querySelector('.ah-caption').classList.toggle('is-sponsor', line.kind === 'sponsor');
-    const rtl = !!line.rtl, text = line.text || '';
+    const rtl = !!line.rtl, text = normText(line.text);
     this.textEl.setAttribute('dir', rtl ? 'rtl' : 'ltr');
     this._capText = text; this._words = null; this._activeWord = -1; this._synced = false;
-    this._stopMarquee();
-    this.textEl.style.opacity = 0;
+    this._stopMarquee(); this._stopAudioSync();
     const self = this;
     clearTimeout(this._capTimer);
-    this._capTimer = setTimeout(function () {
+    const render = function () {
       const w = wordsHTML(text);
       self.textEl.innerHTML = '<span class="ah-run">' + w.html + '</span>';
       self._runEl = self.textEl.querySelector('.ah-run');
       const spans = self._runEl.querySelectorAll('.ah-w');
       self._words = w.meta.map(function (m, i) { m.el = spans[i]; return m; });
+      self._runEl.style.transition = 'none';
       self._runEl.style.transform = 'translateX(0)';
       self.textEl.style.opacity = 1;
       self._maybeMarquee();
       if (self._expanded) self._renderExpand(text, rtl);
-    }, 180);
+    };
+    // `immediate` = the caption is being driven by audio that is starting RIGHT NOW,
+    // so render in step with playback instead of after the 180ms cross-fade (which
+    // used to leave the previous line on screen while the new clip was already talking).
+    if (immediate) { render(); return; }
+    this.textEl.style.opacity = 0;
+    this._capTimer = setTimeout(render, 180);
   };
 
   // If the caption overflows and nothing is word-syncing it (premium audio, or no
@@ -330,14 +353,12 @@
 
   // Highlight the word containing `charIdx` (a global offset into the caption text)
   // and keep it in view. Called from speech word-boundary events (browser voice).
-  AIHost.prototype._highlightWord = function (charIdx) {
-    if (!this._words || !this._words.length) return;
-    this._synced = true; this._stopMarquee();
-    let wi = this._words.length - 1;
-    for (let i = 0; i < this._words.length; i++) {
-      if (charIdx < this._words[i].e) { wi = (charIdx >= this._words[i].s) ? i : Math.max(0, i - 1); break; }
-    }
-    if (wi === this._activeWord) return;
+  // Apply the active word + keep it in view. MONOTONIC: a read-along only ever moves
+  // forward within a caption. Boundary events can fire on whitespace (resolving to the
+  // PREVIOUS word), which used to yank the highlight — and the scroll — backwards.
+  AIHost.prototype._setActiveWord = function (wi) {
+    if (!this._words || wi < 0 || !this._words[wi]) return;
+    if (wi <= this._activeWord) return;                 // same or backwards → ignore
     if (this._activeWord >= 0 && this._words[this._activeWord].el) this._words[this._activeWord].el.classList.remove('active');
     this._activeWord = wi;
     const el = this._words[wi].el; if (!el) return;
@@ -354,6 +375,45 @@
       this._expActive = wi; this._expWords[wi].classList.add('active');
       try { this._expWords[wi].scrollIntoView({ block: 'center', behavior: this._reducedMotion() ? 'auto' : 'smooth' }); } catch (e) {}
     }
+  };
+
+  // Highlight the word containing `charIdx` (a global offset into the caption text).
+  // Called from speech word-boundary events (browser voice).
+  AIHost.prototype._highlightWord = function (charIdx) {
+    if (!this._words || !this._words.length) return;
+    this._synced = true; this._stopMarquee();
+    let wi = this._words.length - 1;
+    for (let i = 0; i < this._words.length; i++) {
+      if (charIdx < this._words[i].e) { wi = (charIdx >= this._words[i].s) ? i : Math.max(0, i - 1); break; }
+    }
+    this._setActiveWord(wi);
+  };
+
+  // PREMIUM (pre-rendered ElevenLabs mp3): the browser emits NO word-boundary events,
+  // so the caption used to fall back to a ping-pong marquee that scrolled forward and
+  // back on its own timer — visually "out of sync" and unrelated to the speech. Drive
+  // the read-along from the AUDIO CLOCK instead: progress = currentTime / duration.
+  // Approximate (assumes an even speaking rate) but always forward and always tied to
+  // what is actually being spoken.
+  AIHost.prototype._stopAudioSync = function () {
+    if (this._audio && this._audioSyncFn) {
+      try { this._audio.removeEventListener('timeupdate', this._audioSyncFn); } catch (e) {}
+    }
+    this._audioSyncFn = null;
+  };
+  AIHost.prototype._startAudioSync = function () {
+    this._stopAudioSync();
+    const self = this, a = this._audio;
+    if (!a) return;
+    this._audioSyncFn = function () {
+      if (!self._words || !self._words.length || !self._runEl) return;
+      const d = a.duration;
+      if (!isFinite(d) || d <= 0) return;
+      self._synced = true; self._stopMarquee();       // audio clock owns the caption now
+      const p = Math.max(0, Math.min(1, a.currentTime / d));
+      self._setActiveWord(Math.min(self._words.length - 1, Math.floor(p * self._words.length)));
+    };
+    a.addEventListener('timeupdate', this._audioSyncFn);
   };
 
   // The expandable "Now playing" transcript (full text, wrapped, auto-highlighting).
@@ -399,17 +459,34 @@
         this._openerDone = true;
         this._setBuffering(true);
         this._pendingBriefing = this.getBriefing ? this.getBriefing() : Promise.resolve(null);   // Plus fetch (parallel)
-        (this.getStinger ? this.getStinger() : Promise.resolve(null)).then(function (s) {
-          if (!self.speaking || self.briefingPlaying) return;
-          if (s && s.url) {                                   // PLUS: stinger → briefing (+ personalization)
-            self._setBuffering(false);
-            self._showCaption({ text: s.text, kind: 'greeting', lang: 'en-US' });   // stinger read-along
-            self._audioSpeak(s.url, s.text, function () { self._playPendingBriefing(); });
-          } else {                                            // FREE: one brief greeting, then STOP
-            self._pendingBriefing = null;
-            self._playFreeGreeting();
-          }
-        }).catch(function () { self._pendingBriefing = null; self._playFreeGreeting(); });
+        // The show proper: PLUS = stinger → briefing; FREE = one brief greeting → stop.
+        const proceed = function () {
+          (self.getStinger ? self.getStinger() : Promise.resolve(null)).then(function (s) {
+            if (!self.speaking || self.briefingPlaying) return;
+            if (s && s.url) {                                   // PLUS: stinger → briefing (+ personalization)
+              self._setBuffering(false);
+              self._audioSpeak(s.url, s.text, function () { self._playPendingBriefing(); },
+                false, { text: s.text, kind: 'greeting', lang: 'en-US' });   // stinger read-along, shown on play
+            } else {                                            // FREE: one brief greeting, then STOP
+              self._pendingBriefing = null;
+              self._playFreeGreeting();
+            }
+          }).catch(function () { self._pendingBriefing = null; self._playFreeGreeting(); });
+        };
+        // OFFICIAL GREETING: the Host opens with "Welcome to Eventually…" — but ONLY if
+        // the launch splash didn't already speak it this session (otherwise the user
+        // would hear the same welcome twice within seconds). Applies to Plus, free
+        // first-play and free repeat plays; city switches keep their station ident
+        // because they don't come through this opener.
+        if (this._needsWelcome() && this.getWelcome) {
+          this.getWelcome().then(function (w) {
+            if (!self.speaking || self.briefingPlaying) return;
+            if (w && w.url) {
+              self._setBuffering(false);
+              self._audioSpeak(w.url, w.text, proceed, false, { text: w.text, kind: 'greeting', lang: 'en-US' });
+            } else proceed();                                   // no clip → don't block the show
+          }).catch(proceed);
+        } else proceed();
         return;
       }
       // Refreshes / subsequent rotations: fetch + play the briefing (no stinger).
@@ -428,8 +505,9 @@
     if (!this.speaking || this.briefingPlaying) return;
     if (i >= segs.length) { this._afterSegment(); return; }   // done → GAP → refresh on next rotate
     const seg = segs[i], self = this;
-    this._showCaption({ text: seg.text || '', kind: 'briefing', lang: 'en-US' });
-    this._audioSpeak(seg.url, seg.text || '', function () { self._playPremiumSegments(segs, i + 1); });
+    // Caption is handed to _audioSpeak so it appears exactly when this clip starts.
+    this._audioSpeak(seg.url, seg.text || '', function () { self._playPremiumSegments(segs, i + 1); },
+      false, { text: seg.text || '', kind: 'briefing', lang: 'en-US' });
   };
 
   // FREE: play ONE brief cached ElevenLabs greeting, then STOP (no continuous show).
@@ -452,8 +530,8 @@
     if (!this.speaking) return;
     if (i >= segs.length) { this._endFreeIntro(); return; }
     const seg = segs[i], self = this;
-    this._showCaption({ text: seg.text || '', kind: 'greeting', lang: 'en-US' });
-    this._audioSpeak(seg.url, seg.text || '', function () { self._playFreeIntro(segs, i + 1); }, true /* no browser fallback */);
+    this._audioSpeak(seg.url, seg.text || '', function () { self._playFreeIntro(segs, i + 1); },
+      true /* no browser fallback */, { text: seg.text || '', kind: 'greeting', lang: 'en-US' });
   };
   // Free intro finished: narration stops, but the music bed keeps playing (uninterrupted)
   // until the user pauses or mutes. The button now controls the music, not narration.
@@ -514,20 +592,25 @@
   // Premium voice: play the returned audio URL via the (gesture-unlocked) element.
   // noFallback=true (FREE tier) → on failure, do NOT drop to the browser voice; just
   // advance/finish (music-only). Free must never use the browser voice.
-  AIHost.prototype._audioSpeak = function (url, text, afterSegment, noFallback) {
+  AIHost.prototype._audioSpeak = function (url, text, afterSegment, noFallback, caption) {
     const self = this, a = this._audio;
     if (this.briefingPlaying) return;                                  // never play premium over the briefing
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();  // enforce one voice: silence browser TTS
     this.onSpeakStart();                                               // duck the music now
-    const fail = function () { self._premiumPlaying = false; if (noFallback) { if (afterSegment) afterSegment(); } else self._browserSpeak(text, afterSegment); };
+    const fail = function () { self._premiumPlaying = false; self._stopAudioSync(); if (noFallback) { if (afterSegment) afterSegment(); } else self._browserSpeak(text, afterSegment); };
     try {
-      a.onended = function () { self._premiumPlaying = false; afterSegment(); };
+      a.onended = function () { self._premiumPlaying = false; self._stopAudioSync(); afterSegment(); };
       a.onerror = fail;
       a.src = url; a.currentTime = 0;
       try { a.volume = 0; } catch (e) {}                   // start silent → fade the clip in
       const p = a.play();
       const begin = function () {
         self._premiumPlaying = true;
+        // Show this clip's caption AT PLAYBACK START. Setting it before play() meant
+        // the text swapped while the previous clip was still audible (and while this
+        // one was still buffering) — the caption led the audio by up to seconds.
+        if (caption) self._showCaption(caption, true);
+        self._startAudioSync();                            // read-along paced by the audio clock
         self._voiceVol(1, 0.35);                           // crossfade the clip in
         self.onSpeakStart();                               // duck music under voice
         clearInterval(self._ampTimer);
@@ -552,11 +635,15 @@
       return;
     }
     window.speechSynthesis.cancel();
-    const sentences = self._splitSentences(text);
-    // Char offset of each sentence within `text`, so word-boundary charIndex (which
-    // is relative to the utterance) maps to a global position for caption sync.
+    // Offsets MUST be measured against the same normalized string the caption was
+    // tokenized from (_showCaption also normalizes). Previously sentences came from a
+    // whitespace-collapsed copy but were located inside the RAW text, so any newline or
+    // double space made indexOf miss → offsets fell back to a running counter and every
+    // later boundary highlighted the wrong word.
+    const norm = normText(text);
+    const sentences = self._splitSentences(norm);
     const offsets = []; let cur = 0;
-    for (let s = 0; s < sentences.length; s++) { const at = text.indexOf(sentences[s], cur); offsets.push(at < 0 ? cur : at); cur = (at < 0 ? cur : at) + sentences[s].length; }
+    for (let s = 0; s < sentences.length; s++) { const at = norm.indexOf(sentences[s], cur); offsets.push(at < 0 ? cur : at); cur = (at < 0 ? cur : at) + sentences[s].length; }
     const voice = self._voiceFor(self._lang || 'en-US');
     const cfg = self.getVoiceSettings ? (self.getVoiceSettings() || {}) : {};
     const rate = cfg.rate || 0.98;                        // slightly relaxed = more natural

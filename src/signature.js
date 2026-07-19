@@ -84,6 +84,10 @@
         if (i >= segs.length) { stopVoice(); return; }
         const s = segs[i++];
         if (!s || !s.url) return next();
+        // Tell the AI Host the official welcome has been delivered this session, so it
+        // doesn't greet again seconds later (aihost.js `_needsWelcome`). Set only when
+        // the FIRST clip (the welcome) actually starts — not merely fetched.
+        if (i === 1) { try { sessionStorage.setItem('eventually.welcomeSpoken', '1'); } catch (e) {} }
         el2.src = s.url;
         const pr = el2.play();
         if (pr && pr.catch) pr.catch(function () { stopVoice(); });

@@ -356,6 +356,13 @@
       const full = !freeIntroPlayed; freeIntroPlayed = true;
       return window.EventuallyHostVoice.getFreeGreeting({ part: part, lang: P.get().language || 'en', count: nearCount(), full: full });
     },
+    // The official "Welcome to Eventually…" opener. The Host plays this FIRST (both
+    // tiers) unless the launch splash already spoke it this session — same cached clip,
+    // so no extra ElevenLabs cost. Returns null when voice isn't available.
+    getWelcome: function () {
+      if (!window.EventuallyHostVoice || !window.EventuallyHostVoice.getWelcome) return Promise.resolve(null);
+      return window.EventuallyHostVoice.getWelcome(P.get().language || 'en');
+    },
     // Admin-tunable delivery for the free browser voice (rate/pitch).
     getVoiceSettings: function () { return RT.hostVoice || {}; },
     // "Back to my area" — return the Host (and the map) to the user's home location.

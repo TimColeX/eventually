@@ -97,6 +97,23 @@
         .then(function (j) { return (j && j.segments && j.segments.length) ? { segments: j.segments } : null; })
         .catch(function () { return null; });
     },
+    // The official "Welcome to Eventually…" clip on its own, for the AI Host's opening.
+    // Reuses the `opening` mode: passing plus:true returns ONLY the welcome line (the
+    // upsell is free-tier-only), which is exactly the single clip we want here — and
+    // it's the SAME cached clip the launch splash uses, so there's no extra synthesis.
+    // -> Promise<{url,text}|null>
+    getWelcome: function (lang) {
+      if (!ENABLED) return Promise.resolve(null);
+      return fetch(BASE + '/functions/v1/briefing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': ANON, 'Authorization': 'Bearer ' + ANON },
+        body: JSON.stringify({ opening: true, lang: (lang || 'en').slice(0, 2), plus: true })
+      }).then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) {
+          var s = j && j.segments && j.segments[0];
+          return (s && s.url) ? { url: s.url, text: s.text || '' } : null;
+        }).catch(function () { return null; });
+    },
     // Short, generic, cached ElevenLabs intro clip — played instantly at the start of
     // a Plus show while the full briefing synthesizes (keeps Premium all-ElevenLabs).
     // -> Promise<{url,text}|null>
