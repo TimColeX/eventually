@@ -1938,6 +1938,7 @@
       if (timeline && timeline._drawSpark) timeline._drawSpark();
       setGlobeLoading(false);
       syncReminders();                  // saved events are now resolvable → (re)schedule
+      launchSignature();                // real data in → accurate "near you" count
     });
     window.EventuallyAPI.boot().then(function (ok) {
       if (!ok) {                      // load failed → fall back to demo data
@@ -1948,6 +1949,31 @@
       setGlobeLoading(false);
     });
   }
+
+  /* ---------- signature opening (brand launch moment) ----------
+     Shown once per session (the module guards). Fired from the data-ready points
+     so the live "near you" count is real; a timeout is the safety net if data is
+     slow/unavailable. Plus members see it without the upsell. */
+  function launchSignature() {
+    if (!window.EventuallySignature) return;
+    const live = D.getEvents().filter(function (e) {
+      const t = D.typeForDate(e, selectedDate); return t === 'live' || t === 'upcoming';
+    }).length;
+    const isPlus = !!((subState && subState.is_plus) || P.get().plus);
+    window.EventuallySignature.play({
+      nearCount: nearCount(),
+      totalCount: live,
+      isPlus: isPlus,
+      onUpgrade: goPlus,
+      // Spoken brand welcome — FIXED cached-ElevenLabs lines (no dynamic count, so
+      // each clip is synthesized once ever). Plus members skip the upsell line.
+      getVoice: function () {
+        if (!window.EventuallyHostVoice || !window.EventuallyHostVoice.getOpening) return null;
+        return window.EventuallyHostVoice.getOpening({ lang: P.get().language || 'en', plus: isPlus });
+      }
+    });
+  }
+  setTimeout(launchSignature, 2200);   // safety net (deduped by the module's once-per-session guard)
 
   /* ---------- PWA service worker ---------- */
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {

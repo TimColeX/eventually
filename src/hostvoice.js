@@ -81,6 +81,22 @@
           return null;
         }).catch(function () { return null; });
     },
+    // SIGNATURE OPENING: the spoken brand welcome for the launch splash (played after
+    // the sonic logo on first tap). FIXED lines with NO dynamic content — the live
+    // count stays visual-only — so each clip is synthesized ONCE ever and cached for
+    // every user. No login needed. opts: {lang, plus} (plus omits the upsell line).
+    // -> Promise<{segments:[{url,text}]}|null>
+    getOpening: function (opts) {
+      if (!ENABLED) return Promise.resolve(null);
+      var o = opts || {};
+      return fetch(BASE + '/functions/v1/briefing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': ANON, 'Authorization': 'Bearer ' + ANON },
+        body: JSON.stringify({ opening: true, lang: (o.lang || 'en').slice(0, 2), plus: !!o.plus })
+      }).then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) { return (j && j.segments && j.segments.length) ? { segments: j.segments } : null; })
+        .catch(function () { return null; });
+    },
     // Short, generic, cached ElevenLabs intro clip — played instantly at the start of
     // a Plus show while the full briefing synthesizes (keeps Premium all-ElevenLabs).
     // -> Promise<{url,text}|null>

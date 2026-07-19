@@ -926,3 +926,54 @@ body.has-ad .toast { bottom: 144px; }
   .co-form label { margin-bottom: 12px; }
   .map-canvas { max-height: 230px; }
 }
+
+/* ============================ Signature opening ============================ */
+/* The launch "brand moment": cinematic splash, animated wordmark + live count,
+   free-only Plus invite; sonic logo fires on first tap. Once per session. */
+.signature {
+  position: fixed; inset: 0; z-index: 4000; display: grid; place-items: center;
+  padding: 24px; cursor: pointer; color: var(--cream);
+  background:
+    radial-gradient(120% 90% at 50% 12%, #3a2c22 0%, #241a14 55%, #17100b 100%);
+  animation: sg-in .5s ease both;
+  padding-top: calc(24px + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+}
+.signature.sg-out { animation: sg-out .46s ease both; pointer-events: none; }
+.sg-inner { max-width: 460px; width: 100%; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 0; }
+.sg-dots { display: inline-flex; gap: 9px; margin-bottom: 22px; }
+.sg-dots i { width: 12px; height: 12px; border-radius: 50%; background: var(--clay); opacity: .35;
+  animation: sg-dot 1.35s ease-in-out infinite; }
+.sg-dots i:nth-child(2) { animation-delay: .18s; background: var(--apricot); }
+.sg-dots i:nth-child(3) { animation-delay: .36s; }
+.sg-word { margin: 0; font-family: var(--font); font-weight: 800; font-size: clamp(38px, 12vw, 60px);
+  letter-spacing: -0.045em; line-height: 1; color: #fff; animation: sg-rise .7s .1s ease both; }
+.sg-tag { margin: 14px 0 0; font-size: clamp(14px, 3.6vw, 16px); line-height: 1.5; color: #e7d8c6;
+  max-width: 22em; animation: sg-rise .7s .24s ease both; }
+.sg-count { margin: 26px 0 0; font-family: var(--mono); font-size: 13px; letter-spacing: .04em;
+  text-transform: uppercase; color: #d7b8a4; animation: sg-rise .7s .4s ease both; }
+.sg-count .sg-num { color: var(--apricot); font-size: 18px; font-weight: 700; }
+.sg-plus { margin: 26px 0 0; padding: 12px 18px; border-radius: 999px; cursor: pointer;
+  background: rgba(203,90,60,.16); border: 1px solid rgba(224,135,95,.5); color: #f5e7db;
+  font-family: var(--font); font-weight: 600; font-size: 13px; line-height: 1.35; max-width: 24em;
+  animation: sg-rise .7s .54s ease both; transition: background .15s; }
+.sg-plus:hover { background: rgba(203,90,60,.28); }
+.sg-enter { margin: 30px 0 0; padding: 13px 26px; border-radius: 999px; cursor: pointer;
+  background: var(--clay); color: #fff; border: 0; font-family: var(--font); font-weight: 700; font-size: 15px;
+  animation: sg-rise .7s .66s ease both, sg-pulse 2.4s 1.4s ease-in-out infinite; }
+.sg-enter span { display: inline-block; margin-left: 4px; }
+.sg-off { margin: 16px 0 0; padding: 6px; background: none; border: 0; cursor: pointer;
+  color: #a8917f; font-family: var(--font); font-size: 12px; text-decoration: underline; opacity: .8;
+  animation: sg-rise .7s .78s ease both; }
+.sg-off:hover { color: #d7b8a4; }
+@keyframes sg-in  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sg-out { from { opacity: 1; } to { opacity: 0; transform: scale(1.015); } }
+@keyframes sg-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes sg-dot { 0%,100% { opacity: .3; transform: translateY(0); } 45% { opacity: 1; transform: translateY(-6px); } }
+@keyframes sg-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(203,90,60,.45); } 50% { box-shadow: 0 0 0 12px rgba(203,90,60,0); } }
+/* Reduced motion: no rise/pulse/count animations, just a quiet fade. */
+.signature.sg-reduced, .signature.sg-reduced * { animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+@media (prefers-reduced-motion: reduce) {
+  .sg-dots i, .sg-enter { animation: none !important; }
+  .sg-word, .sg-tag, .sg-count, .sg-plus, .sg-enter, .sg-off { animation: sg-in .3s ease both !important; }
+}
