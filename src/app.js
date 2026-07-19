@@ -538,15 +538,28 @@
 
   /* ---------- auth ---------- */
   const authEl = document.getElementById('auth');
-  function requireLogin(action) {
+  const authSubEl = authEl.querySelector('.auth-sub');
+  const AUTH_SUB_DEFAULT = authSubEl ? authSubEl.textContent : '';
+  // Gate an action behind a real account. If already signed in, run it now;
+  // otherwise stash it as pendingAction and open the sign-in modal — the action
+  // replays automatically after a successful sign-in (see finishLogin / onChange),
+  // so the user's original intent (e.g. "start Plus") is never lost. `reason`
+  // optionally swaps the modal subtitle so the prompt reflects why we're asking.
+  function requireLogin(action, reason) {
     if (user) { action(); return; }
     pendingAction = action;
-    openAuth();
+    openAuth(reason);
   }
   let pendingAction = null;
 
-  function openAuth() { authEl.classList.add('open'); }
-  function closeAuth() { authEl.classList.remove('open'); }
+  function openAuth(reason) {
+    if (authSubEl) authSubEl.textContent = reason || AUTH_SUB_DEFAULT;
+    authEl.classList.add('open');
+  }
+  function closeAuth() {
+    authEl.classList.remove('open');
+    if (authSubEl) authSubEl.textContent = AUTH_SUB_DEFAULT;   // restore default copy
+  }
 
   authEl.querySelector('.auth-close').addEventListener('click', closeAuth);
   authEl.querySelector('.auth-backdrop').addEventListener('click', closeAuth);
@@ -1533,18 +1546,33 @@
     // core fields above.
     A.saveProfile({ contact_email: p.contactEmail, address: p.address, comms: p.comms });
   }
+  // Copy shown on the sign-in modal when the user reaches it via an upgrade CTA,
+  // so the prompt reads as "start Plus", not a generic sign-in.
+  const PLUS_AUTH_REASON = 'Create an account or sign in to start Eventually Plus — your AI Event Concierge. We\'ll bring you right back.';
+  // Upgrading to Plus ALWAYS requires a real account (across every entry point:
+  // the profile button, the ⋯ menu, the "Remove ads" banner, and any future Plus
+  // prompt — they all funnel through here). Cancelling an existing Plus does not.
   function goPlus() {
+    const isPlus = P.get().plus;
     if (billingEnabled()) {
-      if (P.get().plus) { window.EventuallyToast("You're on Eventually Plus — manage it from your email receipts."); return; }
+      if (isPlus) { window.EventuallyToast("You're on Eventually Plus — manage it from your email receipts."); return; }
       requireLogin(function () {
         window.EventuallyToast('Opening secure checkout…');
         window.EventuallyBilling.startPlusCheckout({ id: user.id, email: user.email });
-      });
+      }, PLUS_AUTH_REASON);
       return;
     }
-    // demo (no billing configured): mock toggle
-    P.setPlus(!P.get().plus); applyMonetization(); renderProfile(); renderMenuTrigger(); syncProfile();
-    window.EventuallyToast(P.get().plus ? 'Welcome to Eventually Plus — ads & sponsor reads off (demo).' : 'Eventually Plus cancelled (demo).');
+    // demo (no billing configured): mock toggle.
+    if (isPlus) {   // cancelling — no account required
+      P.setPlus(false); applyMonetization(); renderProfile(); renderMenuTrigger(); syncProfile();
+      window.EventuallyToast('Eventually Plus cancelled (demo).');
+      return;
+    }
+    // upgrading — gate behind sign-in; the toggle replays after auth so intent survives.
+    requireLogin(function () {
+      P.setPlus(true); applyMonetization(); renderProfile(); renderMenuTrigger(); syncProfile();
+      window.EventuallyToast('Welcome to Eventually Plus — ads & sponsor reads off (demo).');
+    }, PLUS_AUTH_REASON);
   }
   // After a native event is published with "Feature" ticked, settle the placement:
   // a Plus member's monthly free quota first, otherwise a one-off checkout.

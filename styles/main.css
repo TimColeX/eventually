@@ -855,6 +855,15 @@ body.has-ad .toast { bottom: 144px; }
 
 /* ---------- responsive ---------- */
 @media (max-width: 760px) {
+  /* iOS Safari zooms toward any focused text input whose font-size is < 16px, which
+     shifts the visual viewport and leaves the page "out of frame" (the user then has
+     to pinch back). Force EVERY text-entry control to 16px on mobile so focusing the
+     search box / city + address autocompletes / any form field never triggers zoom.
+     Applies to current and future inputs; the per-field rules below can style
+     everything else but can't drop these back under 16px. !important is deliberate:
+     this is a zoom guard that must beat the per-field id/class selectors (#search,
+     .loc-input, .f-addr, .contact-form input, …) regardless of their specificity. */
+  input, textarea, select { font-size: 16px !important; }
   .types-btn { padding: 9px 10px; }
   /* 2-column grid so all 10 categories fit without a tall, overlapping menu. */
   .types-menu { right: 0; width: min(92vw, 360px); max-height: 62vh; overflow-y: auto; padding: 8px; }
