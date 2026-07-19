@@ -756,6 +756,12 @@ body.has-ad .toast { bottom: 144px; }
   border: 1px solid var(--line-2); color: var(--muted); font-family: var(--font); font-weight: 600; }
 .ps-save { flex: 1; padding: 12px; border-radius: 12px; cursor: pointer; background: var(--clay); color: var(--cream);
   border: 0; font-family: var(--font); font-weight: 700; font-size: 15px; }
+/* Destructive variant (e.g. Cancel Plus) — muted, not the primary clay CTA. */
+.ps-save.cx-danger { background: var(--paper); color: #b3402a; border: 1px solid rgba(179,64,42,.4); }
+.ps-save.cx-danger:hover { background: rgba(179,64,42,.06); }
+/* Trial/status line inside the Plus panel. */
+.pf-plus-status { margin: 12px 0 0; font-size: 12px; line-height: 1.5; color: #e8dccb; }
+.pf-plus-status:empty { display: none; }
 
 /* ---------- full event detail (dedup view) ---------- */
 .evdetail {

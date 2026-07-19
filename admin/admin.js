@@ -58,6 +58,7 @@
     main.innerHTML =
       '<div class="ad-tabs">' +
         tabBtn('overview', 'Overview') + tabBtn('review', 'Review Events') +
+        tabBtn('subs', 'Subscriptions') +
         tabBtn('host', 'AI Host Script') + tabBtn('browser', 'Browser Voice') +
         tabBtn('globe', 'Globe & Display') +
       '</div><div id="ad-body"></div>';
@@ -67,6 +68,7 @@
     const body = document.getElementById('ad-body');
     if (tab === 'overview') renderOverview(body);
     else if (tab === 'review') renderReview(body);
+    else if (tab === 'subs') renderSubscriptions(body);
     else if (tab === 'host') renderHost(body);
     else if (tab === 'browser') renderBrowser(body);
     else renderGlobe(body);
@@ -473,6 +475,91 @@
           const m = document.getElementById('bl-msg');
           if (r.error) { m.textContent = 'Error: ' + r.error.message; m.style.color = '#b3402a'; }
           else { m.textContent = 'Saved ✓ (applies on next app load)'; m.style.color = '#3a7d44'; }
+        });
+      };
+    });
+  }
+
+  /* ---------------- Subscriptions & Free Trial ---------------- */
+  // datetime-local <-> ISO helpers for the campaign window fields.
+  function toLocalInput(iso) {
+    if (!iso) return '';
+    const d = new Date(iso); if (isNaN(d.getTime())) return '';
+    const p = function (n) { return String(n).padStart(2, '0'); };
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+  function fromLocalInput(v) { if (!v) return null; const d = new Date(v); return isNaN(d.getTime()) ? null : d.toISOString(); }
+
+  function renderSubscriptions(body) {
+    body.innerHTML = '<div class="ad-center">Loading subscriptions…</div>';
+    Promise.all([
+      sb.rpc('admin_subscriptions'),
+      sb.from('app_config').select('config').eq('id', 1).maybeSingle()
+    ]).then(function (res) {
+      const m = (res[0] && res[0].data) || null;
+      const merr = res[0] && res[0].error;
+      const cfg = (res[1].data && res[1].data.config) || {};
+      const t = cfg.trial || {};
+      const price = (cfg.plus && cfg.plus.priceMonthly != null) ? cfg.plus.priceMonthly : 7;
+
+      // --- metrics ---
+      let html = '<div class="ad-sec"><h2>Subscription metrics</h2>';
+      if (merr || !m || m.error) {
+        html += '<p class="ad-hint">Unavailable' +
+          (m && m.error ? ' (' + esc(m.error) + ')' : merr ? ' (' + esc(merr.message) + ')' : '') +
+          ' — run <code>backend/33_subscriptions.sql</code>, then reload.</p>';
+      } else {
+        const kpi = function (v, l) { return '<div class="ad-kpi"><b>' + esc(String(v == null ? '—' : v)) + '</b><span>' + esc(l) + '</span></div>'; };
+        html += '<div class="ad-grid">' +
+          kpi(m.plus_active, 'Active Plus') + kpi(m.trials_active, 'Active trials') +
+          kpi(m.trials_started, 'Trials started') + kpi(m.converted, 'Converted') +
+          kpi((m.conversion_rate || 0) + '%', 'Conversion rate') + kpi(m.canceling, 'Canceling') +
+          kpi(m.trial_expired, 'Trials expired') + kpi(m.expired, 'Plus expired') +
+          kpi('$' + (m.mrr_estimate || 0), '≈ MRR') +
+          '</div>' +
+          '<p class="ad-hint">Conversion = converted ÷ trials started. No-card trials don\'t convert until paid billing is wired, so this reads 0% for now. MRR ≈ active Plus × $' + esc(String(price)) + '/mo.</p>';
+      }
+      html += '</div>';
+
+      // --- trial policy editor ---
+      html += '<div class="ad-sec"><h2>Free trial settings</h2>' +
+        '<p class="ad-hint">Tune the Eventually Plus free trial with no code change — duration, availability, promotional window and messaging. Applies to new trials on next app load.</p>' +
+        '<label class="ad-toggle"><input type="checkbox" id="tr-enabled"' + (t.enabled !== false ? ' checked' : '') + '> Free trials enabled</label>' +
+        '<div class="ad-row">' +
+          '<div class="ad-field"><label>Trial length (days)</label><input id="tr-days" type="number" min="0" step="1" value="' + (t.days != null ? t.days : 3) + '"></div>' +
+          '<div class="ad-field"><label>Reminder lead (hours before end)</label><input id="tr-remind" type="number" min="0" step="1" value="' + (t.remindHoursBefore != null ? t.remindHoursBefore : 24) + '"></div>' +
+          '<div class="ad-field"><label>Plus price ($/mo · for MRR)</label><input id="tr-price" type="number" min="0" step="0.01" value="' + esc(String(price)) + '"></div>' +
+        '</div>' +
+        '<label class="ad-toggle"><input type="checkbox" id="tr-full"' + (t.fullAccess !== false ? ' checked' : '') + '> Grant full Plus access during trial</label>' +
+        '<label class="ad-toggle"><input type="checkbox" id="tr-pay"' + (t.requirePayment ? ' checked' : '') + '> Require payment details before trial <span class="ad-muted">— needs a live payment provider; leave OFF for the no-card trial</span></label>' +
+        '<div class="ad-row">' +
+          '<div class="ad-field"><label>Campaign start <span class="ad-muted">(optional)</span></label><input id="tr-start" type="datetime-local" value="' + esc(toLocalInput(t.startAt)) + '"></div>' +
+          '<div class="ad-field"><label>Campaign end <span class="ad-muted">(optional)</span></label><input id="tr-end" type="datetime-local" value="' + esc(toLocalInput(t.endAt)) + '"></div>' +
+        '</div>' +
+        '<div class="ad-field"><label>Trial message shown to users</label><textarea id="tr-txt">' + esc(t.message || '') + '</textarea></div>' +
+        '<div><button class="ad-save" id="tr-save">Save trial settings</button><span class="ad-saved" id="tr-saved"></span></div></div>';
+
+      body.innerHTML = html;
+
+      const saveBtn = document.getElementById('tr-save');
+      if (saveBtn) saveBtn.onclick = function () {
+        const trial = {
+          enabled:           document.getElementById('tr-enabled').checked,
+          days:              Math.max(0, parseInt(document.getElementById('tr-days').value, 10) || 0),
+          remindHoursBefore: Math.max(0, parseInt(document.getElementById('tr-remind').value, 10) || 0),
+          fullAccess:        document.getElementById('tr-full').checked,
+          requirePayment:    document.getElementById('tr-pay').checked,
+          startAt:           fromLocalInput(document.getElementById('tr-start').value),
+          endAt:             fromLocalInput(document.getElementById('tr-end').value),
+          message:           document.getElementById('tr-txt').value
+        };
+        const plus = { priceMonthly: parseFloat(document.getElementById('tr-price').value) || 0 };
+        saveBtn.disabled = true;
+        patchConfig({ trial: trial, plus: plus }).then(function (r) {
+          saveBtn.disabled = false;
+          const el = document.getElementById('tr-saved');
+          if (r.error) { el.textContent = 'Error: ' + r.error.message; el.style.color = '#b3402a'; }
+          else { el.textContent = 'Saved ✓'; el.style.color = '#3a7d44'; }
         });
       };
     });

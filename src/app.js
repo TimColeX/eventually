@@ -7,6 +7,8 @@
   const P = window.EventuallyProfile;
   const M = window.EventuallyMonetize;
   const A = window.EventuallyAuth;
+  const S = window.EventuallySubscriptions;   // provider-agnostic subscription/trial service
+  let subState = null;                         // last my_subscription() result (null = unknown / RPCs not deployed / anon)
   const authReal = !!(A && A.enabled);
   // With real auth on, signed-in state comes ONLY from a live Supabase session
   // (set in onChange) — never from cached localStorage. This avoids showing a
@@ -1112,7 +1114,7 @@
   function renderProfile() {
     const p = P.get();
     profileEl.querySelector('.pf-greeting').textContent = 'Hello ' + (p.name || 'there');
-    profileEl.querySelector('.pf-plus-state').textContent = p.plus ? 'Eventually Plus · active' : 'Free plan';
+    profileEl.querySelector('.pf-plus-state').textContent = plusStateLabel(subState);
     profileEl.querySelector('.pf-loc').textContent = p.location ? p.location.city : 'not set';
     profileEl.querySelector('.pf-saved-n').textContent = p.saved.length;
     profileEl.querySelector('.pf-interests').innerHTML = Object.keys(D.CATEGORIES).map(function (c) {
@@ -1131,7 +1133,16 @@
     profileEl.querySelector('.pf-filter').classList.toggle('on', interestFilterActive);
     profileEl.querySelector('.pf-filter .tg-state').textContent = interestFilterActive ? 'On' : 'Off';
     profileEl.querySelector('.pf-filter').style.display = p.plus ? '' : 'none';
-    profileEl.querySelector('.pf-plus-btn').textContent = p.plus ? 'Cancel Plus (demo)' : 'Go Plus — $7/mo';
+    // Plus / trial CTA — label + behaviour driven by the effective subscription state.
+    const pb = plusButton(subState);
+    const plusBtn = profileEl.querySelector('.pf-plus-btn');
+    plusBtn.textContent = pb.label;
+    plusBtn.dataset.act = pb.act;
+    plusBtn.disabled = (pb.act === 'none');
+    const statusEl = profileEl.querySelector('.pf-plus-status');
+    if (statusEl) statusEl.textContent = plusStatusLine(subState);
+    const fineEl = profileEl.querySelector('.pf-fine');
+    if (fineEl) fineEl.textContent = plusFineLine(subState);
     profileEl.querySelector('.pf-logout').style.display = user ? '' : 'none';
     renderAccount();
     renderIdentities();
@@ -1368,7 +1379,13 @@
       });
     }, 350);
   });
-  profileEl.querySelector('.pf-plus-btn').addEventListener('click', goPlus);
+  profileEl.querySelector('.pf-plus-btn').addEventListener('click', function () {
+    const act = this.dataset.act;
+    if (act === 'cancel') return cancelPlusFlow();
+    if (act === 'resume') return resumePlusFlow();
+    if (act === 'none') return;               // trial used, no paid path yet
+    goPlus();                                 // trial / buy / demo — goPlus gates + branches
+  });
   profileEl.querySelector('.pf-notify').addEventListener('click', enableNotifications);
   profileEl.querySelector('.pf-filter').addEventListener('click', function () {
     interestFilterActive = !interestFilterActive;
@@ -1539,7 +1556,8 @@
     const p = P.get();
     const patch = { name: p.name, phone: p.phone, location: p.location, interests: p.interests,
                     notify: p.notify, language: p.language };
-    if (!billingEnabled()) patch.is_plus = p.plus;   // when billing is live, is_plus is server-only
+    // is_plus is NEVER written from the client — it's owned by the subscription RPCs
+    // (start_trial / cancel / the paid webhook) so a user can't self-grant Plus.
     A.saveProfile(patch);
     // Columns from 20_profile_details.sql — saved in a SEPARATE update so that if
     // that migration hasn't been run yet, the missing-column error can't block the
@@ -1549,30 +1567,206 @@
   // Copy shown on the sign-in modal when the user reaches it via an upgrade CTA,
   // so the prompt reads as "start Plus", not a generic sign-in.
   const PLUS_AUTH_REASON = 'Create an account or sign in to start Eventually Plus — your AI Event Concierge. We\'ll bring you right back.';
-  // Upgrading to Plus ALWAYS requires a real account (across every entry point:
-  // the profile button, the ⋯ menu, the "Remove ads" banner, and any future Plus
-  // prompt — they all funnel through here). Cancelling an existing Plus does not.
+  /* ---------- Eventually Plus: subscription + free-trial flow ----------
+     Effective Plus status is owned by the server (backend/33_subscriptions.sql).
+     `subState` = the last my_subscription() result; the app derives every Plus
+     affordance (ads off, premium voice, filter, the profile CTA) from it. Payment
+     is abstracted: this code never calls a provider — the no-card trial runs via
+     the RPCs, and paid checkout goes through the billing seam. */
+
+  // Human-friendly "time left" from a seconds count (e.g. "2 days", "5 hours", "12 min").
+  function humanRemaining(secs) {
+    if (secs == null) return '';
+    if (secs <= 0) return 'moments';
+    const d = Math.floor(secs / 86400), h = Math.floor((secs % 86400) / 3600), m = Math.floor((secs % 3600) / 60);
+    if (d >= 1) return d + ' day' + (d > 1 ? 's' : '') + (h ? ' ' + h + 'h' : '');
+    if (h >= 1) return h + ' hour' + (h > 1 ? 's' : '') + (m ? ' ' + m + 'm' : '');
+    return Math.max(1, m) + ' min';
+  }
+  // Header line under the greeting.
+  function plusStateLabel(s) {
+    if (!s) return P.get().plus ? 'Eventually Plus · active' : 'Free plan';
+    switch (s.state) {
+      case 'trial_active':    return 'Plus trial · ' + humanRemaining(s.seconds_remaining) + ' left';
+      case 'trial_canceling': return 'Plus trial · ' + humanRemaining(s.seconds_remaining) + ' left · won\'t renew';
+      case 'active':          return 'Eventually Plus · active';
+      case 'canceling':       return 'Eventually Plus · active ' + humanRemaining(s.seconds_remaining) + ' more';
+      case 'trial_expired':   return 'Free plan · trial ended';
+      case 'expired':         return 'Free plan · Plus expired';
+      case 'canceled':        return 'Free plan · canceled';
+      default:                return 'Free plan';
+    }
+  }
+  // The Plus panel CTA: { label, act }. act ∈ trial | cancel | resume | buy | demo | none.
+  function plusButton(s) {
+    if (s && (s.state === 'trial_canceling' || s.state === 'canceling')) return { label: 'Resume Plus', act: 'resume' };
+    if (s && s.is_plus)          return { label: 'Cancel Plus', act: 'cancel' };
+    if (s && s.trial_available)  return { label: 'Start ' + (s.trial_days || 3) + '-day free trial', act: 'trial' };
+    if (s && s.trial_used)       return billingEnabled() ? { label: 'Get Eventually Plus', act: 'buy' } : { label: 'Free trial already used', act: 'none' };
+    if (!s)                      return { label: P.get().plus ? 'Cancel Plus (demo)' : 'Go Plus — $7/mo', act: 'demo' };  // RPCs not deployed
+    return billingEnabled() ? { label: 'Get Eventually Plus', act: 'buy' } : { label: 'Go Plus — $7/mo', act: 'demo' };
+  }
+  // Supporting status line inside the Plus card.
+  function plusStatusLine(s) {
+    if (!s) return '';
+    switch (s.state) {
+      case 'trial_active':    return 'Your free trial is active — full concierge access. Cancel anytime before it ends.';
+      case 'trial_canceling': return 'Your trial won\'t renew. You keep full access until it ends.';
+      case 'active':          return 'Thanks for being on Plus — your AI Event Concierge is fully unlocked.';
+      case 'canceling':       return 'Your plan won\'t renew. You keep access until the period ends.';
+      case 'trial_expired':   return 'Your free trial has ended. Start Plus to keep personalized briefings and premium discovery.';
+      case 'expired':         return 'Your Plus has expired. Renew to restore your concierge.';
+      case 'canceled':        return 'Your Plus is canceled. Come back anytime.';
+      default:                return s.trial_available ? (s.trial_message || '') : '';
+    }
+  }
+  // Fine print under the CTA.
+  function plusFineLine(s) {
+    if (s && s.trial_available)  return 'No charge during your trial. Cancel anytime.';
+    if (s && s.is_plus)          return billingEnabled() ? 'Manage billing from your email receipts.' : 'No payment is taken in this build.';
+    if (!s || !billingEnabled()) return 'No payment is taken in this build.';
+    return '';
+  }
+
+  // Push the effective status into the UI (P.plus mirror + monetization + panels + reminder).
+  function applySub(s) {
+    subState = s || null;
+    if (s && typeof s.is_plus === 'boolean' && P.get().plus !== s.is_plus) P.setPlus(s.is_plus);
+    applyMonetization(); renderMenuTrigger();
+    if (profileEl.classList.contains('open')) renderProfile();
+    scheduleTrialReminder(s);
+  }
+  // Fetch the authoritative status (called after sign-in and on demand).
+  function refreshSubscription() {
+    if (!S || !acctEnabled()) { return Promise.resolve(null); }
+    return S.getStatus().then(function (s) { applySub(s); maybeNotifyTrial(s); return s; });
+  }
+
+  // Upgrading to Plus ALWAYS requires a real account (every entry point funnels
+  // through here). Once authed we pick the best path: no-card free trial → paid
+  // checkout → (pre-deploy) demo toggle. Cancelling/resuming is handled separately.
   function goPlus() {
-    const isPlus = P.get().plus;
-    if (billingEnabled()) {
-      if (isPlus) { window.EventuallyToast("You're on Eventually Plus — manage it from your email receipts."); return; }
-      requireLogin(function () {
+    if (subState && subState.is_plus) { openProfile(); return; }   // already Plus → manage
+    requireLogin(function () { beginUpgrade(); }, PLUS_AUTH_REASON);
+  }
+  function beginUpgrade() {
+    // Re-check server truth now that we're authenticated.
+    (S ? S.getStatus() : Promise.resolve(null)).then(function (s) {
+      if (!s) {   // subscription RPCs not deployed yet → legacy demo toggle (still login-gated)
+        P.setPlus(true); applyMonetization(); renderProfile(); renderMenuTrigger(); syncProfile();
+        window.EventuallyToast('Welcome to Eventually Plus (demo).');
+        return;
+      }
+      applySub(s);
+      if (s.is_plus) { openProfile(); return; }
+      if (s.trial_available) { startTrialFlow(); return; }
+      if (billingEnabled()) {
         window.EventuallyToast('Opening secure checkout…');
         window.EventuallyBilling.startPlusCheckout({ id: user.id, email: user.email });
-      }, PLUS_AUTH_REASON);
-      return;
+        return;
+      }
+      window.EventuallyToast(s.trial_used ? 'Your free trial has already been used.' : 'Eventually Plus is coming soon.');
+      openProfile();
+    });
+  }
+  function trialErr(reason) {
+    switch (reason) {
+      case 'trial_already_used': return 'You\'ve already used your free trial.';
+      case 'trials_disabled':    return 'Free trials aren\'t available right now.';
+      case 'campaign_ended':     return 'This trial promotion has ended.';
+      case 'not_started':        return 'This trial promotion hasn\'t started yet.';
+      case 'already_subscribed': return 'You\'re already on Eventually Plus.';
+      default:                   return 'Could not start your trial — please try again.';
     }
-    // demo (no billing configured): mock toggle.
-    if (isPlus) {   // cancelling — no account required
-      P.setPlus(false); applyMonetization(); renderProfile(); renderMenuTrigger(); syncProfile();
+  }
+  function startTrialFlow() {
+    window.EventuallyToast('Starting your free trial…');
+    S.startTrial().then(function (res) {
+      if (res && res.ok) {
+        applySub(res);
+        window.EventuallyToast('Your ' + (res.trial_days || 3) + '-day Eventually Plus trial is live — enjoy your AI Event Concierge.');
+        openProfile();
+      } else {
+        window.EventuallyToast(trialErr(res && res.reason));
+        refreshSubscription();
+      }
+    }).catch(function () { window.EventuallyToast('Could not start your trial — please try again.'); });
+  }
+  function cancelPlusFlow() {
+    if (!S || !acctEnabled() || !subState) {   // demo fallback (RPCs not deployed)
+      P.setPlus(false); applyMonetization(); renderProfile(); renderMenuTrigger();
       window.EventuallyToast('Eventually Plus cancelled (demo).');
       return;
     }
-    // upgrading — gate behind sign-in; the toggle replays after auth so intent survives.
-    requireLogin(function () {
-      P.setPlus(true); applyMonetization(); renderProfile(); renderMenuTrigger(); syncProfile();
-      window.EventuallyToast('Welcome to Eventually Plus — ads & sponsor reads off (demo).');
-    }, PLUS_AUTH_REASON);
+    const ending = subState.seconds_remaining ? humanRemaining(subState.seconds_remaining) : null;
+    openModal('Cancel Eventually Plus',
+      '<p class="modal-lead">You\'ll keep full Plus access' +
+        (ending ? ' for the remaining <b>' + ending + '</b>' : ' until your period ends') +
+        ', then move to the free plan. No charge either way.</p>' +
+      '<div class="ps-actions"><button type="button" class="ps-skip" data-x="keep">Keep Plus</button>' +
+      '<button type="button" class="ps-save cx-danger" data-x="cancel">Cancel Plus</button></div>',
+      function (body) {
+        body.querySelector('[data-x="keep"]').addEventListener('click', closeModal);
+        body.querySelector('[data-x="cancel"]').addEventListener('click', function () {
+          closeModal();
+          S.cancel().then(function (res) {
+            if (res && res.ok) {
+              applySub(res);
+              window.EventuallyToast('Your Plus won\'t renew' + (res.seconds_remaining ? ' — access continues for ' + humanRemaining(res.seconds_remaining) : '') + '.');
+            } else { window.EventuallyToast('Could not cancel — please try again.'); }
+          });
+        });
+      });
+  }
+  function resumePlusFlow() {
+    if (!S) return;
+    S.resume().then(function (res) {
+      if (res && res.ok) { applySub(res); window.EventuallyToast('Welcome back — your Eventually Plus will continue.'); }
+      else { window.EventuallyToast('Could not resume — please try again.'); }
+    });
+  }
+
+  // In-app trial notices (once each): a nudge when the trial is ending soon, and a
+  // note when it has ended. Keyed in localStorage so we don't nag on every load.
+  function maybeNotifyTrial(s) {
+    if (!s) return;
+    const KEY = 'eventually.trialNotice.v1';
+    let seen = {}; try { seen = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) {}
+    function mark(k) { seen[k] = 1; try { localStorage.setItem(KEY, JSON.stringify(seen)); } catch (e) {} }
+    const endKey = s.trial_end ? Math.floor(new Date(s.trial_end).getTime() / 3600000) : 0;
+    if (s.state === 'trial_active' && s.seconds_remaining != null &&
+        s.seconds_remaining <= (s.remind_hours_before || 24) * 3600) {
+      const k = 'ending:' + endKey;
+      if (!seen[k]) { mark(k); window.EventuallyToast('Your Eventually Plus trial ends in ' + humanRemaining(s.seconds_remaining) + '. Cancel anytime before then.'); }
+    }
+    if (s.state === 'trial_expired' && !seen['expired:' + endKey]) {
+      mark('expired:' + endKey);
+      window.EventuallyToast('Your Eventually Plus trial has ended. Start Plus to keep your AI Event Concierge.');
+    }
+  }
+  // Local device reminder before the trial ends (in-session tier, like reminders.js):
+  // arms a timer when within ~26h and Notification permission is granted.
+  let _trialTimer = null;
+  function scheduleTrialReminder(s) {
+    if (_trialTimer) { clearTimeout(_trialTimer); _trialTimer = null; }
+    if (!s || s.state !== 'trial_active' || !s.trial_end) return;
+    if (!window.EventuallyReminders || !window.EventuallyReminders.permitted()) return;
+    const fireAt = new Date(s.trial_end).getTime() - (s.remind_hours_before || 24) * 3600000;
+    const delay = fireAt - Date.now();
+    if (delay < -60000 || delay > 26 * 3600000) return;    // near-term only, while open
+    const RKEY = 'eventually.trialReminder.fired';
+    const stamp = String(Math.floor(new Date(s.trial_end).getTime() / 86400000));
+    if (localStorage.getItem(RKEY) === stamp) return;
+    _trialTimer = setTimeout(function () {
+      try { localStorage.setItem(RKEY, stamp); } catch (e) {}
+      try {
+        if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+          navigator.serviceWorker.ready.then(function (reg) {
+            reg.showNotification('Eventually Plus', { body: 'Your free trial ends soon — keep your AI Event Concierge by staying on Plus.', icon: 'assets/icon.svg', tag: 'trial-ending' });
+          });
+        } else { new Notification('Eventually Plus', { body: 'Your free trial ends soon.', icon: 'assets/icon.svg' }); }
+      } catch (e) {}
+    }, Math.max(0, delay));
   }
   // After a native event is published with "Feature" ticked, settle the placement:
   // a Plus member's monthly free quota first, otherwise a one-off checkout.
@@ -1626,6 +1820,7 @@
       if (!u) {
         const was = user; user = null;
         // Plus is account-bound — never leave a cached Plus state active without a session.
+        subState = null;
         if (P.get().plus) { P.setPlus(false); applyMonetization(); }
         renderMenuTrigger(); refreshProfile();
         if (was) window.EventuallyToast('Signed out.');
@@ -1663,6 +1858,7 @@
         if (A.myEvents) A.myEvents().then(function (rows) { myEventIds = (rows || []).map(function (r) { return r.event_id; }); markMine(); });
         renderMenuTrigger(); renderLocChip(); applyMonetization(); refreshMarkers(); refreshProfile();
         syncReminders();                  // saved list changed after sign-in
+        refreshSubscription();            // authoritative Plus/trial state (overrides the is_plus mirror)
         if (eventEl.classList.contains('open') && activeEventId) openEvent(activeEventId);
         if (place.classList.contains('open')) rerenderPlace();
         window.EventuallyToast('Signed in' + (user.name ? ' — welcome, ' + user.name + '.' : '.'));
