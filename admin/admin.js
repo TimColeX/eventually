@@ -58,7 +58,7 @@
     main.innerHTML =
       '<div class="ad-tabs">' +
         tabBtn('overview', 'Overview') + tabBtn('review', 'Review Events') +
-        tabBtn('subs', 'Subscriptions') +
+        tabBtn('subs', 'Subscriptions') + tabBtn('affiliate', 'Affiliate') +
         tabBtn('host', 'AI Host Script') + tabBtn('browser', 'Browser Voice') +
         tabBtn('globe', 'Globe & Display') +
       '</div><div id="ad-body"></div>';
@@ -69,6 +69,7 @@
     if (tab === 'overview') renderOverview(body);
     else if (tab === 'review') renderReview(body);
     else if (tab === 'subs') renderSubscriptions(body);
+    else if (tab === 'affiliate') renderAffiliate(body);
     else if (tab === 'host') renderHost(body);
     else if (tab === 'browser') renderBrowser(body);
     else renderGlobe(body);
@@ -558,6 +559,97 @@
         patchConfig({ trial: trial, plus: plus }).then(function (r) {
           saveBtn.disabled = false;
           const el = document.getElementById('tr-saved');
+          if (r.error) { el.textContent = 'Error: ' + r.error.message; el.style.color = '#b3402a'; }
+          else { el.textContent = 'Saved ✓'; el.style.color = '#3a7d44'; }
+        });
+      };
+    });
+  }
+
+  /* ---------------- Affiliate Providers + outbound-click analytics ---------------- */
+  function renderAffiliate(body) {
+    body.innerHTML = '<div class="ad-center">Loading affiliate providers…</div>';
+    Promise.all([
+      sb.rpc('admin_ticket_clicks', { p_days: 30 }),
+      sb.from('app_config').select('config').eq('id', 1).maybeSingle()
+    ]).then(function (res) {
+      const m = (res[0] && res[0].data) || null;
+      const merr = res[0] && res[0].error;
+      const cfg = (res[1].data && res[1].data.config) || {};
+      const providers = cfg.affiliateProviders || {};
+
+      // --- outbound click analytics ---
+      let html = '<div class="ad-sec"><h2>Outbound ticket clicks · last 30 days</h2>';
+      if (merr || !m || m.error) {
+        html += '<p class="ad-hint">Unavailable' + (m && m.error ? ' (' + esc(m.error) + ')' : '') +
+          ' — run <code>backend/35_affiliate_redirect.sql</code> + deploy the <code>go</code> function, then reload.</p>';
+      } else {
+        const kpi = function (v, l) { return '<div class="ad-kpi"><b>' + esc(String(v == null ? '—' : v)) + '</b><span>' + esc(l) + '</span></div>'; };
+        const pct = m.total ? Math.round((m.affiliate / m.total) * 100) : 0;
+        html += '<div class="ad-grid">' +
+          kpi(m.total, 'Total clicks') + kpi(m.affiliate, 'Via affiliate') +
+          kpi(pct + '%', 'Affiliate share') + kpi(m.signed_in, 'Signed-in clicks') +
+          '</div>';
+        if ((m.by_provider || []).length) {
+          html += '<h3 class="ad-sub">By provider</h3><table class="ad-table"><tr><th>Provider</th><th>Clicks</th><th>Affiliate</th></tr>' +
+            m.by_provider.map(function (p) { return '<tr><td>' + esc(p.provider || '—') + '</td><td>' + p.clicks + '</td><td>' + p.affiliate + '</td></tr>'; }).join('') + '</table>';
+        }
+        if ((m.by_country || []).length) {
+          html += '<h3 class="ad-sub">By country</h3><table class="ad-table"><tr><th>Country</th><th>Clicks</th></tr>' +
+            m.by_country.map(function (c) { return '<tr><td>' + esc(c.country) + '</td><td>' + c.clicks + '</td></tr>'; }).join('') + '</table>';
+        }
+      }
+      html += '</div>';
+
+      // --- provider manager ---
+      html += '<div class="ad-sec"><h2>Affiliate providers</h2>' +
+        '<p class="ad-hint">The <code>go</code> redirect applies these at click time — add/change/remove affiliate programs with no re-ingest and no code change. ' +
+        'Pattern placeholders: <code>{url}</code> = URL-encoded ticket link, <code>{raw}</code> = raw link. Leave the pattern blank (or disable) to send users straight to the provider.</p>' +
+        '<div id="aff-list"></div>' +
+        '<button class="ad-save" id="aff-add" type="button" style="margin-top:8px">+ Add provider</button>' +
+        '<div style="margin-top:12px"><button class="ad-save" id="aff-save">Save providers</button><span class="ad-saved" id="aff-msg"></span></div></div>';
+
+      body.innerHTML = html;
+
+      const list = document.getElementById('aff-list');
+      function row(key, p) {
+        p = p || {};
+        const d = document.createElement('div');
+        d.className = 'ad-sec aff-row'; d.style.padding = '14px';
+        d.innerHTML =
+          '<div class="ad-row">' +
+            '<div class="ad-field"><label>Provider key</label><input class="aff-key" value="' + esc(key) + '" placeholder="e.g. ticketmaster"></div>' +
+            '<div class="ad-field"><label>Display name</label><input class="aff-name" value="' + esc(p.name || '') + '" placeholder="Ticketmaster"></div>' +
+            '<div class="ad-field"><label>Status</label><input class="aff-status" value="' + esc(p.status || '') + '" placeholder="e.g. Live / Pending"></div>' +
+          '</div>' +
+          '<div class="ad-field"><label>Affiliate URL pattern</label><input class="aff-pattern" value="' + esc(p.urlPattern || '') + '" placeholder="https://track.net/deep?url={url}&aid=123"></div>' +
+          '<div class="ad-field"><label>Notes</label><input class="aff-notes" value="' + esc(p.notes || '') + '" placeholder="Network, account id, terms…"></div>' +
+          '<label class="ad-toggle"><input type="checkbox" class="aff-enabled"' + (p.enabled ? ' checked' : '') + '> Enabled</label> ' +
+          '<button class="an-act an-danger aff-del" type="button">Remove</button>';
+        d.querySelector('.aff-del').onclick = function () { d.remove(); };
+        list.appendChild(d);
+      }
+      Object.keys(providers).forEach(function (k) { row(k, providers[k]); });
+      if (!Object.keys(providers).length) row('', {});
+      document.getElementById('aff-add').onclick = function () { row('', {}); };
+
+      document.getElementById('aff-save').onclick = function () {
+        const out = {};
+        list.querySelectorAll('.aff-row').forEach(function (d) {
+          const key = d.querySelector('.aff-key').value.trim().toLowerCase();
+          if (!key) return;
+          out[key] = {
+            name:       d.querySelector('.aff-name').value.trim() || key,
+            enabled:    d.querySelector('.aff-enabled').checked,
+            urlPattern: d.querySelector('.aff-pattern').value.trim(),
+            notes:      d.querySelector('.aff-notes').value.trim(),
+            status:     d.querySelector('.aff-status').value.trim()
+          };
+        });
+        const btn = document.getElementById('aff-save'); btn.disabled = true;
+        patchConfig({ affiliateProviders: out }).then(function (r) {
+          btn.disabled = false;
+          const el = document.getElementById('aff-msg');
           if (r.error) { el.textContent = 'Error: ' + r.error.message; el.style.color = '#b3402a'; }
           else { el.textContent = 'Saved ✓'; el.style.color = '#3a7d44'; }
         });

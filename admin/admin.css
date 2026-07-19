@@ -76,3 +76,13 @@ body{margin:0;background:#efe7da;color:var(--ink);font-family:var(--font);font-s
 .rv-main small{display:block;color:var(--faint);font-family:var(--mono);font-size:11px;margin-top:3px}
 .rv-desc{margin:6px 0 0;font-size:13px;color:var(--muted);line-height:1.45}
 .rv-actions{display:flex;gap:8px;flex:none}
+
+/* Affiliate tab: sub-headers, tables, provider rows */
+.ad-sub{margin:18px 0 8px;font-size:13px;font-weight:700;color:var(--ink)}
+.ad-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:4px}
+.ad-table th{text-align:left;font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);padding:6px 10px;border-bottom:1px solid var(--line)}
+.ad-table td{padding:7px 10px;border-bottom:1px solid var(--line);color:var(--ink)}
+.aff-row{background:var(--paper);border:1px solid var(--line);border-radius:12px;margin-bottom:10px}
+.an-act{padding:8px 14px;border-radius:10px;border:1px solid var(--line-2);background:var(--paper);cursor:pointer;font-family:var(--font);font-weight:600;font-size:13px;color:var(--muted)}
+.an-danger{color:#b3402a;border-color:rgba(179,64,42,.4)}
+.an-danger:hover{background:rgba(179,64,42,.06)}

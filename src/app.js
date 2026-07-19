@@ -787,13 +787,33 @@
   const eventScroll = eventEl.querySelector('.evd-scroll');
   let activeEventId = null;
 
-  function sourceRowHTML(ev, s) {
-    const cheapest = s.source_id === ev.cheapestId;
-    const badge = s.badge ? '<span class="avail-badge">' + esc(s.badge) + '</span>' : '';
-    return '<button class="avail-row' + (cheapest ? ' cheapest' : '') + '" data-src="' + s.source_id + '">' +
-      '<span class="avail-left"><strong>' + esc(s.sourceLabel) + '</strong>' + badge + '</span>' +
-      '<span class="avail-right">' + (cheapest ? '<span class="avail-tag">Cheapest</span>' : '') +
-      '<span class="avail-price">' + esc(s.priceLabel) + '</span><span class="avail-go">↗</span></span></button>';
+  // Outbound ticket redirect. Eventually is a discovery platform, not a ticket
+  // seller: "Get Tickets" always goes through the centralized `go` redirect service
+  // (which resolves the affiliate link server-side + logs the click). The frontend
+  // never holds an affiliate URL — it only ever links to /go?e={eventId}.
+  function goBase() {
+    const cfg = window.EVENTUALLY_CONFIG || {};
+    if (cfg.redirectBase) return cfg.redirectBase;                 // future pretty domain (e.g. eventually.app/go)
+    const b = (cfg.supabaseUrl || '').replace(/\/+$/, '');
+    return b ? b + '/functions/v1/go' : null;
+  }
+  function anonSessionId() {
+    try {
+      let s = localStorage.getItem('eventually.sid');
+      if (!s) { s = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(16).slice(2)); localStorage.setItem('eventually.sid', s); }
+      return s;
+    } catch (e) { return null; }
+  }
+  function ticketUrl(ev) {
+    const base = goBase();
+    if (!base) return ev.ticketUrl || '#';                         // no backend (pure demo) → direct link
+    const p = new URLSearchParams(); p.set('e', ev.id);
+    const sid = anonSessionId(); if (sid) p.set('s', sid);
+    if (user && user.id) p.set('u', user.id);
+    const pr = P.get();
+    if (pr.location && pr.location.city) p.set('city', pr.location.city);
+    if (pr.address && pr.address.country) p.set('c', pr.address.country);
+    return base + '?' + p.toString();
   }
 
   function openEvent(id) {
@@ -813,10 +833,14 @@
       avail = '<div class="evd-section"><div class="evd-sec-h">Hosted on Eventually</div>' +
         '<button class="native-cta" data-register="' + ev.id + '">Register on this platform</button>' +
         '<p class="evd-note">Hosted natively on Eventually — no external ticketing needed.</p></div>';
+    } else if (ev.ticketUrl) {
+      // Single, clean CTA → the official provider via the /go redirect (affiliate
+      // resolved server-side). No prices, no "buy through Eventually".
+      avail = '<div class="evd-section">' +
+        '<a class="evd-tickets" data-tickets="' + esc(ev.id) + '" href="' + esc(ticketUrl(ev)) + '" target="_blank" rel="noopener nofollow">Get Tickets ↗</a>' +
+        '<p class="evd-note">You\'ll be taken to ' + esc(ev.sourceLabel || 'the official provider') + ' to book. Eventually doesn\'t sell tickets.</p></div>';
     } else {
-      avail = '<div class="evd-section"><div class="evd-sec-h">Available on</div>' +
-        '<div class="avail-list">' + ev.sources.map(function (s) { return sourceRowHTML(ev, s); }).join('') + '</div>' +
-        '<p class="evd-note">Prices and links come straight from each source — pick where you buy.</p></div>';
+      avail = '<div class="evd-section"><p class="evd-note">Ticket link coming soon for this event.</p></div>';
     }
     eventScroll.innerHTML =
       '<div class="evd-banner" style="background:linear-gradient(135deg,' + ev.categoryColor + ',#211A15)">' +
@@ -845,14 +869,12 @@
   eventEl.addEventListener('click', function (e) {
     if (e.target.closest('.evd-x') || e.target.closest('.evd-back')) { closeEvent(); return; }
     if (e.target.closest('[data-register]')) { window.EventuallyToast('Registration (demo) — native Eventually event.'); return; }
-    const srcBtn = e.target.closest('[data-src]');
-    if (srcBtn) {
-      const ev = D.getById(activeEventId);
-      const s = ev.sources.find(function (x) { return x.source_id === srcBtn.dataset.src; });
-      ev.clicks++; const n = M.trackAffiliate();
-      window.open(M.affiliate(s.url || 'https://example.com'), '_blank', 'noopener');
-      window.EventuallyToast('Opening ' + s.sourceLabel + ' — referral tracked (demo · ' + n + ').');
-      updateStats(); return;
+    const tix = e.target.closest('[data-tickets]');
+    if (tix) {
+      // The anchor navigates to /go (server resolves affiliate + logs the click);
+      // we just bump the local counter. Don't preventDefault — let it open.
+      const ev = D.getById(activeEventId); if (ev) { ev.clicks++; updateStats(); }
+      return;
     }
     const act = e.target.closest('[data-act]'); if (!act) return;
     const ev = D.getById(activeEventId);
