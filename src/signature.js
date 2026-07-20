@@ -16,7 +16,7 @@
 
   const SHOWN_KEY = 'eventually.signature.shown';  // sessionStorage — once per session
   const OFF_KEY   = 'eventually.signature.off';     // localStorage — user disabled it
-  let el = null, dismissed = false, timer = null, entered = false;
+  let el = null, dismissed = false, timer = null, entered = false, shownThisLoad = false;
 
   function isEnabled() { try { return localStorage.getItem(OFF_KEY) !== '1'; } catch (e) { return true; } }
   function setEnabled(on) { try { on ? localStorage.removeItem(OFF_KEY) : localStorage.setItem(OFF_KEY, '1'); } catch (e) {} }
@@ -102,15 +102,19 @@
     if (e.target && e.target.closest && e.target.closest('#ai-host')) stopVoice();
   }, true);
 
-  // First tap = the "enter" gesture: sonic logo, then the spoken welcome, then out.
+  // First tap = the "enter" gesture. The splash HOLDS for the sonic logo so the sting
+  // reads as the thing that opens the app, then reveals the globe exactly as the
+  // spoken welcome begins (voice was prefetched, so it's ready).
   function enter(opts) {
     if (entered) { dismiss(); return; }
     entered = true;
+    if (timer) { clearTimeout(timer); timer = null; }
+    if (el) el.classList.add('sg-entering');   // acknowledge the tap during the sting
     playSting();
-    // Voice was prefetched when the splash appeared, so it's ready to play the
-    // instant the sonic logo finishes (the fetch itself can take seconds).
-    if (voicePromise) setTimeout(function () { playVoice(voicePromise); }, STING_MS);
-    dismiss();
+    setTimeout(function () {
+      dismiss();
+      if (voicePromise) playVoice(voicePromise);
+    }, STING_MS);
   }
 
   function countUp(node, target) {
@@ -128,12 +132,14 @@
   function play(opts) {
     opts = opts || {};
     if (!isEnabled()) return false;
+    // Re-entrancy guard. `onData` can fire more than once during startup, which used
+    // to re-enter play() and TEAR DOWN the splash that was already on screen (it looked
+    // like the intro auto-skipped after ~1s). An in-memory flag + a live-element check
+    // make that impossible, independent of sessionStorage behaviour.
+    if (shownThisLoad || document.getElementById('signature')) return false;
     try { if (sessionStorage.getItem(SHOWN_KEY)) return false; sessionStorage.setItem(SHOWN_KEY, '1'); } catch (e) {}
-
-    // Fresh run: reset per-show state and clear any stale overlay (defensive —
-    // play() is normally once per session, but never leave two splashes around).
+    shownThisLoad = true;
     dismissed = false; entered = false;
-    const stale = document.getElementById('signature'); if (stale && stale.parentNode) stale.parentNode.removeChild(stale);
 
     // PREFETCH the spoken welcome now, while the user is reading the splash. The
     // clips are cached server-side but the round trip still costs seconds, so
@@ -175,8 +181,11 @@
       if (e.target.closest('.sg-plus')) { e.stopPropagation(); dismiss(); if (opts.onUpgrade) opts.onUpgrade(); return; }
       enter(opts);   // tap anywhere else = enter (plays the sonic logo)
     });
-    // If the user never taps, dismiss visually after a beat (no sound — no gesture).
-    timer = setTimeout(dismiss, 6500);
+    // The intro waits for the user ("Tap to enter", the Plus invitation, or "Don't show
+    // this again") — audio needs a gesture, so auto-advancing early would skip the sonic
+    // logo + welcome entirely. Safety net only: after a long grace period reveal the
+    // globe SILENTLY, so a distracted user never comes back to a blocked app.
+    timer = setTimeout(function () { if (!entered) { entered = true; dismiss(); } }, 20000);
     return true;
   }
 

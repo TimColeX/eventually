@@ -977,3 +977,10 @@ body.has-ad .toast { bottom: 144px; }
   .sg-dots i, .sg-enter { animation: none !important; }
   .sg-word, .sg-tag, .sg-count, .sg-plus, .sg-enter, .sg-off { animation: sg-in .3s ease both !important; }
 }
+/* Tap acknowledged: controls fade out while the sonic logo plays, then the splash
+   reveals the globe. Without this the ~1.7s hold reads as an unresponsive tap. */
+.signature.sg-entering .sg-enter,
+.signature.sg-entering .sg-plus,
+.signature.sg-entering .sg-off { opacity: 0; pointer-events: none; transition: opacity .28s ease; }
+.signature.sg-entering .sg-inner { transform: scale(1.02); transition: transform 1.6s ease-out; }
+@media (prefers-reduced-motion: reduce) { .signature.sg-entering .sg-inner { transform: none; } }

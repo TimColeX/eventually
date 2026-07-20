@@ -483,7 +483,10 @@
             if (!self.speaking || self.briefingPlaying) return;
             if (w && w.url) {
               self._setBuffering(false);
-              self._audioSpeak(w.url, w.text, proceed, false, { text: w.text, kind: 'greeting', lang: 'en-US' });
+              // noFallback=true: if the cached clip can't play, SKIP the welcome silently
+              // and go straight to the show. The brand greeting must never be read by the
+              // robotic device voice (and free tier never uses browser voice at all).
+              self._audioSpeak(w.url, w.text, proceed, true, { text: w.text, kind: 'greeting', lang: 'en-US' });
             } else proceed();                                   // no clip → don't block the show
           }).catch(proceed);
         } else proceed();
