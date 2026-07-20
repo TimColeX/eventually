@@ -326,15 +326,19 @@
       if (!window.EventuallyHostVoice || !window.EventuallyHostVoice.enabled) return Promise.resolve(null);
       if (!P.get().plus) return Promise.resolve(null);
       const loc = activeBriefingLocation || P.get().location;   // follows the searched/viewed cell
+      const home = P.get().location;                            // the user's OWN cell (cost control)
       const city = (loc && loc.city) ? loc.city : null;
       const now = new Date();
       const day = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
       // Personalization inputs (assembled into reusable cached clips server-side).
       const interests = (P.effectiveInterests(D.getById) || []).slice(0, 3);
       const saved = (P.get().saved || []).length;
+      // home_* lets the server detect EXPLORATION (a non-home cell) and serve a short
+      // cached "city headline" instead of minting a full ~2-min premium briefing.
       return window.EventuallyHostVoice.getBriefing({
         city: city, lat: loc && loc.lat, lon: loc && loc.lon, lang: P.get().language || 'en', day: day,
-        interests: interests, saved: saved
+        interests: interests, saved: saved,
+        homeLat: home && home.lat, homeLon: home && home.lon
       });
     },
     // Premium (Plus) is ElevenLabs from the very first word: a short, cached

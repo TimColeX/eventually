@@ -297,6 +297,7 @@
 
   /* ---------------- AI Host Script ---------------- */
   let dbCfg = {};      // app_config.config.dailyBriefing
+  let vbCfg = {};      // app_config.config.voiceBudget (daily generation ceiling)
   let dbRows = [];     // recent daily_briefings (cache view)
   let dbSponsors = []; // briefing_sponsors rows
   function renderHost(body) {
@@ -307,6 +308,7 @@
       sb.from('briefing_sponsors').select('*').order('scope')
     ]).then(function (res) {
       dbCfg = (res[0].data && res[0].data.config && res[0].data.config.dailyBriefing) || {};
+      vbCfg = (res[0].data && res[0].data.config && res[0].data.config.voiceBudget) || {};
       dbRows = res[1].data || [];
       dbSponsors = (res[2] && res[2].data) || [];
       drawHost(body);
@@ -365,6 +367,12 @@
       '<textarea id="db-premium" placeholder="e.g. You are the Eventually premium host — warm, vivid, energetic. Write a ~250-word spoken briefing, 5–8 events grouped by vibe…">' + esc(dbCfg.premiumPersona || '') + '</textarea></div>' +
       '<div class="ad-field"><label>Global announcement (read on BOTH tiers, verbatim)</label>' +
       '<textarea id="db-ann">' + esc(dbCfg.announcement || '') + '</textarea></div>' +
+      '<div class="ad-field"><label>Daily voice-generation ceiling (0 = unlimited)</label>' +
+      '<input id="db-budget" type="number" min="0" step="1" value="' + (vbCfg.maxDailyGenerations != null ? vbCfg.maxDailyGenerations : 0) + '">' +
+      '<p class="ad-hint">Hard platform-wide cap on <b>new</b> briefing generations per day — the ElevenLabs circuit breaker. ' +
+      'Cached audio is always served and never counts, so listeners in already-generated areas are unaffected. ' +
+      'Once the cap is hit, new areas get a short cached clip instead. A full briefing costs ≈$0.14, an explored-city ' +
+      'headline ≈$0.014 — so e.g. <b>150</b> ≈ $21/day worst case (~$630/mo).</p></div>' +
       '<div><button class="ad-save" id="db-save">Save briefing settings</button><span class="ad-saved" id="db-msg"></span></div>' +
       sponsors +
       '<div class="ad-field" style="margin-top:16px"><label>Cached briefings (' + dbRows.length + ')</label>' +
@@ -375,12 +383,14 @@
     const save = $('db-save');
     if (save) save.onclick = function () {
       const patch = { dailyBriefing: { enabled: $('db-en').checked, persona: $('db-persona').value, premiumPersona: ($('db-premium') ? $('db-premium').value : (dbCfg.premiumPersona || '')), announcement: $('db-ann').value } };
+      if ($('db-budget')) patch.voiceBudget = { maxDailyGenerations: Math.max(0, parseInt($('db-budget').value, 10) || 0) };
       save.disabled = true;
       patchConfig(patch).then(function (r) {
         save.disabled = false;
         const m = $('db-msg');
         if (r && r.error) { m.textContent = 'Error: ' + r.error.message; m.style.color = '#b3402a'; return; }
         dbCfg = patch.dailyBriefing;
+        if (patch.voiceBudget) vbCfg = patch.voiceBudget;
         m.textContent = 'Saved ✓'; m.style.color = '#3a7d44';
       });
     };

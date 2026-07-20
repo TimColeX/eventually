@@ -139,7 +139,11 @@
       method: 'POST', headers: headers(),
       body: JSON.stringify({
         city: o.city || null, lat: (o.lat != null ? o.lat : null), lon: (o.lon != null ? o.lon : null),
-        lang: o.lang || 'en', day: o.day || null
+        lang: o.lang || 'en', day: o.day || null,
+        // Home cell → the server serves a short "city headline" when exploring
+        // (cheaper Claude generation as well as cheaper audio).
+        home_lat: (o.homeLat != null ? o.homeLat : null),
+        home_lon: (o.homeLon != null ? o.homeLon : null)
       })
     }).then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) { return (d && d.text) ? d : null; })
