@@ -25,11 +25,16 @@
     this.getBriefing = opts.getBriefing || null;  // () -> Promise<{url,text}|null> (shared city briefing)
     this.getDailyBriefing = opts.getDailyBriefing || null;  // () -> Promise<{text}|null> (free daily briefing, device voice)
     this.getWelcome = opts.getWelcome || null;    // () -> Promise<{url,text}|null> (official cached "Welcome to Eventually…")
+    this.getIntro = opts.getIntro || null;        // ({have}) -> Promise<{changed,sig,segments}|null> (one-time host self-intro)
     this.onHomeReset = opts.onHomeReset || null;  // () -> void ("back to my area" clicked)
     this.onMuteToggle = opts.onMuteToggle || null;  // () -> bool (new muted state)
     this.initialMuted = !!opts.initialMuted;
     this._premiumPlaying = false;
     this._musicHold = false; this._freeMode = false; this._introDone = false;
+    // Generation token: bumped on every play/stop/city-switch. An async fetch (briefing /
+    // welcome) captures the token when it starts and MUST re-check it before playing, so a
+    // late result for a PREVIOUS city can never overwrite the current one (#4 race control).
+    this._gen = 0;
     this.getStinger = opts.getStinger || null;    // () -> Promise<{url,text}|null> (cached ElevenLabs intro, Plus)
     this.getFreeGreeting = opts.getFreeGreeting || null;  // () -> Promise<{url,text}|null> (cached EL greeting, Free)
     this.getVoiceSettings = opts.getVoiceSettings || null;  // () -> { rate, pitch } (admin-tunable)
@@ -181,10 +186,20 @@
   // into the new city's opening (station ident → fresh briefing → live). Checked
   // between sentences in _browserSpeak; if we're in a music gap, bring it forward.
   AIHost.prototype.switchLocation = function () {
-    if (!this.speaking) return;
-    if (this._premiumPlaying) {                 // Plus: crossfade out the current clip, then switch
+    if (!this.speaking && !this._musicHold) return;
+    this._gen++;                                 // invalidate ANY in-flight generation for the old city (#4)
+    const self = this;
+    // Two-host conversation already finished (music bed playing) → start the NEW city's
+    // conversation. Without this, a city switch after the convo ended did nothing.
+    if (this._musicHold) {
+      this._musicHold = false; this.speaking = true; this._premiumPlaying = false;
+      this._openerDone = false; this._openingDone = false;
+      this.icPlay.style.display = 'none'; this.icPause.style.display = '';
+      this._rotate();
+      return;
+    }
+    if (this._premiumPlaying) {                 // crossfade out the current clip, then switch
       this._voiceVol(0, 0.5);
-      const self = this;
       clearTimeout(this._switchFade);
       this._switchFade = setTimeout(function () {
         try { self._audio.pause(); } catch (e) {}
@@ -195,7 +210,6 @@
     this._switchPending = true;                 // device: finish the current sentence, then switch
     if (this._gapTimer) {                        // in a music gap → apply soon
       clearTimeout(this._gapTimer);
-      const self = this;
       this._gapTimer = setTimeout(function () { if (self.speaking) self._applySwitch(); }, 1200);
     }
   };
@@ -203,6 +217,7 @@
     this._switchPending = false;
     this.briefingPlaying = false;
     this._openingDone = false;                  // replay the opening (ident → briefing) for the new city
+    this._openerDone = false;                   // ← two-host / stinger: re-run the opener for the NEW city (#3)
     if (this.speaking) this._rotate();
   };
 
@@ -294,6 +309,17 @@
   AIHost.prototype._needsWelcome = function () {
     try { return sessionStorage.getItem(WELCOME_KEY) !== '1'; } catch (e) { return true; }
   };
+  // Play a list of cached audio segments back-to-back, then call `done`. Used for the
+  // one-time host intro (Fish = one clip; ElevenLabs = one clip per turn). noFallback so
+  // a failed clip never drops to the browser voice — it just advances to `done`.
+  AIHost.prototype._playSegmentsThen = function (segs, i, done) {
+    if (!this.speaking) return;
+    if (i >= segs.length) { if (done) done(); return; }
+    const seg = segs[i], self = this;
+    this._audioSpeak(seg.url, seg.text || '', function () { self._playSegmentsThen(segs, i + 1, done); },
+      true, { text: seg.text || '', kind: 'greeting', lang: 'en-US' });
+  };
+
   // Admin flips the whole app between single-host and two-host conversation mode.
   AIHost.prototype.setTwoHost = function (on, names) { this.twoHost = !!on; this._hostNames = names || null; };
 
@@ -462,21 +488,46 @@
       if (this.twoHost && !this._openerDone) {
         this._openerDone = true;
         this._setBuffering(true);
+        const myGen = this._gen;                             // tie this show to the CURRENT city
+        const stale = function () { return myGen !== self._gen || !self.speaking; };
         const playConv = function () {
+          if (stale()) return;                               // city changed while welcome played → abandon
           self.getBriefing().then(function (b) {
+            if (stale()) return;                             // a newer city started → ignore this result (#4/#5)
             self._setBuffering(false);
-            if (!self.speaking) return;
             if (b && b.segments && b.segments.length) self._playFreeIntro(b.segments, 0);
             else self._endFreeIntro();                       // no audio → music only, no browser voice
-          }).catch(function () { self._setBuffering(false); self._endFreeIntro(); });
+          }).catch(function () { if (stale()) return; self._setBuffering(false); self._endFreeIntro(); });
         };
-        if (this._needsWelcome() && this.getWelcome) {
-          this.getWelcome().then(function (w) {
-            if (!self.speaking) return;
-            if (w && w.url) self._audioSpeak(w.url, w.text, playConv, true, { text: w.text, kind: 'greeting', lang: 'en-US' });
-            else playConv();
-          }).catch(playConv);
-        } else playConv();
+        // The name-free brand welcome ("Welcome to Eventually…"), unless the splash
+        // already spoke it this session. Runs AFTER the one-time host intro.
+        const afterIntro = function () {
+          if (stale()) return;
+          if (self._needsWelcome() && self.getWelcome) {
+            self.getWelcome().then(function (w) {
+              if (stale()) return;
+              if (w && w.url) self._audioSpeak(w.url, w.text, playConv, true, { text: w.text, kind: 'greeting', lang: 'en-US' });
+              else playConv();
+            }).catch(playConv);
+          } else playConv();
+        };
+        // ONE-TIME HOST INTRODUCTION (#5): the hosts say their NAMES once per device. We
+        // send the sig we last played; the server returns changed:false (NO synthesis) when
+        // the hosts/voices are unchanged — so returning users skip it and every briefing
+        // stays name-free and cheap. A rename/voice change yields a new sig → introduced
+        // once more. City switches don't reach here (they keep the station ident).
+        let have = '';
+        try { have = (global.localStorage && localStorage.getItem('ev_introSig')) || ''; } catch (e) {}
+        if (this.getIntro) {
+          this.getIntro({ have: have }).then(function (intro) {
+            if (stale()) return;
+            if (intro && intro.sig) { try { localStorage.setItem('ev_introSig', intro.sig); } catch (e) {} }
+            if (intro && intro.changed && intro.segments && intro.segments.length) {
+              self._setBuffering(false);
+              self._playSegmentsThen(intro.segments, 0, afterIntro);
+            } else afterIntro();
+          }).catch(afterIntro);
+        } else afterIntro();
         return;
       }
       // Start of the show (once per Play): play a cached ElevenLabs stinger IMMEDIATELY
@@ -731,6 +782,7 @@
 
   AIHost.prototype.play = function () {
     this.speaking = true;
+    this._gen++;                           // new session → invalidate any older in-flight fetch
     this._musicHold = false; this._freeMode = false;
     this._openerDone = false;              // premium stinger plays once per Play session
     this._openingDone = false;             // replay the show opening (intro → briefing) on each Play
@@ -810,6 +862,7 @@
   };
   AIHost.prototype.stop = function () {
     this.speaking = false;
+    this._gen++;                           // invalidate any in-flight generation on stop
     this.briefingPlaying = false;
     this._switchPending = false;
     this._premiumPlaying = false;

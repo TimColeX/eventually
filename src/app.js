@@ -372,6 +372,13 @@
       if (!window.EventuallyHostVoice || !window.EventuallyHostVoice.getWelcome) return Promise.resolve(null);
       return window.EventuallyHostVoice.getWelcome(P.get().language || 'en');
     },
+    // ONE-TIME host self-introduction (names spoken once per device). `have` is the sig
+    // we last played; the server returns changed:false with no synthesis when the hosts
+    // are unchanged, so every briefing after the first stays name-free (cost control).
+    getIntro: function (opts) {
+      if (!window.EventuallyHostVoice || !window.EventuallyHostVoice.getIntro) return Promise.resolve(null);
+      return window.EventuallyHostVoice.getIntro({ have: (opts && opts.have) || '', lang: P.get().language || 'en' });
+    },
     // Admin-tunable delivery for the free browser voice (rate/pitch).
     getVoiceSettings: function () { return RT.hostVoice || {}; },
     // "Back to my area" — return the Host (and the map) to the user's home location.

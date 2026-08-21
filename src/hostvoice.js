@@ -84,6 +84,24 @@
           return null;
         }).catch(function () { return null; });
     },
+    // ONE-TIME HOST INTRODUCTION — the hosts say their names ONCE per device, then every
+    // briefing is name-free. We send the sig we last played (`have`); the server returns
+    // {changed:false} (no synthesis) if the hosts/voices are unchanged, or {changed:true,
+    // sig, segments} to introduce a new/renamed host once. Cached clip, reused globally.
+    // -> Promise<{changed:boolean, sig:string|null, segments?:[{url,text}]}|null>
+    getIntro: function (opts) {
+      if (!ENABLED) return Promise.resolve(null);
+      var o = opts || {};
+      return fetch(BASE + '/functions/v1/briefing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': ANON, 'Authorization': 'Bearer ' + ANON },
+        body: JSON.stringify({ intro: true, have: o.have || '', lang: (o.lang || 'en').slice(0, 2) })
+      }).then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) {
+          if (!j) return null;
+          return { changed: !!j.changed, sig: j.sig || null, segments: (j.segments && j.segments.length) ? j.segments : null };
+        }).catch(function () { return null; });
+    },
     // FREE tier intro: cached ElevenLabs clips reused by ALL free users → near-zero
     // marginal cost. Assembled [count]+[upsell] on the first play (`full`), else a
     // short welcome-back. No login needed. opts: {part,lang,count,full}
