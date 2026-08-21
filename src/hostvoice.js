@@ -77,12 +77,28 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': ANON, 'Authorization': 'Bearer ' + ANON },
         body: JSON.stringify({ audio: true, city: o.city || null, lat: (o.lat != null ? o.lat : null), lon: (o.lon != null ? o.lon : null),
-          lang: (o.lang || 'en').slice(0, 2), day: o.day || null, home_lat: (o.homeLat != null ? o.homeLat : null), home_lon: (o.homeLon != null ? o.homeLon : null) })
+          lang: (o.lang || 'en').slice(0, 2), day: o.day || null, home_lat: (o.homeLat != null ? o.homeLat : null), home_lon: (o.homeLon != null ? o.homeLon : null),
+          quick: !!o.quick })   // switch / pre-warm → short "headline" tier (fast synth)
       }).then(function (r) { return r.ok ? r.json() : null; })
         .then(function (j) {
           if (j && j.segments && j.segments.length) return { segments: j.segments, text: j.text || '', twoHost: !!j.twoHost };
           return null;
         }).catch(function () { return null; });
+    },
+    // Fire-and-forget PRE-WARM: generate + cache a city's briefing in the background so a
+    // later tap is a ~2s cache hit instead of a 15-60s cold generation. Uses the SAME
+    // params as the switch fetch (quick:true) so the cache key matches. Result ignored.
+    prewarm: function (opts) {
+      if (!ENABLED) return;
+      var o = opts || {};
+      try {
+        fetch(BASE + '/functions/v1/briefing', {
+          method: 'POST', keepalive: true,
+          headers: { 'Content-Type': 'application/json', 'apikey': ANON, 'Authorization': 'Bearer ' + ANON },
+          body: JSON.stringify({ audio: true, city: o.city || null, lat: (o.lat != null ? o.lat : null), lon: (o.lon != null ? o.lon : null),
+            lang: (o.lang || 'en').slice(0, 2), home_lat: (o.homeLat != null ? o.homeLat : null), home_lon: (o.homeLon != null ? o.homeLon : null), quick: true })
+        }).catch(function () {});
+      } catch (e) {}
     },
     // ONE-TIME HOST INTRODUCTION — the hosts say their names ONCE per device, then every
     // briefing is name-free. We send the sig we last played (`have`); the server returns

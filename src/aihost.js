@@ -516,9 +516,9 @@
         this._setBuffering(true);
         const myGen = this._gen;                             // tie this show to the CURRENT city
         const stale = function () { return myGen !== self._gen || !self.speaking; };
-        const fetchAndPlay = function () {
+        const fetchAndPlay = function (quick) {
           if (stale()) { self._setBuffering(false); return; }   // superseded → abandon (never leave buffering stuck)
-          self.getBriefing().then(function (b) {
+          self.getBriefing(quick).then(function (b) {            // quick → short "headline" (fast synth) on a switch
             if (stale()) { self._setBuffering(false); return; } // a newer city started → ignore this result (#4/#5)
             self._setBuffering(false);
             if (b && b.segments && b.segments.length) self._playFreeIntro(b.segments, 0);
@@ -526,17 +526,18 @@
           }).catch(function () { self._setBuffering(false); if (stale()) return; self._endFreeIntro(); });
         };
         // On a CITY SWITCH, play a short cached "heading to <city>" ident FIRST (instant),
-        // masking the new briefing's generation latency; then fetch + play the briefing.
+        // masking the new briefing's generation latency; then fetch + play the (short) briefing.
         const playConv = function () {
           if (stale()) return;
           const idc = self._identCity; self._identCity = null;
+          const isSwitch = !!idc;
           if (idc && self.getIdent) {
             self.getIdent(idc).then(function (id) {
               if (stale()) return;
-              if (id && id.url) self._audioSpeak(id.url, id.text, fetchAndPlay, true, { text: id.text, kind: 'greeting', lang: 'en-US' });
-              else fetchAndPlay();
-            }).catch(fetchAndPlay);
-          } else fetchAndPlay();
+              if (id && id.url) self._audioSpeak(id.url, id.text, function () { fetchAndPlay(isSwitch); }, true, { text: id.text, kind: 'greeting', lang: 'en-US' });
+              else fetchAndPlay(isSwitch);
+            }).catch(function () { fetchAndPlay(isSwitch); });
+          } else fetchAndPlay(isSwitch);
         };
         // The name-free brand welcome ("Welcome to Eventually…"), unless the splash
         // already spoke it this session. Runs AFTER the one-time host intro.
@@ -628,8 +629,10 @@
     if (i >= segs.length) { this._afterSegment(); return; }   // done → GAP → refresh on next rotate
     const seg = segs[i], self = this;
     // Caption is handed to _audioSpeak so it appears exactly when this clip starts.
+    // noFallback=true: a clip that fails to load SKIPS to the next segment (or ends to the
+    // music bed) — never the browser voice.
     this._audioSpeak(seg.url, seg.text || '', function () { self._playPremiumSegments(segs, i + 1); },
-      false, { text: seg.text || '', kind: 'briefing', lang: 'en-US' });
+      true, { text: seg.text || '', kind: 'briefing', lang: 'en-US' });
   };
 
   // FREE: play ONE brief cached ElevenLabs greeting, then STOP (no continuous show).
@@ -754,6 +757,12 @@
   // a radio presenter), using the best available device voice + tuned rate/pitch.
   AIHost.prototype._browserSpeak = function (text, afterSegment) {
     const self = this;
+    // BROWSER/DEVICE VOICE IS DISABLED BY DESIGN. The Host is premium-voice (Fish/ElevenLabs)
+    // ONLY — if a cached clip is ever unavailable we degrade to the MUSIC BED, never the
+    // robotic device voice. This is the single chokepoint every fallback path funnels through,
+    // so guarding it here guarantees the device voice can't surface anywhere. (Set
+    // this._allowBrowserVoice = true to restore the legacy behaviour.)
+    if (!this._allowBrowserVoice) { this._endFreeIntro(); return; }
     try { this._audio.pause(); } catch (e) {}   // enforce one voice: silence the premium element first
     this.onSpeakStart();                         // duck the music NOW (don't wait for onstart, which is flaky)
     if (!('speechSynthesis' in window)) {

@@ -31,6 +31,14 @@ body{margin:0;background:#efe7da;color:var(--ink);font-family:var(--font);font-s
 .ad-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px}
 .ad-tab{padding:9px 15px;border-radius:10px;border:1px solid var(--line2);background:var(--paper);cursor:pointer;font-family:var(--font);font-weight:600;font-size:13px;color:var(--muted)}
 .ad-tab.on{background:var(--ink);color:var(--cream);border-color:var(--ink)}
+/* Pending-review alert: draws the eye to the Review Events tab when events await approval. */
+.ad-tab-alert{border-color:#e07a3f;color:#c05a1f}
+.ad-tab-alert.on{background:#e07a3f;border-color:#e07a3f;color:#fff}
+/* Affiliate "test pattern" output */
+.aff-test-out{margin-top:8px;font-family:var(--mono);font-size:12px;word-break:break-all;line-height:1.55;color:var(--muted)}
+.aff-test-out:empty{display:none}
+.aff-test-out.is-ok,.aff-test-out.is-ok b{color:#3a7d44}
+.aff-test-out .is-warn,.aff-test-out.is-warn{color:#b3402a}
 
 /* cards / sections */
 .ad-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin-bottom:24px}

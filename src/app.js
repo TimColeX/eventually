@@ -198,7 +198,8 @@
       const c = clusterById(id);
       const n = c._visible;
       tip.textContent = c.city + ' · ' + n + ' event' + (n === 1 ? '' : 's');
-    }
+      if (c) prewarmCity({ city: c.city, lat: c.lat, lon: c.lon });   // warm the briefing before the tap
+    } else { clearTimeout(_warmTimer); }
   };
   function clusterById(id) { return D.getClusters().find(function (c) { return c.id === id; }); }
 
@@ -326,7 +327,7 @@
     // Cost-optimized "radio" model: a SHARED, cached ElevenLabs briefing keyed by
     // CLUSTER CELL (Plus only) — a RICHER Claude script than the free tier, same
     // location model. null → the host uses the free browser-voice rotation.
-    getBriefing: function () {
+    getBriefing: function (quick) {
       if (!window.EventuallyHostVoice || !window.EventuallyHostVoice.enabled) return Promise.resolve(null);
       const loc = activeBriefingLocation || P.get().location;   // follows the searched/viewed cell
       const home = P.get().location;                            // the user's OWN cell (cost control)
@@ -334,8 +335,9 @@
       const now = new Date();
       const day = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
       // home_* lets the server detect EXPLORATION (a non-home cell) and serve a short
-      // cached "city headline" instead of minting a full briefing.
-      const base = { city: city, lat: loc && loc.lat, lon: loc && loc.lon,
+      // cached "city headline" instead of minting a full briefing. `quick` (a city SWITCH)
+      // forces that short headline too, so a switched city synthesizes fast even with no home.
+      const base = { city: city, lat: loc && loc.lat, lon: loc && loc.lon, quick: !!quick,
         lang: P.get().language || 'en', day: day, homeLat: home && home.lat, homeLon: home && home.lon };
       // TWO-HOST mode → ONE cached conversation for EVERYONE (free + Plus), fetched
       // with the anon key (no Plus token needed).
@@ -442,6 +444,30 @@
       // Stopped → browsers block autostarting audio, so cue a tap instead of playing.
       aiHost.setNewBriefingCue(true, city);
     }
+  }
+  // PRE-WARM: when the user hovers / nears a city marker, quietly generate + cache its
+  // briefing in the background (short headline tier) so a subsequent tap plays in ~2s
+  // instead of a 15-60s cold wait. Deduped per city/session and debounced, so spinning
+  // past markers doesn't spam generations. Costs little: a hovered city is likely to be
+  // tapped, and it would be generated on tap anyway — this just moves the work earlier.
+  const _warmed = {}; let _warmTimer = null, _warmPending = null, _warmCount = 0;
+  const WARM_MAX = 12;   // per-session cap so scanning the globe can't spawn dozens of generations
+  function prewarmCity(loc) {
+    if (!loc || !loc.city || !RT.twoHost || _warmCount >= WARM_MAX) return;
+    if (!window.EventuallyHostVoice || !window.EventuallyHostVoice.prewarm) return;
+    const key = (loc.city || '').toLowerCase();
+    if (!key || _warmed[key]) return;
+    _warmPending = loc;
+    clearTimeout(_warmTimer);
+    _warmTimer = setTimeout(function () {
+      const l = _warmPending; if (!l) return;
+      const k = (l.city || '').toLowerCase();
+      if (_warmed[k] || _warmCount >= WARM_MAX) return;
+      _warmed[k] = 1; _warmCount++;
+      const home = P.get().location;
+      window.EventuallyHostVoice.prewarm({ city: l.city, lat: l.lat, lon: l.lon,
+        lang: P.get().language || 'en', homeLat: home && home.lat, homeLon: home && home.lon });
+    }, 550);   // only warm after the hover/settle looks intentional, not a fly-by
   }
   function homeLoc() { return P.get().location || null; }
   // Exploring = the Host is focused on a place other than the user's home.

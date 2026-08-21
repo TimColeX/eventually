@@ -54,9 +54,18 @@
 
   /* ---------------- dashboard ---------------- */
   let tab = 'overview';
+  let pendingCount = null;   // events awaiting review — shown as a badge on the Review Events tab
+  // Reflect the pending-review count on its tab so unreviewed events are visible from anywhere.
+  function setPendingBadge() {
+    const b = main.querySelector('.ad-tab[data-tab="review"]');
+    if (b) { b.textContent = 'Review Events' + (pendingCount ? ' (' + pendingCount + ')' : ''); b.classList.toggle('ad-tab-alert', pendingCount > 0); }
+  }
+  function refreshPending() {
+    sb.rpc('pending_events').then(function (r) { pendingCount = (r.data || []).length; setPendingBadge(); }).catch(function () {});
+  }
   function renderDashboard() {
-    // 'Subscriptions' hidden while Eventually Plus is parked ("coming soon"); 'Browser
-    // Voice' removed (free no longer uses the device voice). Both still reachable in code.
+    // 'Subscriptions' hidden while Eventually Plus is parked ("coming soon"). Browser-voice
+    // editor removed — the Host is premium-voice (Fish/ElevenLabs) only.
     main.innerHTML =
       '<div class="ad-tabs">' +
         tabBtn('overview', 'Overview') + tabBtn('review', 'Review Events') +
@@ -66,6 +75,8 @@
     main.querySelectorAll('.ad-tab').forEach(function (b) {
       b.onclick = function () { tab = b.dataset.tab; renderDashboard(); };
     });
+    setPendingBadge();                               // show the cached count immediately
+    if (pendingCount === null) refreshPending();     // first load → fetch it once
     const body = document.getElementById('ad-body');
     if (tab === 'overview') renderOverview(body);
     else if (tab === 'review') renderReview(body);
@@ -80,9 +91,10 @@
     sb.rpc('pending_events').then(function (r) {
       const rows = r.data || [];
       if (r.error) { body.innerHTML = '<div class="ad-center">Could not load (' + esc(r.error.message) + ').</div>'; return; }
-      if (!rows.length) { body.innerHTML = '<div class="ad-sec"><h2>Review events</h2><p class="ad-hint">Nothing pending — all caught up. ✓</p></div>'; return; }
+      pendingCount = rows.length; setPendingBadge();     // keep the tab badge in sync
+      if (!rows.length) { body.innerHTML = '<div class="ad-sec"><h2>Review Events</h2><p class="ad-hint">Nothing pending — all caught up. ✓</p></div>'; return; }
       let html = '<div class="ad-sec"><h2>Pending review (' + rows.length + ')</h2>' +
-        '<p class="ad-hint">Native events wait here until you approve them. Editing an approved event sends it back here.</p>';
+        '<p class="ad-hint">Events submitted by users wait here for your approval before they appear on the globe. Editing an already-approved event sends it back here for re-review.</p>';
       rows.forEach(function (e) {
         html += '<div class="rv-row" data-id="' + esc(e.event_id) + '">' +
           '<div class="rv-main"><strong>' + esc(e.title) + '</strong>' +
@@ -146,7 +158,7 @@
       html += '<div class="ad-sec" id="ad-src"><h2>Event sources</h2><p class="ad-hint">Counting per source…</p></div>';
       html += '<div class="ad-sec" id="ad-dq"><h2>Data quality</h2><p class="ad-hint">Checking event coordinates…</p></div>';
       html += '<div class="ad-sec" id="ad-bu"><h2>Daily briefing usage</h2><p class="ad-hint">Counting Claude calls…</p></div>';
-      html += '<div class="ad-sec" id="ad-el"><h2>ElevenLabs usage (Plus voice)</h2><p class="ad-hint">Measuring cache performance…</p></div>';
+      html += '<div class="ad-sec" id="ad-el"><h2>AI Host voice usage</h2><p class="ad-hint">Measuring cache performance…</p></div>';
       body.innerHTML = html;
       renderSourceBreakdown();
       renderDataQuality();
@@ -164,7 +176,7 @@
     sb.rpc('admin_audio_usage', { p_days: 30 }).then(function (r) {
       const d = r.data;
       if (!d || (r.error && r.error.message)) {
-        box.innerHTML = '<h2>ElevenLabs usage (Plus voice)</h2><p class="ad-hint">Unavailable (' +
+        box.innerHTML = '<h2>AI Host voice usage</h2><p class="ad-hint">Unavailable (' +
           esc((r.error && r.error.message) || 'run backend/32_audio_usage.sql') + ').</p>';
         return;
       }
@@ -180,7 +192,7 @@
       var reused = (d.top_reused || []).map(function (t) {
         return '<div class="ad-li"><span>' + esc(t.scope || '—') + '</span><span>' + t.hits + ' reuse</span></div>';
       }).join('') || '<div class="ad-li"><span class="ad-hint">—</span></div>';
-      box.innerHTML = '<h2>ElevenLabs usage (Plus voice) · last ' + (d.window_days || 30) + ' days</h2>' +
+      box.innerHTML = '<h2>AI Host voice usage · last ' + (d.window_days || 30) + ' days</h2>' +
         '<p class="ad-hint">Each request either hits the cache (no ElevenLabs call) or synthesizes. A high hit % = the caching is preventing spend. Characters ≈ ElevenLabs credits; edit EL_COST_PER_1K in admin.js for your plan.</p>' +
         '<div class="ad-grid">' +
           kpi((d.hit_pct != null ? d.hit_pct : 0) + '%', 'Cache hit rate') +
@@ -194,7 +206,7 @@
         '</div>' +
         '<div class="ad-field" style="margin-top:14px"><label>By category</label><div class="ad-list">' + catRows + '</div></div>' +
         '<div class="ad-field" style="margin-top:10px"><label>Most reused (cache hits by area)</label><div class="ad-list">' + reused + '</div></div>';
-    }).catch(function () { box.innerHTML = '<h2>ElevenLabs usage (Plus voice)</h2><p class="ad-hint">Unavailable.</p>'; });
+    }).catch(function () { box.innerHTML = '<h2>AI Host voice usage</h2><p class="ad-hint">Unavailable.</p>'; });
   }
 
   // Per-source breakdown (live). Dynamic — any new source appears automatically.
@@ -573,58 +585,6 @@
     });
   }
 
-  /* ---------------- Browser-voice scripts (free rotation, EN) ---------------- */
-  const LINE_DEFS = [
-    { kind: 'greeting', label: 'Greeting (personalized)', tmpl: "Good {part}, {name}! Based on what you love, I've found {k} live {cat} events within {mi} miles — including {event}, over in {city}.", ph: '{part} {name} {k} {cat} {mi} {event} {city}' },
-    { kind: 'welcome', label: 'Worldwide pulse', tmpl: 'Welcome to Eventually! Right now, there are {count} events happening live around the world.', ph: '{count}' },
-    { kind: 'spotlight', label: 'Spotlight', tmpl: "Here's one to watch: {event}, in {city}. {going} people are heading there right now.", ph: '{event} {city} {going}' },
-    { kind: 'countdown', label: 'Countdown', tmpl: 'Heads up — {event} in {city} kicks off in just {min} minutes.', ph: '{event} {min} {city}' },
-    { kind: 'region', label: 'Regional roundup', tmpl: 'Over in {region}, {n} big {cat} events are underway right now.', ph: '{n} {cat} {region}' },
-    { kind: 'trending', label: 'Trending', tmpl: "Trending tonight: {event}, in {city}. It's climbing fast, with {likes} likes.", ph: '{event} {city} {likes}' },
-    { kind: 'sponsor', label: 'Sponsor read', tmpl: 'This update is brought to you by {sponsor}.', ph: '{sponsor}' },
-    { kind: 'tip', label: 'Tip', tmpl: "Tap any glowing marker on the globe, and you'll see everything happening there.", ph: '(none)' }
-  ];
-  function renderBrowser(body) {
-    body.innerHTML = '<div class="ad-center">Loading…</div>';
-    sb.from('app_config').select('config').eq('id', 1).maybeSingle().then(function (r) {
-      const cfg = (r.data && r.data.config) || {};
-      const hl = cfg.hostLines || {};
-      const hv = cfg.hostVoice || { rate: 0.98, pitch: 1.0 };
-      let html = '<div class="ad-sec"><h2>Voice delivery (free)</h2>' +
-        '<p class="ad-hint">Fine-tune how the free on-device voice sounds. The best available device voice is chosen automatically. 1.0 = normal.</p>' +
-        '<div class="ad-row">' +
-        '<div class="ad-field"><label>Speaking rate (0.7–1.3)</label><input id="hv-rate" type="number" step="0.01" min="0.7" max="1.3" value="' + (hv.rate || 0.98) + '"></div>' +
-        '<div class="ad-field"><label>Pitch (0.7–1.3)</label><input id="hv-pitch" type="number" step="0.01" min="0.7" max="1.3" value="' + (hv.pitch != null ? hv.pitch : 1.0) + '"></div>' +
-        '</div></div>';
-      html += '<div class="ad-sec"><h2>Browser-voice scripts (free)</h2>' +
-        '<p class="ad-hint">The rotating lines spoken by the free on-device voice (separate from the ElevenLabs city briefing). Write them conversationally, for the ear. Placeholders fill from live data. Untick to stop a line type.</p>';
-      LINE_DEFS.forEach(function (d) {
-        const cur = hl[d.kind] || {};
-        const text = cur.text != null ? cur.text : d.tmpl;
-        const on = cur.on !== false;
-        html += '<div class="ad-field" data-kind="' + d.kind + '">' +
-          '<label>' + esc(d.label) + ' <span class="ad-muted">— ' + esc(d.ph) + '</span></label>' +
-          '<textarea class="bl-text">' + esc(text) + '</textarea>' +
-          '<label class="ad-toggle" style="margin-top:6px"><input type="checkbox" class="bl-on"' + (on ? ' checked' : '') + '> Enabled</label></div>';
-      });
-      html += '<div><button class="ad-save" id="bl-save">Save voice &amp; scripts</button><span class="ad-saved" id="bl-msg"></span></div></div>';
-      body.innerHTML = html;
-      document.getElementById('bl-save').onclick = function () {
-        const out = {};
-        body.querySelectorAll('[data-kind]').forEach(function (f) {
-          out[f.dataset.kind] = { text: f.querySelector('.bl-text').value, on: f.querySelector('.bl-on').checked };
-        });
-        const voice = { rate: +document.getElementById('hv-rate').value || 0.98, pitch: +document.getElementById('hv-pitch').value || 1.0 };
-        const btn = document.getElementById('bl-save'); btn.disabled = true;
-        patchConfig({ hostLines: out, hostVoice: voice }).then(function (r) {
-          btn.disabled = false;
-          const m = document.getElementById('bl-msg');
-          if (r.error) { m.textContent = 'Error: ' + r.error.message; m.style.color = '#b3402a'; }
-          else { m.textContent = 'Saved ✓ (applies on next app load)'; m.style.color = '#3a7d44'; }
-        });
-      };
-    });
-  }
 
   /* ---------------- Subscriptions & Free Trial ---------------- */
   // datetime-local <-> ISO helpers for the campaign window fields.
@@ -757,6 +717,12 @@
       body.innerHTML = html;
 
       const list = document.getElementById('aff-list');
+      // Mirrors the `go` function EXACTLY (supabase/functions/go): no {url}/{raw} placeholder
+      // → the pattern can't be applied and the user goes straight to the ticket link.
+      function applyPattern(pattern, url) {
+        if (!pattern || (pattern.indexOf('{url}') === -1 && pattern.indexOf('{raw}') === -1)) return null;
+        return pattern.replace(/\{url\}/g, encodeURIComponent(url)).replace(/\{raw\}/g, url);
+      }
       function row(key, p) {
         p = p || {};
         const d = document.createElement('div');
@@ -769,9 +735,32 @@
           '</div>' +
           '<div class="ad-field"><label>Affiliate URL pattern</label><input class="aff-pattern" value="' + esc(p.urlPattern || '') + '" placeholder="https://track.net/deep?url={url}&aid=123"></div>' +
           '<div class="ad-field"><label>Notes</label><input class="aff-notes" value="' + esc(p.notes || '') + '" placeholder="Network, account id, terms…"></div>' +
+          '<div class="ad-field"><label>Test the pattern <span class="ad-muted">— paste a sample ticket link, then Test</span></label>' +
+            '<div class="ad-row" style="align-items:flex-end;gap:8px">' +
+              '<input class="aff-sample" style="flex:1;min-width:200px" value="https://www.ticketmaster.com/event/1A00612345" placeholder="https://…/event/123">' +
+              '<button class="ad-save aff-test" type="button">Test →</button>' +
+            '</div>' +
+            '<div class="aff-test-out"></div>' +
+          '</div>' +
           '<label class="ad-toggle"><input type="checkbox" class="aff-enabled"' + (p.enabled ? ' checked' : '') + '> Enabled</label> ' +
           '<button class="an-act an-danger aff-del" type="button">Remove</button>';
         d.querySelector('.aff-del').onclick = function () { d.remove(); };
+        d.querySelector('.aff-test').onclick = function () {
+          const pattern = d.querySelector('.aff-pattern').value.trim();
+          const sample = d.querySelector('.aff-sample').value.trim();
+          const enabled = d.querySelector('.aff-enabled').checked;
+          const out = d.querySelector('.aff-test-out');
+          if (!sample) { out.className = 'aff-test-out is-warn'; out.textContent = 'Enter a sample ticket link first.'; return; }
+          const applied = applyPattern(pattern, sample);
+          if (applied === null) {
+            out.className = 'aff-test-out is-plain';
+            out.innerHTML = 'No affiliate pattern applied — the user goes straight to:<br><b>' + esc(sample) + '</b>';
+          } else {
+            out.className = 'aff-test-out is-ok';
+            out.innerHTML = 'Redirects to:<br><b>' + esc(applied) + '</b>' +
+              (enabled ? '' : '<br><span class="is-warn">⚠ This provider is disabled — live clicks currently skip the pattern.</span>');
+          }
+        };
         list.appendChild(d);
       }
       Object.keys(providers).forEach(function (k) { row(k, providers[k]); });
