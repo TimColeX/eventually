@@ -26,6 +26,7 @@
     this.getDailyBriefing = opts.getDailyBriefing || null;  // () -> Promise<{text}|null> (free daily briefing, device voice)
     this.getWelcome = opts.getWelcome || null;    // () -> Promise<{url,text}|null> (official cached "Welcome to Eventually…")
     this.getIntro = opts.getIntro || null;        // ({have}) -> Promise<{changed,sig,segments}|null> (one-time host self-intro)
+    this.getIdent = opts.getIdent || null;        // (city) -> Promise<{url,text}|null> (cached "heading to <city>" switch ident)
     this.onHomeReset = opts.onHomeReset || null;  // () -> void ("back to my area" clicked)
     this.onMuteToggle = opts.onMuteToggle || null;  // () -> bool (new muted state)
     this.initialMuted = !!opts.initialMuted;
@@ -185,9 +186,11 @@
   // The focus city changed WHILE LISTENING. Finish the current sentence, then flow
   // into the new city's opening (station ident → fresh briefing → live). Checked
   // between sentences in _browserSpeak; if we're in a music gap, bring it forward.
-  AIHost.prototype.switchLocation = function () {
+  AIHost.prototype.switchLocation = function (city) {
     if (!this.speaking && !this._musicHold) return;
     this._gen++;                                 // invalidate ANY in-flight generation for the old city (#4)
+    this._identCity = city || this._focusCity || null;   // spoken "heading to <city>" masks the fetch
+    this._primeAudio();                          // iOS: keep the audio element alive within THIS tap gesture
     const self = this;
     // Two-host conversation already finished (music bed playing) → start the NEW city's
     // conversation. Without this, a city switch after the convo ended did nothing.
@@ -220,6 +223,12 @@
     this._openerDone = false;                   // ← two-host / stinger: re-run the opener for the NEW city (#3)
     if (this.speaking) this._rotate();
   };
+
+  // True while the Host is "on" — actively narrating OR holding on the music bed after a
+  // show has settled (speaking:false, _musicHold:true). A city switch in EITHER state
+  // should flow into the new city's briefing; only a FULLY stopped/paused Host shows a
+  // tap-to-play cue. Fixes the silent-switch-after-a-short-clip bug (e.g. a quiet home).
+  AIHost.prototype.isActive = function () { return !!(this.speaking || this._musicHold); };
 
   // Admin toggle: when the daily briefing is disabled, the show plays intro → live
   // (the briefing segment is skipped).
@@ -259,6 +268,7 @@
 
   // Show the focus city in the Host label (" · Toronto").
   AIHost.prototype.setFocusCity = function (city) {
+    this._focusCity = city || null;
     const f = this.el.querySelector('.ah-focus');
     if (f) f.textContent = city ? ' · ' + city : '';
   };
@@ -318,6 +328,21 @@
     const seg = segs[i], self = this;
     this._audioSpeak(seg.url, seg.text || '', function () { self._playSegmentsThen(segs, i + 1, done); },
       true, { text: seg.text || '', kind: 'greeting', lang: 'en-US' });
+  };
+
+  // iOS SAFARI SAFEGUARD: once the voice <audio> element has sat idle (e.g. during the
+  // music bed after a show), iOS can refuse a programmatic play() that fires seconds later
+  // when the async briefing finally arrives — even though the element was unlocked earlier.
+  // Called SYNCHRONOUSLY inside the city-select tap, this keeps the element "user-activated"
+  // by looping the silent clip, so the real briefing clip is allowed to play. Harmless on
+  // other platforms. _audioSpeak clears loop/mute before playing the real clip.
+  AIHost.prototype._primeAudio = function () {
+    const a = this._audio; if (!a) return;
+    try {
+      a.onended = null; a.onerror = null;                        // don't let the primer fire stale handlers
+      a.loop = true; a.muted = true; a.src = silentClip();
+      const p = a.play(); if (p && p.catch) p.catch(function () {});
+    } catch (e) {}
   };
 
   // Admin flips the whole app between single-host and two-host conversation mode.
@@ -474,7 +499,8 @@
 
   AIHost.prototype._rotate = function () {
     if (!this.getLine) return;
-    if (this.briefingPlaying) return;          // the briefing owns the audio right now
+    if (this.briefingPlaying) return;          // the browser-voice briefing owns the audio right now
+    if (this._premiumPlaying) return;          // a cached clip is playing (two-host briefing/ident) → never re-fetch/replay over it
     if (this._musicHold) return;               // free intro done → music bed only, no caption rotation
     const self = this;
     // Briefing mode: Plus = SHARED, cached ElevenLabs briefing (premium voice from the
@@ -490,14 +516,27 @@
         this._setBuffering(true);
         const myGen = this._gen;                             // tie this show to the CURRENT city
         const stale = function () { return myGen !== self._gen || !self.speaking; };
-        const playConv = function () {
-          if (stale()) return;                               // city changed while welcome played → abandon
+        const fetchAndPlay = function () {
+          if (stale()) { self._setBuffering(false); return; }   // superseded → abandon (never leave buffering stuck)
           self.getBriefing().then(function (b) {
-            if (stale()) return;                             // a newer city started → ignore this result (#4/#5)
+            if (stale()) { self._setBuffering(false); return; } // a newer city started → ignore this result (#4/#5)
             self._setBuffering(false);
             if (b && b.segments && b.segments.length) self._playFreeIntro(b.segments, 0);
             else self._endFreeIntro();                       // no audio → music only, no browser voice
-          }).catch(function () { if (stale()) return; self._setBuffering(false); self._endFreeIntro(); });
+          }).catch(function () { self._setBuffering(false); if (stale()) return; self._endFreeIntro(); });
+        };
+        // On a CITY SWITCH, play a short cached "heading to <city>" ident FIRST (instant),
+        // masking the new briefing's generation latency; then fetch + play the briefing.
+        const playConv = function () {
+          if (stale()) return;
+          const idc = self._identCity; self._identCity = null;
+          if (idc && self.getIdent) {
+            self.getIdent(idc).then(function (id) {
+              if (stale()) return;
+              if (id && id.url) self._audioSpeak(id.url, id.text, fetchAndPlay, true, { text: id.text, kind: 'greeting', lang: 'en-US' });
+              else fetchAndPlay();
+            }).catch(fetchAndPlay);
+          } else fetchAndPlay();
         };
         // The name-free brand welcome ("Welcome to Eventually…"), unless the splash
         // already spoke it this session. Runs AFTER the one-time host intro.
@@ -511,11 +550,14 @@
             }).catch(playConv);
           } else playConv();
         };
+        // STARTUP vs SWITCH. The one-time intro + brand welcome are STARTUP-only. A city
+        // SWITCH (_identCity set) skips STRAIGHT to the ident + briefing — no extra intro/
+        // welcome round-trips — so it stays snappy (ident ≈ 1s, not ~3s).
+        if (this._identCity) { playConv(); return; }
         // ONE-TIME HOST INTRODUCTION (#5): the hosts say their NAMES once per device. We
         // send the sig we last played; the server returns changed:false (NO synthesis) when
         // the hosts/voices are unchanged — so returning users skip it and every briefing
-        // stays name-free and cheap. A rename/voice change yields a new sig → introduced
-        // once more. City switches don't reach here (they keep the station ident).
+        // stays name-free and cheap. A rename/voice change yields a new sig → introduced once.
         let have = '';
         try { have = (global.localStorage && localStorage.getItem('ev_introSig')) || ''; } catch (e) {}
         if (this.getIntro) {
@@ -681,6 +723,7 @@
     try {
       a.onended = function () { self._premiumPlaying = false; self._stopAudioSync(); afterSegment(); };
       a.onerror = fail;
+      a.loop = false; a.muted = false;                     // clear any iOS keep-alive primer state
       a.src = url; a.currentTime = 0;
       try { a.volume = 0; } catch (e) {}                   // start silent → fade the clip in
       const p = a.play();
@@ -787,6 +830,7 @@
     this._openerDone = false;              // premium stinger plays once per Play session
     this._openingDone = false;             // replay the show opening (intro → briefing) on each Play
     this._switchPending = false;
+    this._identCity = null;                // a fresh Play is not a city switch → no "heading to…" ident
     this.setNewBriefingCue(false);         // pressing Play consumes any "new briefing" cue
     this.icPlay.style.display = 'none';
     this.icPause.style.display = '';
@@ -868,6 +912,7 @@
     this._premiumPlaying = false;
     this._musicHold = false;
     this._pendingBriefing = null;
+    this._identCity = null;
     this._setBuffering(false);
     this.icPlay.style.display = '';
     this.icPause.style.display = 'none';

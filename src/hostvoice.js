@@ -102,6 +102,19 @@
           return { changed: !!j.changed, sig: j.sig || null, segments: (j.segments && j.segments.length) ? j.segments : null };
         }).catch(function () { return null; });
     },
+    // SWITCH IDENT — a short cached per-city line ("let's head over to Toronto") played
+    // INSTANTLY on a city switch to mask the briefing's generation latency. Cached per city.
+    // -> Promise<{url,text}|null>
+    getIdent: function (city, lang) {
+      if (!ENABLED || !city) return Promise.resolve(null);
+      return fetch(BASE + '/functions/v1/briefing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': ANON, 'Authorization': 'Bearer ' + ANON },
+        body: JSON.stringify({ ident: true, city: city, lang: (lang || 'en').slice(0, 2) })
+      }).then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) { return (j && j.url) ? { url: j.url, text: j.text || '' } : null; })
+        .catch(function () { return null; });
+    },
     // FREE tier intro: cached ElevenLabs clips reused by ALL free users → near-zero
     // marginal cost. Assembled [count]+[upsell] on the first play (`full`), else a
     // short welcome-back. No login needed. opts: {part,lang,count,full}

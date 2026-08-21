@@ -379,6 +379,12 @@
       if (!window.EventuallyHostVoice || !window.EventuallyHostVoice.getIntro) return Promise.resolve(null);
       return window.EventuallyHostVoice.getIntro({ have: (opts && opts.have) || '', lang: P.get().language || 'en' });
     },
+    // Short cached "heading over to <city>" ident played instantly on a city switch to
+    // mask the new briefing's generation latency (esp. a cold city, ~15–60s).
+    getIdent: function (city) {
+      if (!window.EventuallyHostVoice || !window.EventuallyHostVoice.getIdent) return Promise.resolve(null);
+      return window.EventuallyHostVoice.getIdent(city, P.get().language || 'en');
+    },
     // Admin-tunable delivery for the free browser voice (rate/pitch).
     getVoiceSettings: function () { return RT.hostVoice || {}; },
     // "Back to my area" — return the Host (and the map) to the user's home location.
@@ -422,7 +428,12 @@
     if (aiHost && aiHost.setFocusCity) aiHost.setFocusCity(city);
     if (aiHost && aiHost.setExploring) aiHost.setExploring(isExploringNow(), (homeLoc() || {}).city || null);
     if (!city || city === prevCity || !aiHost) return;
-    if (aiHost.speaking) {
+    // "Active" = narrating OR holding on the music bed after a show settled. In BOTH cases
+    // flow into the new city's briefing (switchLocation handles the music-hold restart).
+    // Only a FULLY stopped/paused Host gets the tap cue — otherwise selecting a city right
+    // after a short clip (e.g. a quiet home) left the Host silent.
+    const active = aiHost.isActive ? aiHost.isActive() : aiHost.speaking;
+    if (active) {
       // Listening → finish the current sentence, play a station ident, then this
       // city's fresh briefing, then continue. One continuous experience.
       if (narrator.announceFocus) narrator.announceFocus(city);   // queue the device-voice ident (free path)
