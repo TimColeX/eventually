@@ -661,8 +661,13 @@
     this.speaking = false;
     this._musicHold = true;                               // music continues on its own
     this._introDone = true;
+    this._premiumPlaying = false;
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-    try { this._audio.pause(); } catch (e) {}
+    // Keep the voice element WARM (muted silent loop) instead of pausing it. On iOS Safari a
+    // media element that has gone idle often refuses a later programmatic play() — which made
+    // the next city switch silent. Staying "playing" (inaudibly) means the switched briefing
+    // can always swap in and play, no fresh tap gesture required.
+    try { this._primeAudio(); } catch (e) { try { this._audio.pause(); } catch (e2) {} }
     clearInterval(this._voiceTween); clearTimeout(this._gapTimer); clearTimeout(this._introTimer);
     this.onSpeakEnd();                                    // swell the music back up
     this.icPlay.style.display = 'none';                   // button = "music playing"

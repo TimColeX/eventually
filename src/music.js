@@ -34,28 +34,23 @@
   Music.prototype._build = function () {
     if (this._built) return !!(this.master || this.audioEl);
     this._built = true;
-    const Ctx = global.AudioContext || global.webkitAudioContext;
     const el = document.getElementById('bg-music');
     const hasTrack = el && el.getAttribute('src');
 
-    if (hasTrack && Ctx) {                      // real track through Web Audio → duck anywhere
-      try {
-        const ctx = new Ctx(); this.ctx = ctx;
-        el.loop = true; el.setAttribute('playsinline', ''); try { el.volume = 1; } catch (e) {}
-        const src = ctx.createMediaElementSource(el);
-        const master = ctx.createGain(); master.gain.value = 0;
-        src.connect(master); master.connect(ctx.destination);
-        this.master = master; this.audioEl = el;
-        this._wireResume();
-        return true;
-      } catch (e) { this.ctx = null; this.master = null; /* fall through */ }
-    }
-    if (hasTrack) {                             // Web Audio unavailable → direct playback (no ducking)
+    // REAL TRACK → DIRECT <audio> playback. Critical for iOS Safari: a directly-played
+    // media element keeps playing when the app is backgrounded (swiped away), whereas a
+    // Web-Audio-routed element (MediaElementSource) is SUSPENDED in the background and the
+    // music goes silent. We trade the Web-Audio volume duck (which iOS ignores anyway —
+    // HTMLMediaElement.volume is read-only there) for reliable background playback. On
+    // desktop/Android the volume tween still ducks; on iOS the bed simply plays under the
+    // voice (its natural level), matching the pre-Web-Audio behaviour.
+    if (hasTrack) {
       el.loop = true; el.setAttribute('playsinline', ''); try { el.volume = 0; } catch (e) {}
       this.audioEl = el; this._direct = true;
+      this._wireResume();
       return true;
     }
-    return this._buildSynth();                  // no track → Web Audio ambient bed
+    return this._buildSynth();                  // no track → Web Audio ambient bed (foreground only)
   };
 
   Music.prototype._buildSynth = function () {
