@@ -484,17 +484,35 @@
       '<textarea id="db-ann">' + esc(dbCfg.announcement || '') + '</textarea></div>' +
       '<div class="ad-field"><label>Daily voice-generation ceiling (0 = unlimited)</label>' +
       '<input id="db-budget" type="number" min="0" step="1" value="' + (vbCfg.maxDailyGenerations != null ? vbCfg.maxDailyGenerations : 0) + '">' +
-      '<p class="ad-hint">Hard platform-wide cap on <b>new</b> briefing generations per day — the ElevenLabs circuit breaker. ' +
+      '<div class="ad-hint" id="db-ceiling">' + budgetCeilingText(vbCfg.maxDailyGenerations != null ? vbCfg.maxDailyGenerations : 0) + '</div>' +
+      '<p class="ad-hint">Hard platform-wide cap on <b>new</b> briefing generations per day. ' +
       'Cached audio is always served and never counts, so listeners in already-generated areas are unaffected. ' +
-      'Once the cap is hit, new areas get a short cached clip instead. A full briefing costs ≈$0.14, an explored-city ' +
-      'headline ≈$0.014 — so e.g. <b>150</b> ≈ $21/day worst case (~$630/mo).</p></div>' +
+      'Once the cap is hit, new areas get a short cached clip instead.</p></div>' +
       '<div><button class="ad-save" id="db-save">Save briefing settings</button><span class="ad-saved" id="db-msg"></span></div>' +
       sponsors +
       '<div class="ad-field" style="margin-top:16px"><label>Cached briefings (' + dbRows.length + ')</label>' +
       '<div class="ad-list" id="db-list">' + rows + '</div>' +
       '<div style="margin-top:8px"><button class="ad-save ad-danger" id="db-clear">Clear today’s briefings</button></div></div></div>';
   }
+  // Live "estimated monthly ceiling" for the daily cap, priced on the ACTIVE provider
+  // and the configured briefing length. Fish ≈ $0.015/1k chars; ElevenLabs ≈ $0.15/1k.
+  // Speech ≈ 15 chars/sec, so chars ≈ maxSeconds × 15. Real spend is well below this
+  // ceiling (cache hits + empty areas cost nothing) — it's the worst case if EVERY
+  // capped generation were a fresh full briefing.
+  function budgetCeilingText(n) {
+    const provider = (aiCfg.provider === 'elevenlabs') ? 'ElevenLabs' : 'Fish';
+    const chars = Math.round((parseInt(aiCfg.maxSeconds, 10) || 70) * 15);
+    const price = provider === 'ElevenLabs' ? 0.15 : 0.015;   // $ per 1,000 chars
+    const per = (chars / 1000) * price;                       // $ per new full briefing
+    if (!n || n <= 0) {
+      return '<b>Unlimited</b> — no hard spend ceiling. Cost tracks how many populated areas are opened per day; empty areas and cache hits are free. Enter a number to cap it.';
+    }
+    const day = n * per, mo = Math.round(day * 30);
+    return 'Active voice: <b>' + provider + '</b> (~' + chars + ' chars/briefing at ~$' + price.toFixed(3) + '/1k). Worst-case ceiling: <b>$' + day.toFixed(2) + '/day</b> · <b>$' + mo.toLocaleString() + '/month</b>. Real spend is usually far lower (cache hits + empty areas cost nothing).';
+  }
   function bindDailySection($, body) {
+    const budget = $('db-budget'), ceil = $('db-ceiling');
+    if (budget && ceil) budget.oninput = function () { ceil.innerHTML = budgetCeilingText(Math.max(0, parseInt(budget.value, 10) || 0)); };
     const save = $('db-save');
     if (save) save.onclick = function () {
       // persona/premiumPersona no longer edited here (two-host uses the conversation
