@@ -344,14 +344,14 @@
   }
   function aiHostManagerHTML() {
     const mode = aiCfg.hostMode === 'two' ? 'two' : 'single';
-    const model = aiCfg.model || 's2.1-pro';
+    const model = aiCfg.model || 's2.1-pro-free';
     const opt = function (v, cur, label) { return '<option value="' + v + '"' + (cur === v ? ' selected' : '') + '>' + label + '</option>'; };
     return '<div class="ad-sec"><h2>AI Host Manager — two-host conversation (Fish Audio)</h2>' +
       '<p class="ad-hint">Configure the two AI hosts and the voice provider, then <b>validate with the test buttons below before switching Host Mode to Two Hosts</b>. ' +
       'While Host Mode is <b>Single</b>, the app behaves exactly as today. Fish multi-speaker cost ≈ $0.015 per cached briefing (~9× cheaper than ElevenLabs).</p>' +
       '<div class="ad-row">' +
         '<div class="ad-field"><label>Host Mode</label><select id="ai-mode">' + opt('single', mode, 'Single Host (current)') + opt('two', mode, 'Two Hosts (conversation)') + '</select></div>' +
-        '<div class="ad-field"><label>Fish model</label><select id="ai-model">' + opt('s2.1-pro', model, 's2.1-pro (production)') + opt('s2.1-pro-free', model, 's2.1-pro-free (test/dev)') + opt('s2-pro', model, 's2-pro (needs API credit)') + '</select></div>' +
+        '<div class="ad-field"><label>Fish model</label><select id="ai-model">' + opt('s2.1-pro-free', model, 's2.1-pro-free (free — works now)') + opt('s2.1-pro', model, 's2.1-pro (needs API credit)') + opt('s2-pro', model, 's2-pro (needs API credit)') + '</select></div>' +
       '</div>' +
       '<div class="ad-row">' +
         '<div class="ad-field"><label>Target length (seconds)</label><input id="ai-secs" type="number" min="20" max="180" value="' + (aiCfg.maxSeconds || 70) + '"></div>' +
