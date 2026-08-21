@@ -672,12 +672,14 @@ body {
 .ad-slot.ad-panel .ad-cta { margin-top: 6px; font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--clay); }
 .ad-slot.ad-infeed .ad-tag, .ad-slot.ad-panel .ad-tag { position: absolute; top: 8px; right: 8px; }
 
-/* lift the floating bottom UI when the ad bar is present */
-body.has-ad .ai-host { bottom: 70px; }
-body.has-ad .timeline { bottom: 138px; }
-body.has-ad .globe-controls { bottom: 204px; }
-body.has-ad .legend { bottom: 204px; }
-body.has-ad .toast { bottom: 144px; }
+/* lift the floating bottom UI when the ad bar is present. The ad bar's height is
+   56px + safe-area-inset-bottom, so these offsets MUST add the same inset or the
+   host bar overlaps the ad on notch/home-bar devices. */
+body.has-ad .ai-host { bottom: calc(70px + env(safe-area-inset-bottom, 0px)); }
+body.has-ad .timeline { bottom: calc(138px + env(safe-area-inset-bottom, 0px)); }
+body.has-ad .globe-controls { bottom: calc(204px + env(safe-area-inset-bottom, 0px)); }
+body.has-ad .legend { bottom: calc(204px + env(safe-area-inset-bottom, 0px)); }
+body.has-ad .toast { bottom: calc(144px + env(safe-area-inset-bottom, 0px)); }
 
 /* ---------- ⋯ menu + dropdown ---------- */
 .menu-wrap { position: relative; }
@@ -905,9 +907,11 @@ body.has-ad .toast { bottom: 144px; }
                            on mobile, leaving them parked off-screen — snap into place instead */
   }
   .place.open, .profile.open, .evdetail.open { right: 12px; }
-  body.has-ad .ai-host { bottom: 66px; }
-  body.has-ad .timeline { bottom: 128px; }
-  body.has-ad .globe-controls { bottom: 188px; }
+  /* MUST include the safe-area inset (the ad bar is 56px + inset) or the host bar
+     overlaps the ad on notch/home-bar phones. */
+  body.has-ad .ai-host { bottom: calc(66px + env(safe-area-inset-bottom, 0px)); }
+  body.has-ad .timeline { bottom: calc(128px + env(safe-area-inset-bottom, 0px)); }
+  body.has-ad .globe-controls { bottom: calc(188px + env(safe-area-inset-bottom, 0px)); }
 
   /* --- Auth ("Join Eventually") card: compact + stack the magic form --- */
   .auth-modal { padding: 24px 18px; border-radius: 18px; }

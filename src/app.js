@@ -21,7 +21,11 @@
   // Runtime config — admin-tunable via the app_config table; these are the code
   // defaults used until (and if) the remote config loads.
   let RT = { spikes: { priority: 18, fair: 15, sponsored: 12 }, maxClusters: 0, adsEnabled: true, hostEnabled: true,
-             hostLines: null, hostVoice: { rate: 0.98, pitch: 1.0 },
+             hostLines: null, hostVoice: { rate: 0.98, pitch: 1.0 }, twoHost: false,
+             // Eventually Plus is PARKED ("coming soon") for now — the subscription infra
+             // stays intact; the UI shows a waitlist instead of upgrade/trial CTAs. Admin
+             // re-enables Plus later via app_config.config.plus.comingSoon === false.
+             plusComingSoon: true,
              pinned: [], hiddenCities: [], hiddenEvents: [], _hidEv: {}, _hidCity: {} };
   function applyHidden() {
     RT._hidEv = {}; (RT.hiddenEvents || []).forEach(function (id) { RT._hidEv[id] = 1; });
@@ -1166,16 +1170,33 @@
     profileEl.querySelector('.pf-notify .tg-state').textContent = p.notify ? 'On' : 'Off';
     profileEl.querySelector('.pf-filter').classList.toggle('on', interestFilterActive);
     profileEl.querySelector('.pf-filter .tg-state').textContent = interestFilterActive ? 'On' : 'Off';
-    profileEl.querySelector('.pf-filter').style.display = p.plus ? '' : 'none';
+    profileEl.querySelector('.pf-filter').style.display = (p.plus && !RT.plusComingSoon) ? '' : 'none';
+    const plusBtn = profileEl.querySelector('.pf-plus-btn');
+    const statusEl = profileEl.querySelector('.pf-plus-status');
+    const fineEl = profileEl.querySelector('.pf-fine');
+    const plusList0 = profileEl.querySelector('.pf-plus-list');
+    const plusH = profileEl.querySelector('.pf-plus-h');
+    if (RT.plusComingSoon) {
+      // PARKED: show a "coming soon" state + a waitlist CTA (no trial/checkout).
+      const onList = !!((P.get().comms || {}).plusWaitlist);
+      profileEl.querySelector('.pf-plus-state').textContent = 'Eventually Plus · coming soon';
+      if (plusH) plusH.innerHTML = 'Eventually <b>Plus</b> — coming soon';
+      if (plusList0) plusList0.innerHTML = '<li>Longer, personalized AI briefings</li><li>Ad-free listening &amp; browsing</li><li>Early access to new features</li>';
+      plusBtn.textContent = onList ? '✓ You\'re on the waitlist' : 'Notify me at launch';
+      plusBtn.dataset.act = 'waitlist';
+      plusBtn.disabled = false;
+      if (statusEl) statusEl.textContent = onList ? 'We\'ll email you when Eventually Plus launches.' : 'Eventually Plus is in the works. Join the waitlist to hear first.';
+      if (fineEl) fineEl.textContent = '';
+      profileEl.querySelector('.pf-logout').style.display = user ? '' : 'none';
+      renderAccount(); renderIdentities();
+      return;
+    }
     // Plus / trial CTA — label + behaviour driven by the effective subscription state.
     const pb = plusButton(subState);
-    const plusBtn = profileEl.querySelector('.pf-plus-btn');
     plusBtn.textContent = pb.label;
     plusBtn.dataset.act = pb.act;
     plusBtn.disabled = (pb.act === 'none');
-    const statusEl = profileEl.querySelector('.pf-plus-status');
     if (statusEl) statusEl.textContent = plusStatusLine(subState);
-    const fineEl = profileEl.querySelector('.pf-fine');
     if (fineEl) fineEl.textContent = plusFineLine(subState);
     // When the two-host conversation is the UNIVERSAL experience, the briefing is no
     // longer a Plus-exclusive perk — reframe the benefit list honestly (ad-free + more
@@ -1454,7 +1475,8 @@
   /* ---------- display ads + premium visibility ---------- */
   const adbar = document.getElementById('adbar');
   // Show ads only to non-Plus users when the admin has ads enabled.
-  function adsOn() { return RT.adsEnabled && !P.get().plus; }
+  // While Plus is parked ("coming soon"), ads show to EVERYONE (nobody can be ad-free yet).
+  function adsOn() { return RT.adsEnabled && (RT.plusComingSoon || !P.get().plus); }
   // A reserved ad container (banner | infeed | panel). Empty string when ads are
   // off so nothing renders/reserves space. Provider-agnostic (house creative now,
   // AdSense later) — see monetize.js adSlotHTML/mountAdSense.
@@ -1469,7 +1491,7 @@
     if (plus) plus.addEventListener('click', openProfile);
   }
   function applyMonetization() {
-    const showAds = RT.adsEnabled && !P.get().plus;   // admin can disable ads globally
+    const showAds = RT.adsEnabled && (RT.plusComingSoon || !P.get().plus);   // admin can disable ads globally
     document.body.classList.toggle('has-ad', showAds);
     adbar.style.display = showAds ? '' : 'none';
     if (showAds) renderAd();
@@ -1505,7 +1527,8 @@
     h += '<div class="dd-sep"></div>';
     h += '<button class="dd-item" data-act="help">Help centre</button>';
     h += '<button class="dd-item" data-act="contact">Contact sales</button>';
-    if (!p.plus) h += '<button class="dd-item dd-plus" data-act="plus">✦ Get Eventually Plus</button>';
+    if (RT.plusComingSoon) h += '<button class="dd-item dd-plus" data-act="plus">✦ Eventually Plus · coming soon</button>';
+    else if (!p.plus) h += '<button class="dd-item dd-plus" data-act="plus">✦ Get Eventually Plus</button>';
     if (user) h += '<div class="dd-sep"></div><button class="dd-item dd-muted" data-act="signout">Sign out</button>';
     dropdown.innerHTML = h;
   }
@@ -1689,8 +1712,23 @@
   // through here). Once authed we pick the best path: no-card free trial → paid
   // checkout → (pre-deploy) demo toggle. Cancelling/resuming is handled separately.
   function goPlus() {
+    // Plus is PARKED ("coming soon") → collect waitlist interest instead of upgrading.
+    if (RT.plusComingSoon) { joinWaitlist(); return; }
     if (subState && subState.is_plus) { openProfile(); return; }   // already Plus → manage
     requireLogin(function () { beginUpgrade(); }, PLUS_AUTH_REASON);
+  }
+  // "Notify me" — records interest in a future Eventually Plus. Reuses the profile's
+  // existing `comms` prefs (no new table); signed-in only (we need an email to notify).
+  function joinWaitlist() {
+    const already = (P.get().comms || {}).plusWaitlist;
+    if (already) { window.EventuallyToast("You're on the Eventually Plus waitlist — we'll let you know."); openProfile(); return; }
+    requireLogin(function () {
+      const comms = Object.assign({}, P.get().comms || {}, { plusWaitlist: true });
+      P.set({ comms: comms });
+      if (acctEnabled()) A.saveProfile({ comms: comms });
+      renderProfile();
+      window.EventuallyToast('🎉 You\'re on the Eventually Plus waitlist — we\'ll notify you at launch.');
+    }, 'Sign in to join the Eventually Plus waitlist — we\'ll email you when it launches.');
   }
   function beginUpgrade() {
     // Re-check server truth now that we're authenticated.
@@ -1945,6 +1983,8 @@
         // Two-host conversation mode (Fish). When on, the show is ONE cached two-host
         // conversation for EVERYONE (free + Plus), fetched with the anon key.
         RT.twoHost = !!(cfg.aiHost && cfg.aiHost.hostMode === 'two');
+        // Admin can re-enable Plus later by setting plus.comingSoon = false.
+        if (cfg.plus && typeof cfg.plus.comingSoon === 'boolean') RT.plusComingSoon = cfg.plus.comingSoon;
         if (aiHost.setTwoHost) aiHost.setTwoHost(RT.twoHost, {
           h1: (cfg.aiHost && cfg.aiHost.host1 && cfg.aiHost.host1.name) || 'Ethan',
           h2: (cfg.aiHost && cfg.aiHost.host2 && cfg.aiHost.host2.name) || 'Sarah'
@@ -1987,7 +2027,9 @@
     const live = D.getEvents().filter(function (e) {
       const t = D.typeForDate(e, selectedDate); return t === 'live' || t === 'upcoming';
     }).length;
-    const isPlus = !!((subState && subState.is_plus) || P.get().plus);
+    // `isPlus` here also SUPPRESSES the splash upsell (visual + spoken). While Plus is
+    // parked as "coming soon", suppress the upsell entirely rather than pitch it.
+    const isPlus = !!((subState && subState.is_plus) || P.get().plus || RT.plusComingSoon);
     window.EventuallySignature.play({
       nearCount: nearCount(),
       totalCount: live,
