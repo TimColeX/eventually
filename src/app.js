@@ -324,22 +324,23 @@
     // location model. null → the host uses the free browser-voice rotation.
     getBriefing: function () {
       if (!window.EventuallyHostVoice || !window.EventuallyHostVoice.enabled) return Promise.resolve(null);
-      if (!P.get().plus) return Promise.resolve(null);
       const loc = activeBriefingLocation || P.get().location;   // follows the searched/viewed cell
       const home = P.get().location;                            // the user's OWN cell (cost control)
       const city = (loc && loc.city) ? loc.city : null;
       const now = new Date();
       const day = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
-      // Personalization inputs (assembled into reusable cached clips server-side).
+      // home_* lets the server detect EXPLORATION (a non-home cell) and serve a short
+      // cached "city headline" instead of minting a full briefing.
+      const base = { city: city, lat: loc && loc.lat, lon: loc && loc.lon,
+        lang: P.get().language || 'en', day: day, homeLat: home && home.lat, homeLon: home && home.lon };
+      // TWO-HOST mode → ONE cached conversation for EVERYONE (free + Plus), fetched
+      // with the anon key (no Plus token needed).
+      if (RT.twoHost) return window.EventuallyHostVoice.getConversation(base);
+      // Single-host mode → Plus only (free tier gets the brief greeting instead).
+      if (!P.get().plus) return Promise.resolve(null);
       const interests = (P.effectiveInterests(D.getById) || []).slice(0, 3);
       const saved = (P.get().saved || []).length;
-      // home_* lets the server detect EXPLORATION (a non-home cell) and serve a short
-      // cached "city headline" instead of minting a full ~2-min premium briefing.
-      return window.EventuallyHostVoice.getBriefing({
-        city: city, lat: loc && loc.lat, lon: loc && loc.lon, lang: P.get().language || 'en', day: day,
-        interests: interests, saved: saved,
-        homeLat: home && home.lat, homeLon: home && home.lon
-      });
+      return window.EventuallyHostVoice.getBriefing(Object.assign({ interests: interests, saved: saved }, base));
     },
     // Premium (Plus) is ElevenLabs from the very first word: a short, cached
     // ElevenLabs stinger plays instantly while the full briefing synthesizes — no
@@ -1176,6 +1177,15 @@
     if (statusEl) statusEl.textContent = plusStatusLine(subState);
     const fineEl = profileEl.querySelector('.pf-fine');
     if (fineEl) fineEl.textContent = plusFineLine(subState);
+    // When the two-host conversation is the UNIVERSAL experience, the briefing is no
+    // longer a Plus-exclusive perk — reframe the benefit list honestly (ad-free + more
+    // to come) rather than advertising something everyone already gets.
+    const plusList = profileEl.querySelector('.pf-plus-list');
+    if (plusList && RT.twoHost) {
+      plusList.innerHTML = '<li>Ad-free listening &amp; browsing</li>' +
+        '<li>Longer, personalized briefings <span class="ps-opt">(coming soon)</span></li>' +
+        '<li>Priority access to new features</li>';
+    }
     profileEl.querySelector('.pf-logout').style.display = user ? '' : 'none';
     renderAccount();
     renderIdentities();
@@ -1932,6 +1942,13 @@
         if (cfg.dailyBriefing && aiHost.setDailyBriefingEnabled) {
           aiHost.setDailyBriefingEnabled(cfg.dailyBriefing.enabled !== false);
         }
+        // Two-host conversation mode (Fish). When on, the show is ONE cached two-host
+        // conversation for EVERYONE (free + Plus), fetched with the anon key.
+        RT.twoHost = !!(cfg.aiHost && cfg.aiHost.hostMode === 'two');
+        if (aiHost.setTwoHost) aiHost.setTwoHost(RT.twoHost, {
+          h1: (cfg.aiHost && cfg.aiHost.host1 && cfg.aiHost.host1.name) || 'Ethan',
+          h2: (cfg.aiHost && cfg.aiHost.host2 && cfg.aiHost.host2.name) || 'Sarah'
+        });
         applyHidden();
         refreshMarkers(); applyMonetization();
       });

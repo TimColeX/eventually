@@ -67,6 +67,23 @@
         });
       }).catch(function () { return null; });
     },
+    // TWO-HOST conversation (Fish multi-speaker) — UNIVERSAL. One cached mp3 for
+    // everyone, no Plus token needed (anon key). Server decides two-host vs fallback.
+    // opts: {city,lat,lon,lang,day,homeLat,homeLon} -> Promise<{segments:[{url,text}]}|null>
+    getConversation: function (opts) {
+      if (!ENABLED) return Promise.resolve(null);
+      var o = opts || {};
+      return fetch(BASE + '/functions/v1/briefing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': ANON, 'Authorization': 'Bearer ' + ANON },
+        body: JSON.stringify({ audio: true, city: o.city || null, lat: (o.lat != null ? o.lat : null), lon: (o.lon != null ? o.lon : null),
+          lang: (o.lang || 'en').slice(0, 2), day: o.day || null, home_lat: (o.homeLat != null ? o.homeLat : null), home_lon: (o.homeLon != null ? o.homeLon : null) })
+      }).then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) {
+          if (j && j.segments && j.segments.length) return { segments: j.segments, text: j.text || '', twoHost: !!j.twoHost };
+          return null;
+        }).catch(function () { return null; });
+    },
     // FREE tier intro: cached ElevenLabs clips reused by ALL free users → near-zero
     // marginal cost. Assembled [count]+[upsell] on the first play (`full`), else a
     // short welcome-back. No login needed. opts: {part,lang,count,full}

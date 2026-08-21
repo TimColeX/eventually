@@ -300,6 +300,7 @@
   let vbCfg = {};      // app_config.config.voiceBudget (daily generation ceiling)
   let dbRows = [];     // recent daily_briefings (cache view)
   let dbSponsors = []; // briefing_sponsors rows
+  let aiCfg = {};      // app_config.config.aiHost (two-host / provider / host profiles)
   function renderHost(body) {
     body.innerHTML = '<div class="ad-center">Loading script…</div>';
     Promise.all([
@@ -309,6 +310,7 @@
     ]).then(function (res) {
       dbCfg = (res[0].data && res[0].data.config && res[0].data.config.dailyBriefing) || {};
       vbCfg = (res[0].data && res[0].data.config && res[0].data.config.voiceBudget) || {};
+      aiCfg = (res[0].data && res[0].data.config && res[0].data.config.aiHost) || {};
       dbRows = res[1].data || [];
       dbSponsors = (res[2] && res[2].data) || [];
       drawHost(body);
@@ -317,9 +319,105 @@
   // The old fill-in-the-blank template editor (host_script) is retired — Claude now
   // authors BOTH tiers, so everything lives in the one "AI Host briefing" section.
   function drawHost(body) {
-    body.innerHTML = dailySectionHTML();
+    body.innerHTML = aiHostManagerHTML() + dailySectionHTML();
     const $ = function (id) { return document.getElementById(id); };
+    bindAiHostManager($);
     bindDailySection($, body);
+  }
+
+  /* -------- AI Host Manager: two-host conversational voices (Fish Audio) -------- */
+  function hostFields(n, h) {
+    h = h || {};
+    return '<div class="ad-sec aff-row" style="padding:14px"><h3 class="ad-sub">Host ' + n + '</h3>' +
+      '<label class="ad-toggle"><input type="checkbox" id="ai-h' + n + '-en"' + (h.enabled === false ? '' : ' checked') + '> Enabled</label>' +
+      '<div class="ad-row">' +
+        '<div class="ad-field"><label>Name</label><input id="ai-h' + n + '-name" value="' + esc(h.name || (n === 1 ? 'Ethan' : 'Sarah')) + '"></div>' +
+        '<div class="ad-field"><label>Provider</label><select id="ai-h' + n + '-prov"><option value="fish"' + (h.provider !== 'elevenlabs' ? ' selected' : '') + '>Fish Audio</option><option value="elevenlabs"' + (h.provider === 'elevenlabs' ? ' selected' : '') + '>ElevenLabs</option></select></div>' +
+        '<div class="ad-field"><label>Voice / reference ID</label><input id="ai-h' + n + '-vid" value="' + esc(h.voiceId || (n === 1 ? '536d3a5e000945adb7038665781a4aca' : '933563129e564b19a115bedd57b7406a')) + '" placeholder="Fish reference_id"></div>' +
+      '</div>' +
+      '<div class="ad-field"><label>Role</label><input id="ai-h' + n + '-role" value="' + esc(h.role || (n === 1 ? 'Primary host' : 'Co-host')) + '"></div>' +
+      '<div class="ad-field"><label>Personality / speaking style</label><textarea id="ai-h' + n + '-pers">' + esc(h.personality || '') + '</textarea></div>' +
+      '<div class="ad-row"><div class="ad-field"><label>Test text</label><input id="ai-h' + n + '-test" value="Welcome to Eventually. Here’s what’s happening around you this weekend."></div>' +
+        '<div class="ad-field" style="flex:0 0 auto"><label>&nbsp;</label><button class="ad-save" id="ai-h' + n + '-play" type="button">▶ Test Host ' + n + '</button></div></div>' +
+      '<audio id="ai-h' + n + '-audio" controls style="width:100%;display:none;margin-top:6px"></audio>' +
+      '<span class="ad-saved" id="ai-h' + n + '-msg"></span></div>';
+  }
+  function aiHostManagerHTML() {
+    const mode = aiCfg.hostMode === 'two' ? 'two' : 'single';
+    const model = aiCfg.model || 's2.1-pro';
+    const opt = function (v, cur, label) { return '<option value="' + v + '"' + (cur === v ? ' selected' : '') + '>' + label + '</option>'; };
+    return '<div class="ad-sec"><h2>AI Host Manager — two-host conversation (Fish Audio)</h2>' +
+      '<p class="ad-hint">Configure the two AI hosts and the voice provider, then <b>validate with the test buttons below before switching Host Mode to Two Hosts</b>. ' +
+      'While Host Mode is <b>Single</b>, the app behaves exactly as today. Fish multi-speaker cost ≈ $0.015 per cached briefing (~9× cheaper than ElevenLabs).</p>' +
+      '<div class="ad-row">' +
+        '<div class="ad-field"><label>Host Mode</label><select id="ai-mode">' + opt('single', mode, 'Single Host (current)') + opt('two', mode, 'Two Hosts (conversation)') + '</select></div>' +
+        '<div class="ad-field"><label>Fish model</label><select id="ai-model">' + opt('s2.1-pro', model, 's2.1-pro (production)') + opt('s2.1-pro-free', model, 's2.1-pro-free (test/dev)') + opt('s2-pro', model, 's2-pro (needs API credit)') + '</select></div>' +
+      '</div>' +
+      '<div class="ad-row">' +
+        '<div class="ad-field"><label>Target length (seconds)</label><input id="ai-secs" type="number" min="20" max="180" value="' + (aiCfg.maxSeconds || 70) + '"></div>' +
+        '<div class="ad-field"><label>Max events per briefing</label><input id="ai-events" type="number" min="2" max="10" value="' + (aiCfg.maxEvents || 6) + '"></div>' +
+        '<div class="ad-field"><label>Tone (optional)</label><input id="ai-tone" value="' + esc(aiCfg.tone || '') + '" placeholder="e.g. warm, upbeat, local"></div>' +
+      '</div>' +
+      hostFields(1, aiCfg.host1) + hostFields(2, aiCfg.host2) +
+      '<div class="ad-sec aff-row" style="padding:14px"><h3 class="ad-sub">Test two-host conversation</h3>' +
+        '<p class="ad-hint">Uses both host voices above. Enter a sample dialogue (or leave the default) and generate a real Fish multi-speaker clip.</p>' +
+        '<div class="ad-field"><textarea id="ai-conv" style="min-height:90px">Host 1: What have you found happening around town this weekend?\nHost 2: There are quite a few events — I found a family festival on Saturday.\nHost 1: That sounds fun. What’s on there?\nHost 2: Live music, food vendors and activities for the kids.</textarea></div>' +
+        '<button class="ad-save" id="ai-conv-play" type="button">▶ Test Conversation</button>' +
+        '<audio id="ai-conv-audio" controls style="width:100%;display:none;margin-top:8px"></audio>' +
+        '<span class="ad-saved" id="ai-conv-msg"></span></div>' +
+      '<div style="margin-top:12px"><button class="ad-save" id="ai-save">Save AI Host settings</button><span class="ad-saved" id="ai-msg"></span></div></div>';
+  }
+  // Call the briefing function with the admin's session (sb.functions.invoke passes the JWT).
+  function invokeBriefing(bodyObj) {
+    return sb.functions.invoke('briefing', { body: bodyObj }).then(function (r) {
+      if (r.error) return { error: r.error.message || 'error' };
+      return r.data || {};
+    }).catch(function (e) { return { error: String(e) }; });
+  }
+  function toSpeakerTagged(script) {   // "Host 1: .. / Host 2: .." → <|speaker:0|>../<|speaker:1|>..
+    return String(script).split(/\r?\n/).map(function (ln) {
+      var m = ln.match(/^\s*(host[_ ]?1|host[_ ]?2|h1|h2)\s*[:\-]\s*(.*)$/i);
+      if (!m) return '';
+      return '<|speaker:' + (/1/.test(m[1]) ? 0 : 1) + '|>' + (m[2] || '').trim();
+    }).filter(Boolean).join('');
+  }
+  function bindAiHostManager($) {
+    function testHost(n) {
+      const btn = $('ai-h' + n + '-play'), msg = $('ai-h' + n + '-msg'), au = $('ai-h' + n + '-audio');
+      btn.disabled = true; msg.textContent = 'Generating…'; msg.style.color = '';
+      invokeBriefing({ test_voice: true, provider: $('ai-h' + n + '-prov').value, reference_id: $('ai-h' + n + '-vid').value.trim(), model: $('ai-model').value, text: $('ai-h' + n + '-test').value }).then(function (d) {
+        btn.disabled = false;
+        if (d.error || !d.url) { msg.textContent = 'Failed: ' + (d.error || d.error === undefined && 'no audio') ; msg.style.color = '#b3402a'; return; }
+        au.src = d.url; au.style.display = ''; au.play().catch(function () {});
+        msg.textContent = 'OK · ' + (d.textBytes || 0) + ' bytes ≈ $' + ((d.textBytes || 0) / 1e6 * 15).toFixed(4); msg.style.color = '#3a7d44';
+      });
+    }
+    if ($('ai-h1-play')) $('ai-h1-play').onclick = function () { testHost(1); };
+    if ($('ai-h2-play')) $('ai-h2-play').onclick = function () { testHost(2); };
+    if ($('ai-conv-play')) $('ai-conv-play').onclick = function () {
+      const btn = $('ai-conv-play'), msg = $('ai-conv-msg'), au = $('ai-conv-audio');
+      const tagged = toSpeakerTagged($('ai-conv').value);
+      if (!tagged) { msg.textContent = 'Enter dialogue as "Host 1: …" / "Host 2: …"'; msg.style.color = '#b3402a'; return; }
+      btn.disabled = true; msg.textContent = 'Generating conversation…'; msg.style.color = '';
+      invokeBriefing({ test_conversation: true, reference_id: [$('ai-h1-vid').value.trim(), $('ai-h2-vid').value.trim()], model: $('ai-model').value, text: tagged }).then(function (d) {
+        btn.disabled = false;
+        if (d.error || !d.url) { msg.textContent = 'Failed: ' + (d.error || 'no audio'); msg.style.color = '#b3402a'; return; }
+        au.src = d.url; au.style.display = ''; au.play().catch(function () {});
+        msg.textContent = 'OK · ' + (d.textBytes || 0) + ' bytes ≈ $' + ((d.textBytes || 0) / 1e6 * 15).toFixed(4); msg.style.color = '#3a7d44';
+      });
+    };
+    if ($('ai-save')) $('ai-save').onclick = function () {
+      function host(n) { return { name: $('ai-h' + n + '-name').value.trim(), provider: $('ai-h' + n + '-prov').value, voiceId: $('ai-h' + n + '-vid').value.trim(), role: $('ai-h' + n + '-role').value.trim(), personality: $('ai-h' + n + '-pers').value.trim(), enabled: $('ai-h' + n + '-en').checked }; }
+      const patch = { aiHost: { hostMode: $('ai-mode').value, model: $('ai-model').value, maxSeconds: parseInt($('ai-secs').value, 10) || 70, maxEvents: parseInt($('ai-events').value, 10) || 6, tone: $('ai-tone').value.trim(), host1: host(1), host2: host(2) } };
+      const btn = $('ai-save'); btn.disabled = true;
+      patchConfig(patch).then(function (r) {
+        btn.disabled = false;
+        const m = $('ai-msg');
+        if (r && r.error) { m.textContent = 'Error: ' + r.error.message; m.style.color = '#b3402a'; return; }
+        aiCfg = patch.aiHost;
+        m.textContent = 'Saved ✓' + ($('ai-mode').value === 'two' ? ' — Two-Host mode LIVE for all users' : ''); m.style.color = '#3a7d44';
+      });
+    };
   }
 
   /* -------- Daily briefing (AI) — free device-voice, admin-controlled -------- */

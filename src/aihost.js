@@ -294,6 +294,8 @@
   AIHost.prototype._needsWelcome = function () {
     try { return sessionStorage.getItem(WELCOME_KEY) !== '1'; } catch (e) { return true; }
   };
+  // Admin flips the whole app between single-host and two-host conversation mode.
+  AIHost.prototype.setTwoHost = function (on, names) { this.twoHost = !!on; this._hostNames = names || null; };
 
   // Update the caption (no audio). Renders the line as word spans so it can scroll
   // and highlight the current word in sync with the narration. Shared by line
@@ -453,6 +455,30 @@
     // very first word — a cached stinger covers synth latency at the start). Free = the
     // browser-voice show. getBriefing() resolves null for Free → the free show runs.
     if (this.speaking && this.getBriefing) {
+      // TWO-HOST mode: the show is ONE cached two-host conversation for everyone. Open
+      // with the official welcome (unless the splash spoke it), then play the
+      // conversation once and settle to music. Fallback on failure = silent + music
+      // (never the browser voice). Reuses _playFreeIntro (play segments → stop → music).
+      if (this.twoHost && !this._openerDone) {
+        this._openerDone = true;
+        this._setBuffering(true);
+        const playConv = function () {
+          self.getBriefing().then(function (b) {
+            self._setBuffering(false);
+            if (!self.speaking) return;
+            if (b && b.segments && b.segments.length) self._playFreeIntro(b.segments, 0);
+            else self._endFreeIntro();                       // no audio → music only, no browser voice
+          }).catch(function () { self._setBuffering(false); self._endFreeIntro(); });
+        };
+        if (this._needsWelcome() && this.getWelcome) {
+          this.getWelcome().then(function (w) {
+            if (!self.speaking) return;
+            if (w && w.url) self._audioSpeak(w.url, w.text, playConv, true, { text: w.text, kind: 'greeting', lang: 'en-US' });
+            else playConv();
+          }).catch(playConv);
+        } else playConv();
+        return;
+      }
       // Start of the show (once per Play): play a cached ElevenLabs stinger IMMEDIATELY
       // while the full briefing synthesizes in parallel — no browser-voice greeting.
       if (!this._openerDone && (this.getStinger || this.getFreeGreeting)) {
