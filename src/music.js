@@ -34,20 +34,33 @@
   Music.prototype._build = function () {
     if (this._built) return !!(this.master || this.audioEl);
     this._built = true;
+    const Ctx = global.AudioContext || global.webkitAudioContext;
     const el = document.getElementById('bg-music');
     const hasTrack = el && el.getAttribute('src');
 
-    // REAL TRACK → DIRECT <audio> playback. Critical for iOS Safari: a directly-played
-    // media element keeps playing when the app is backgrounded (swiped away), whereas a
-    // Web-Audio-routed element (MediaElementSource) is SUSPENDED in the background and the
-    // music goes silent. We trade the Web-Audio volume duck (which iOS ignores anyway —
-    // HTMLMediaElement.volume is read-only there) for reliable background playback. On
-    // desktop/Android the volume tween still ducks; on iOS the bed simply plays under the
-    // voice (its natural level), matching the pre-Web-Audio behaviour.
-    if (hasTrack) {
+    // REAL TRACK → route through Web Audio (MediaElementSource → master GainNode) so the bed
+    // can DUCK under the Host's voice on EVERY platform, INCLUDING iOS — where a plain
+    // <audio>'s .volume is read-only and can't be turned down. This is the behaviour that
+    // "used to work fine": the music drops to a soft presence while the hosts speak and
+    // swells back between segments. Trade-off (an Apple limitation, not a bug): iOS SUSPENDS a
+    // Web-Audio-routed element when the app is backgrounded, so the music pauses if you leave
+    // the app; it resumes automatically when you return (_wireResume). You can't have both
+    // ducking AND background audio on iPhone Safari — ducking is the chosen priority.
+    if (hasTrack && Ctx) {
+      try {
+        const ctx = new Ctx(); this.ctx = ctx;
+        el.loop = true; el.setAttribute('playsinline', ''); try { el.volume = 1; } catch (e) {}
+        const src = ctx.createMediaElementSource(el);
+        const master = ctx.createGain(); master.gain.value = 0;
+        src.connect(master); master.connect(ctx.destination);
+        this.master = master; this.audioEl = el;
+        this._wireResume();
+        return true;
+      } catch (e) { this.ctx = null; this.master = null; /* fall through to direct */ }
+    }
+    if (hasTrack) {                             // Web Audio unavailable → direct playback (no ducking)
       el.loop = true; el.setAttribute('playsinline', ''); try { el.volume = 0; } catch (e) {}
-      this.audioEl = el; this._direct = true;
-      this._wireResume();
+      this.audioEl = el; this._direct = true; this._wireResume();
       return true;
     }
     return this._buildSynth();                  // no track → Web Audio ambient bed (foreground only)
