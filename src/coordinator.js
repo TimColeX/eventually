@@ -36,7 +36,6 @@
     this.onFlyTo = opts.onFlyTo;           // (lat, lon) -> void
     this.getMyEvents = opts.getMyEvents;   // () -> [events]  (demo fallback)
     this.pin = { lat: 48.85, lon: 2.35 };  // default Paris
-    this.banner = ['#CB5A3C', '#8A3B1E'];
     this.city = null;                       // resolved place name (geocoded)
     this.editId = null;                     // set when editing an existing event
     this.locationChosen = false;            // a real location must be picked before publishing
@@ -71,56 +70,56 @@
           '<h2 class="co-form-h">Publish to the globe</h2></div>' +
           '<button class="co-close" aria-label="Close">✕</button>' +
         '</header>' +
-        '<div class="co-body">' +
-          '<label>Event name<input class="f-name" placeholder="Midnight Rooftop Sessions"></label>' +
-          '<div class="co-row co-row-2">' +
-            '<label>Category<select class="f-cat">' + cats + '</select></label>' +
-            '<label>Venue <span class="co-opt">(optional)</span><input class="f-venue" placeholder="The Roundhouse"></label>' +
-          '</div>' +
-          '<div class="co-row co-row-3">' +
-            '<label>Date<input type="date" class="f-date"></label>' +
-            '<label>Start<input type="time" class="f-time" value="19:00"></label>' +
-            '<label>End <span class="co-opt">(optional)</span><input type="time" class="f-endtime"></label>' +
-          '</div>' +
-          '<label>Description<textarea class="f-desc" rows="3" placeholder="Tell people what to expect…"></textarea></label>' +
-          '<label>Ticket / source link <span class="co-opt">(optional)</span><input class="f-url" placeholder="https://yourtickets.com/show"></label>' +
-          '<div class="f-banner"><span>Event banner</span><div class="swatches"></div></div>' +
-
-          '<div class="co-loc">' +
-            '<div class="co-card-h">Location · search or drop a pin</div>' +
-            '<div class="co-search"><input class="f-addr" placeholder="Search address or city…" autocomplete="off"><div class="co-suggest"></div></div>' +
-            '<canvas class="map-canvas"></canvas>' +
-            '<div class="co-coords">' +
-              '<div class="co-place">📍 <strong class="ll-city">—</strong></div>' +
-              '<div class="latlon">lat <strong class="ll-lat"></strong> · lon <strong class="ll-lon"></strong></div>' +
+        '<div class="co-body"><div class="co-cols">' +
+          '<div class="co-col co-col-main">' +
+            '<label>Event name<input class="f-name" placeholder="Midnight Rooftop Sessions"></label>' +
+            '<div class="co-row co-row-2">' +
+              '<label>Category<select class="f-cat">' + cats + '</select></label>' +
+              '<label>Venue <span class="co-opt">(optional)</span><input class="f-venue" placeholder="The Roundhouse"></label>' +
             '</div>' +
+            '<label>Date<input type="date" class="f-date"></label>' +
+            '<div class="co-row co-row-2">' +
+              '<label>Start<input type="time" class="f-time" value="19:00"></label>' +
+              '<label>End <span class="co-opt">(optional)</span><input type="time" class="f-endtime"></label>' +
+            '</div>' +
+            '<label>Description<textarea class="f-desc" rows="3" placeholder="Tell people what to expect…"></textarea></label>' +
+            '<label>Ticket / source link <span class="co-opt">(optional)</span><input class="f-url" placeholder="https://yourtickets.com/show"></label>' +
+            '<div class="co-catcolor"><span class="co-catdot"></span>' +
+              '<span class="co-catcolor-t">Shows in the <b class="co-catname">Music</b> colour on the globe &amp; card — set automatically by category.</span></div>' +
           '</div>' +
-
-          '<label class="co-feature"><input type="checkbox" class="f-feature">' +
-            '<span class="co-feature-txt"><b>✦ Feature this event</b>' +
-            '<small>Premium placement — distinct highlight, a spike, and top of search. Billed via Eventually Plus.</small></span>' +
-          '</label>' +
-          '<button class="co-publish">Publish event ✦</button>' +
-          '<button class="co-cancel-edit" type="button" style="display:none">Cancel edit</button>' +
-          '<p class="co-note">Your event is geo-located and published live to the globe.</p>' +
-        '</div>' +
+          '<div class="co-col co-col-side">' +
+            '<div class="co-loc">' +
+              '<div class="co-card-h">Location · search or drop a pin</div>' +
+              '<div class="co-search"><input class="f-addr" placeholder="Search address or city…" autocomplete="off"><div class="co-suggest"></div></div>' +
+              '<canvas class="map-canvas"></canvas>' +
+              '<div class="co-coords">' +
+                '<div class="co-place">📍 <strong class="ll-city">—</strong></div>' +
+                '<div class="latlon">lat <strong class="ll-lat"></strong> · lon <strong class="ll-lon"></strong></div>' +
+              '</div>' +
+            '</div>' +
+            '<label class="co-feature"><input type="checkbox" class="f-feature">' +
+              '<span class="co-feature-txt"><b>✦ Feature this event</b>' +
+              '<small>Premium placement — distinct highlight, a spike, and top of search. Billed via Eventually Plus.</small></span>' +
+            '</label>' +
+            '<button class="co-publish">Publish event ✦</button>' +
+            '<button class="co-cancel-edit" type="button" style="display:none">Cancel edit</button>' +
+            '<p class="co-note">Your event is geo-located and published live to the globe.</p>' +
+          '</div>' +
+        '</div></div>' +
       '</div>';
 
-    // banner swatches
-    const palettes = [['#CB5A3C','#8A3B1E'],['#E0875F','#CB5A3C'],['#B5722F','#E0875F'],
-                      ['#A23A22','#CB5A3C'],['#6E4A30','#B5722F'],['#C18A5C','#E0875F']];
-    const sw = this.el.querySelector('.swatches');
-    palettes.forEach(function (p, i) {
-      const b = document.createElement('button');
-      b.className = 'sw' + (i === 0 ? ' active' : '');
-      b.style.background = 'linear-gradient(135deg,' + p[0] + ',' + p[1] + ')';
-      b.addEventListener('click', function () {
-        self.banner = p;
-        sw.querySelectorAll('.sw').forEach(function (x) { x.classList.remove('active'); });
-        b.classList.add('active');
-      });
-      sw.appendChild(b);
-    });
+    // The event colour is AUTOMATIC — derived from the category (same colour the spike uses).
+    // We just preview it so the publisher sees what they'll get; no manual choice.
+    const catSel = this.el.querySelector('.f-cat');
+    const catDot = this.el.querySelector('.co-catdot');
+    const catName = this.el.querySelector('.co-catname');
+    function syncCatColor() {
+      const cat = catSel.value, col = global.EventuallyData.CATEGORIES[cat] || '#CB5A3C';
+      if (catDot) catDot.style.background = col;
+      if (catName) catName.textContent = cat;
+    }
+    catSel.addEventListener('change', syncCatColor);
+    syncCatColor();
 
     // Default the date to today; allow today .. +60 days (the forward window).
     const dateEl = this.el.querySelector('.f-date');
@@ -251,7 +250,7 @@
       date: date, dayOffset: dayOffset, category: cat,
       categoryColor: global.EventuallyData.CATEGORIES[cat],
       source: 'orbit', sourceLabel: 'Eventually Native', sourceColor: '#CB5A3C',
-      banner: this.banner.slice(),
+      banner: [global.EventuallyData.CATEGORIES[cat] || '#CB5A3C', '#211A15'],   // auto from category
       description: q('.f-desc').value.trim() || (name + ' — published via the Eventually Coordinator portal.'),
       ticketUrl: url || null,
       sponsored: !!q('.f-feature').checked,    // paid "Feature" placement
