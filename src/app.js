@@ -911,7 +911,9 @@
       '<div class="evd-body">' +
         '<div class="evd-badges">' + featured + badge + '</div>' +
         '<h2 class="evd-title">' + esc(ev.name) + '</h2>' +
-        '<p class="evd-meta">' + esc(dateLabel) + ' · ' + timeLabel + '  —  ' + esc(ev.city) + '</p>' +
+        '<p class="evd-meta">' + esc(dateLabel) + ' · ' + timeLabel +
+          (ev.endsAt ? '–' + new Date(ev.endsAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : '') +
+          '  —  ' + (ev.venue ? esc(ev.venue) + ', ' : '') + esc(ev.city) + '</p>' +
         (type === 'upcoming' ? '<div class="evd-cd"><span class="cd-label">Starts in</span><span class="ev-cd" data-start="' + ev.date.getTime() + '">⏳ ' + esc(fmtCountdown(ev.date.getTime() - Date.now())) + '</span></div>' : '') +
         transparency +
         '<p class="evd-desc">' + esc(ev.description) + '</p>' +
@@ -1641,6 +1643,7 @@
     h += '<button class="dd-item" data-act="profile">Profile</button>';
     h += '<button class="dd-item" data-act="saved">Saved events <span class="dd-badge">' + p.saved.length + '</span></button>';
     h += '<button class="dd-item" data-act="create">Create an event</button>';
+    if (user) h += '<button class="dd-item" data-act="myevents">My events</button>';
     h += '<div class="dd-sep"></div>';
     h += '<button class="dd-item" data-act="help">Help centre</button>';
     h += '<button class="dd-item" data-act="contact">Contact sales</button>';
@@ -1662,6 +1665,7 @@
     else if (act === 'plus') openPlus();
     else if (act === 'profile') openProfile();
     else if (act === 'create') requireLogin(function () { coordinator.open(); });
+    else if (act === 'myevents') requireLogin(function () { openMyEvents(); });
     else if (act === 'types') openTypes();
     else if (act === 'help') openHelp();
     else if (act === 'contact') openContact();
@@ -1722,6 +1726,12 @@
       '<details><summary>How do I list my event?</summary><p>Open the ⋯ menu → Create an event, drop a pin on the map, and publish straight to the globe.</p></details>' +
       '<details><summary>What is Eventually Plus?</summary><p>Your personal AI event concierge: longer personalized briefings, ad-free listening &amp; browsing, travel-aware city briefings, saved-event reminders and early access to new features.</p></details>' +
       '</div>');
+  }
+  // My events — manage/edit/delete your published events in its OWN modal (separate from Create).
+  function openMyEvents() {
+    openModal('My events', '<div class="me-body"></div>', function (body) {
+      coordinator.mountMyEvents(body.querySelector('.me-body') || body, closeModal);
+    });
   }
   // Eventually Plus — its OWN Help-centre-style modal (blurred backdrop), not buried in Profile.
   function plusModalHTML() {

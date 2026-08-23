@@ -46,8 +46,9 @@
   Coordinator.prototype.open = function () {
     this.el.classList.add('open');
     if (!this.editId && !this.locationChosen) this._applyDefaultLocation();   // start on the user's location
-    this._drawMap();
-    this._renderAnalytics();
+    // Canvas has no size until the modal is visible → draw on the next frame.
+    const self = this;
+    requestAnimationFrame(function () { self._drawMap(); });
   };
   Coordinator.prototype.close = function () { this.el.classList.remove('open'); };
 
@@ -61,51 +62,47 @@
 
   Coordinator.prototype._build = function () {
     const self = this;
+    const cats = Object.keys(global.EventuallyData.CATEGORIES).map(function (c) { return '<option>' + c + '</option>'; }).join('');
     this.el.innerHTML =
-      '<div class="co-shell">' +
+      '<div class="co-backdrop"></div>' +
+      '<div class="co-modal">' +
         '<header class="co-head">' +
-          '<div><span class="co-kicker">Coordinator Portal</span>' +
-          '<h2>Publish to the globe</h2></div>' +
+          '<div><span class="co-kicker">Create an event</span>' +
+          '<h2 class="co-form-h">Publish to the globe</h2></div>' +
           '<button class="co-close" aria-label="Close">✕</button>' +
         '</header>' +
-        '<div class="co-grid">' +
-          '<section class="co-card co-form">' +
-            '<div class="co-card-h co-form-h">Publish a new event</div>' +
-            '<label>Event name<input class="f-name" placeholder="Midnight Rooftop Sessions"></label>' +
-            '<label>Category' +
-              '<select class="f-cat">' + Object.keys(global.EventuallyData.CATEGORIES)
-                .map(function (c) { return '<option>' + c + '</option>'; }).join('') +
-              '</select></label>' +
+        '<div class="co-body">' +
+          '<label>Event name<input class="f-name" placeholder="Midnight Rooftop Sessions"></label>' +
+          '<div class="co-row co-row-2">' +
+            '<label>Category<select class="f-cat">' + cats + '</select></label>' +
+            '<label>Venue <span class="co-opt">(optional)</span><input class="f-venue" placeholder="The Roundhouse"></label>' +
+          '</div>' +
+          '<div class="co-row co-row-3">' +
             '<label>Date<input type="date" class="f-date"></label>' +
-            '<label>Description<textarea class="f-desc" rows="3" placeholder="Tell people what to expect…"></textarea></label>' +
-            '<label>Ticket / source link<input class="f-url" placeholder="https://yourtickets.com/show"></label>' +
-            '<div class="f-banner">' +
-              '<span>Event banner</span>' +
-              '<div class="swatches"></div>' +
-            '</div>' +
-            '<label class="co-feature"><input type="checkbox" class="f-feature">' +
-              '<span class="co-feature-txt"><b>✦ Feature this event</b>' +
-              '<small>Premium placement — distinct highlight, a spike, and top of search. Billed via Eventually Plus.</small></span>' +
-            '</label>' +
-            '<button class="co-publish">Publish event ✦</button>' +
-            '<button class="co-cancel-edit" type="button" style="display:none">Cancel edit</button>' +
-            '<p class="co-note">Your event is geo-located and published live to the globe.</p>' +
-          '</section>' +
+            '<label>Start<input type="time" class="f-time" value="19:00"></label>' +
+            '<label>End <span class="co-opt">(optional)</span><input type="time" class="f-endtime"></label>' +
+          '</div>' +
+          '<label>Description<textarea class="f-desc" rows="3" placeholder="Tell people what to expect…"></textarea></label>' +
+          '<label>Ticket / source link <span class="co-opt">(optional)</span><input class="f-url" placeholder="https://yourtickets.com/show"></label>' +
+          '<div class="f-banner"><span>Event banner</span><div class="swatches"></div></div>' +
 
-          '<section class="co-card co-map">' +
-            '<div class="co-card-h">Geolocation · drop a pin</div>' +
+          '<div class="co-loc">' +
+            '<div class="co-card-h">Location · search or drop a pin</div>' +
+            '<div class="co-search"><input class="f-addr" placeholder="Search address or city…" autocomplete="off"><div class="co-suggest"></div></div>' +
             '<canvas class="map-canvas"></canvas>' +
             '<div class="co-coords">' +
-              '<div class="co-search"><input class="f-addr" placeholder="Search address or city…" autocomplete="off"><div class="co-suggest"></div></div>' +
+              '<div class="co-place">📍 <strong class="ll-city">—</strong></div>' +
               '<div class="latlon">lat <strong class="ll-lat"></strong> · lon <strong class="ll-lon"></strong></div>' +
-            '<div class="co-place">📍 <strong class="ll-city">—</strong></div>' +
             '</div>' +
-          '</section>' +
+          '</div>' +
 
-          '<section class="co-card co-analytics">' +
-            '<div class="co-card-h">My events &amp; engagement</div>' +
-            '<div class="an-body"></div>' +
-          '</section>' +
+          '<label class="co-feature"><input type="checkbox" class="f-feature">' +
+            '<span class="co-feature-txt"><b>✦ Feature this event</b>' +
+            '<small>Premium placement — distinct highlight, a spike, and top of search. Billed via Eventually Plus.</small></span>' +
+          '</label>' +
+          '<button class="co-publish">Publish event ✦</button>' +
+          '<button class="co-cancel-edit" type="button" style="display:none">Cancel edit</button>' +
+          '<p class="co-note">Your event is geo-located and published live to the globe.</p>' +
         '</div>' +
       '</div>';
 
@@ -133,6 +130,7 @@
     dateEl.value = fmt(t); dateEl.min = fmt(t); dateEl.max = fmt(maxD);
 
     this.el.querySelector('.co-close').addEventListener('click', function () { self.close(); });
+    this.el.querySelector('.co-backdrop').addEventListener('click', function () { self.close(); });
     this.mapCanvas = this.el.querySelector('.map-canvas');
     this.mapCanvas.addEventListener('click', function (e) {
       const r = self.mapCanvas.getBoundingClientRect();
@@ -142,7 +140,7 @@
       self.pin.lat = 90 - y * 180;
       self.city = null;
       self.locationChosen = true;           // dropping a pin counts as choosing a location
-      var m0 = self.el.querySelector('.co-map'); if (m0) m0.classList.remove('co-need-loc');
+      var m0 = self.el.querySelector('.co-loc'); if (m0) m0.classList.remove('co-need-loc');
       self._drawMap();
       // name the dropped pin (best-effort reverse geocode)
       const at = { lat: self.pin.lat, lon: self.pin.lon };
@@ -160,7 +158,7 @@
     function pick(res) {
       self.pin.lat = res.lat; self.pin.lon = res.lon; self.city = res.city;
       self.locationChosen = true;           // picking a searched address counts
-      var m1 = self.el.querySelector('.co-map'); if (m1) m1.classList.remove('co-need-loc');
+      var m1 = self.el.querySelector('.co-loc'); if (m1) m1.classList.remove('co-need-loc');
       addr.value = res.city || (res.label || '').split(',')[0];
       hideSuggest(); self._drawMap();
       self._toast('📍 ' + (res.city || 'Location set'));
@@ -196,17 +194,26 @@
       self._publish();
     });
     this.el.querySelector('.co-cancel-edit').addEventListener('click', function () { self._resetForm(); });
+  };
 
-    // My-events list actions (edit / publish-toggle / delete)
-    this.el.querySelector('.an-body').addEventListener('click', function (e) {
+  // "My events" — mounted into a SEPARATE modal (its own ⋯-menu item). Renders the manage
+  // list + engagement, and wires edit / publish-toggle / delete. `closeFn` closes that modal
+  // so "Edit" can hand off to the Create modal.
+  Coordinator.prototype.mountMyEvents = function (container, closeFn) {
+    const self = this;
+    this._meClose = closeFn || function () {};
+    container.innerHTML = '<div class="an-body"></div>';
+    const body = container.querySelector('.an-body');
+    this._renderAnalyticsInto(body);
+    container.addEventListener('click', function (e) {
       const b = e.target.closest('[data-me-act]'); if (!b) return;
       const id = b.dataset.id, act = b.dataset.meAct;
       const ev = (self._myEvents || []).find(function (x) { return x.event_id === id; });
-      if (act === 'edit') { if (ev) self._editEvent(ev); }
-      else if (act === 'toggle') { if (self.onSetPublished) Promise.resolve(self.onSetPublished(id, !(ev && ev.published !== false))).then(function () { self._renderAnalytics(); }); }
+      if (act === 'edit') { if (ev) { self._meClose(); self.open(); self._editEvent(ev); } }
+      else if (act === 'toggle') { if (self.onSetPublished) Promise.resolve(self.onSetPublished(id, !(ev && ev.published !== false))).then(function () { self._renderAnalyticsInto(body); }); }
       else if (act === 'delete') {
         if (!confirm('Delete "' + (ev ? ev.title : 'this event') + '" permanently? This cannot be undone.')) return;
-        if (self.onDelete) Promise.resolve(self.onDelete(id)).then(function () { if (self.editId === id) self._resetForm(); self._renderAnalytics(); });
+        if (self.onDelete) Promise.resolve(self.onDelete(id)).then(function () { if (self.editId === id) self._resetForm(); self._renderAnalyticsInto(body); });
       }
     });
   };
@@ -218,13 +225,17 @@
     if (!name) { this._toast('Add an event name first.'); return; }
     if (!this.locationChosen) {
       this._toast('Set a location first — search an address or tap the map.');
-      const map = this.el.querySelector('.co-map'); if (map) { map.classList.add('co-need-loc'); q('.f-addr').focus(); }
+      const map = this.el.querySelector('.co-loc'); if (map) { map.classList.add('co-need-loc'); q('.f-addr').focus(); }
       return;
     }
     const cat = q('.f-cat').value;
     const dateStr = q('.f-date').value;
     if (!dateStr) { this._toast('Pick a date.'); return; }
-    const date = new Date(dateStr + 'T19:00:00');   // local 7pm
+    const timeStr = (q('.f-time').value || '19:00');
+    const date = new Date(dateStr + 'T' + timeStr + ':00');
+    const endStr = q('.f-endtime').value;
+    const endsAt = endStr ? new Date(dateStr + 'T' + endStr + ':00') : null;
+    const venue = q('.f-venue').value.trim();
     const today = global.EventuallyData.TODAY;
     const dayOffset = Math.round((date - today) / 86400000);
     if (dayOffset < 0) { this._toast('Pick a date from today onward.'); return; }
@@ -235,7 +246,8 @@
       : (Date.now() + '_' + Math.random().toString(36).slice(2))));
 
     const evt = {
-      id: id, name: name, city: this.city || 'Dropped pin', lat: this.pin.lat, lon: this.pin.lon,
+      id: id, name: name, city: this.city || 'Dropped pin', venue: venue || null, endsAt: endsAt,
+      lat: this.pin.lat, lon: this.pin.lon,
       date: date, dayOffset: dayOffset, category: cat,
       categoryColor: global.EventuallyData.CATEGORIES[cat],
       source: 'orbit', sourceLabel: 'Eventually Native', sourceColor: '#CB5A3C',
@@ -256,7 +268,6 @@
       self._toast(r.message || (editing ? 'Changes saved.' : 'Published!'));
       if (r.live && self.onFlyTo) self.onFlyTo(evt.lat, evt.lon);   // only fly if it's actually on the globe
       self._resetForm();
-      self._renderAnalytics();
     }).catch(function () {
       btn.disabled = false; btn.textContent = editing ? 'Update event' : 'Publish event ✦';
       self._toast((editing ? 'Save' : 'Publish') + ' failed — please try again.');
@@ -268,12 +279,15 @@
     const q = function (s) { return this.el.querySelector(s); }.bind(this);
     this.editId = null; this.city = null;
     q('.f-name').value = ''; q('.f-desc').value = ''; q('.f-url').value = '';
+    if (q('.f-venue')) q('.f-venue').value = '';
+    if (q('.f-time')) q('.f-time').value = '19:00';
+    if (q('.f-endtime')) q('.f-endtime').value = '';
     if (q('.f-feature')) q('.f-feature').checked = false;
     q('.co-publish').textContent = 'Publish event ✦';
     const h = this.el.querySelector('.co-form-h'); if (h) h.textContent = 'Publish a new event';
     const cancel = this.el.querySelector('.co-cancel-edit'); if (cancel) cancel.style.display = 'none';
     q('.f-addr').value = '';
-    const map = this.el.querySelector('.co-map'); if (map) map.classList.remove('co-need-loc');
+    const map = this.el.querySelector('.co-loc'); if (map) map.classList.remove('co-need-loc');
     this._applyDefaultLocation();            // start fresh on the user's location (if set)
     this._drawMap();
   };
@@ -285,7 +299,12 @@
     this.locationChosen = true;              // an existing event already has a location
     q('.f-name').value = ev.title || '';
     q('.f-cat').value = ev.category || q('.f-cat').value;
-    if (ev.start_time) { const d = new Date(ev.start_time); q('.f-date').value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+    if (ev.start_time) {
+      const d = new Date(ev.start_time);
+      q('.f-date').value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      if (q('.f-time')) q('.f-time').value = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    }
+    if (q('.f-venue')) q('.f-venue').value = ev.venue || '';
     q('.f-desc').value = ev.description || '';
     q('.f-url').value = ev.url || '';
     this.pin = { lat: +ev.lat, lon: +ev.lon }; this.city = ev.city || null;
@@ -332,8 +351,8 @@
     if (cityEl) cityEl.textContent = this.city || '—';
   };
 
-  Coordinator.prototype._renderAnalytics = function () {
-    const self = this, body = this.el.querySelector('.an-body');
+  Coordinator.prototype._renderAnalyticsInto = function (body) {
+    const self = this;
     function esc(s) { return String(s == null ? '' : s).replace(/[&<>]/g, function (m) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[m]; }); }
     function draw(rows, real) {
       self._myEvents = rows;

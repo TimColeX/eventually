@@ -403,46 +403,42 @@ body {
 .auth-fine { margin: 16px 0 0; font-family: var(--mono); font-size: 10px; letter-spacing: .04em; color: var(--hint); }
 
 /* ---------- coordinator portal ---------- */
-.coordinator {
-  position: fixed; inset: 0; z-index: 55; display: none;
-  background: radial-gradient(1000px 700px at 80% -10%, #fbf5ec, var(--canvas) 70%);
-  overflow-y: auto;
+/* Create an event — a Help-centre-style modal with a blurred backdrop + single-column form. */
+.coordinator { position: fixed; inset: 0; z-index: 60; display: none; }
+.coordinator.open { display: flex; align-items: center; justify-content: center; }
+.co-backdrop { position: absolute; inset: 0; background: rgba(33,26,21,.45); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+.co-modal {
+  position: relative; z-index: 1; width: 440px; max-width: calc(100vw - 28px); max-height: calc(100vh - 72px);
+  display: flex; flex-direction: column; background: var(--cream); border: 1px solid var(--line);
+  border-radius: 20px; overflow: hidden; box-shadow: var(--shadow-lg);
 }
-.coordinator.open { display: block; }
-.co-shell { max-width: 1140px; margin: 0 auto; padding: 26px 24px 60px; }
-.co-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 24px; }
-.co-kicker { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--clay); }
-.co-head h2 { margin: 6px 0 0; font-size: 30px; font-weight: 800; letter-spacing: -0.03em; }
-.co-close {
-  width: 40px; height: 40px; border-radius: 12px; cursor: pointer; font-size: 16px;
-  background: var(--paper); border: 1px solid var(--line-2); color: var(--ink);
-}
-.co-grid { display: grid; grid-template-columns: 1.05fr 1fr; gap: 18px; }
-.co-analytics { grid-column: 1 / -1; }
-.co-card {
-  background: var(--paper); border: 1px solid var(--line);
-  border-radius: 18px; padding: 20px; box-shadow: var(--shadow);
-}
-.co-card-h { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); margin-bottom: 14px; }
-.co-form label { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 14px; }
-.co-form input, .co-form select, .co-form textarea {
+.co-head { display: flex; align-items: flex-start; justify-content: space-between; padding: 18px 20px 14px; border-bottom: 1px solid var(--line); }
+.co-kicker { font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--clay); }
+.co-head h2 { margin: 5px 0 0; font-size: 21px; font-weight: 800; letter-spacing: -0.03em; }
+.co-close { width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 14px; flex: none; background: #ece2d4; border: 0; color: var(--ink); }
+.co-body { overflow-y: auto; padding: 16px 20px 20px; }
+.co-body > label { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 13px; }
+.co-opt { color: var(--faint); font-weight: 400; }
+.co-row { display: grid; gap: 12px; }
+.co-row-2 { grid-template-columns: 1fr 1fr; }
+.co-row-3 { grid-template-columns: 1.35fr 1fr 1fr; }
+.co-card-h { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); margin-bottom: 12px; }
+.co-loc { margin: 6px 0 16px; padding-top: 15px; border-top: 1px solid var(--line); }
+.co-body input, .co-body select, .co-body textarea {
   display: block; width: 100%; max-width: 100%; min-width: 0; margin-top: 6px;
-  padding: 11px 13px; border-radius: 11px;
-  background: #faf3ea; border: 1px solid var(--line-2); color: var(--ink);
+  padding: 10px 12px; border-radius: 10px;
+  background: var(--paper); border: 1px solid var(--line-2); color: var(--ink);
   font-family: var(--font); font-size: 16px; outline: none; resize: vertical;
 }
-/* iOS renders date/time inputs at an intrinsic width that can overflow the card;
-   normalise their appearance so they respect width:100% + box-sizing. */
-.co-form input[type="date"], .co-form input[type="time"] {
-  -webkit-appearance: none; appearance: none;
-}
-.co-form input:focus, .co-form select:focus, .co-form textarea:focus { border-color: var(--clay); background: #fff; }
+/* iOS renders date/time inputs at an intrinsic width that can overflow — normalise them. */
+.co-body input[type="date"], .co-body input[type="time"] { -webkit-appearance: none; appearance: none; }
+.co-body input:focus, .co-body select:focus, .co-body textarea:focus { border-color: var(--clay); background: #fff; }
 .f-banner span { font-size: 12.5px; color: var(--muted); }
 .swatches { display: flex; gap: 8px; margin-top: 8px; margin-bottom: 16px; }
 .sw { width: 38px; height: 28px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; }
 .sw.active { border-color: var(--ink); box-shadow: 0 0 0 2px var(--clay); }
 .co-feature { display: flex; align-items: flex-start; gap: 9px; margin-bottom: 16px; cursor: pointer; }
-.co-form input.f-feature { width: auto; margin: 3px 0 0; flex: none; accent-color: var(--clay); }
+.co-body input.f-feature { width: auto; margin: 3px 0 0; flex: none; accent-color: var(--clay); }
 .co-feature-txt { display: flex; flex-direction: column; }
 .co-feature-txt b { font-size: 13.5px; color: var(--ink); font-weight: 700; }
 .co-feature-txt small { font-size: 11px; color: var(--hint); line-height: 1.4; margin-top: 2px; }
@@ -453,8 +449,10 @@ body {
 .co-publish:hover { background: #b94e32; box-shadow: 0 10px 26px rgba(203,90,60,.3); }
 .co-note { font-family: var(--mono); font-size: 10px; letter-spacing: .04em; color: var(--hint); margin: 10px 0 0; text-align: center; }
 .map-canvas { width: 100%; border-radius: 12px; border: 1px solid var(--line); cursor: crosshair; display: block; }
-.co-map.co-need-loc { border-color: #b3402a; box-shadow: 0 0 0 2px rgba(179,64,42,.16); }
-.co-coords { margin-top: 12px; }
+.co-loc.co-need-loc .map-canvas, .co-loc.co-need-loc .f-addr { border-color: #b3402a; box-shadow: 0 0 0 2px rgba(179,64,42,.16); }
+.co-coords { margin-top: 10px; display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.co-coords .co-place { margin: 0; }
+.co-coords .latlon { margin: 0; }
 .f-addr {
   width: 100%; padding: 10px 13px; border-radius: 11px; background: #faf3ea;
   border: 1px solid var(--line-2); color: var(--ink); font-family: var(--font); font-size: 14px; outline: none;
@@ -1008,13 +1006,12 @@ body.has-ad .toast { bottom: calc(144px + env(safe-area-inset-bottom, 0px)); }
   .magic button { padding: 13px; width: 100%; }
 
   /* --- Coordinator ("Publish to the globe"): single column, tighter cards --- */
-  .co-shell { padding: 16px 12px 44px; }
-  .co-head { margin-bottom: 16px; }
-  .co-head h2 { font-size: 22px; }
-  .co-grid { grid-template-columns: 1fr; gap: 14px; }
-  .co-card { padding: 15px; border-radius: 14px; }
-  .co-form label { margin-bottom: 12px; }
-  .map-canvas { max-height: 230px; }
+  .co-modal { width: 100%; max-width: none; max-height: calc(100vh - 24px); border-radius: 18px; }
+  .co-head h2 { font-size: 19px; }
+  .co-row-3 { grid-template-columns: 1fr 1fr; }   /* date + start on one line, end wraps below */
+  .co-row-3 > label:first-child { grid-column: 1 / -1; }
+  .co-body > label { margin-bottom: 12px; }
+  .map-canvas { max-height: 200px; }
 }
 
 /* ============================ Signature opening ============================ */
