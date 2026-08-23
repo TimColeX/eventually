@@ -941,7 +941,7 @@
     if (act.dataset.act === 'save') {
       const on = P.toggleSaved(ev.id); act.classList.toggle('on', on); act.textContent = on ? '★' : '☆';
       if (acctEnabled()) A.setUserEvent('save', ev.id, snap(ev), on);
-      syncReminders();
+      syncReminders(); refreshSaved();
       window.EventuallyToast(on ? 'Saved to your events.' : 'Removed from saved.'); return;
     }
     requireLogin(function () {
@@ -1202,11 +1202,6 @@
     profileEl.querySelector('.pf-interests').innerHTML = Object.keys(D.CATEGORIES).map(function (c) {
       return '<button class="chip' + (P.hasInterest(c) ? ' on' : '') + '" data-cat="' + c + '">' + c + '</button>';
     }).join('');
-    const recs = recommendations();
-    profileEl.querySelector('.pf-recs').innerHTML = recs.length ? recs.map(function (e) {
-      return '<button class="pf-rec" data-id="' + e.id + '"><span class="dot" style="background:' + e.categoryColor + '"></span>' +
-        esc(e.name) + '<small>' + esc(e.city) + '</small></button>';
-    }).join('') : '<p class="pf-empty">Set your location and interests for tailored picks.</p>';
     profileEl.querySelector('.pf-langs').innerHTML = I18n.LANGS.map(function (l) {
       return '<button class="chip' + ((p.language || 'en') === l.code ? ' on' : '') + '" data-lang="' + l.code + '">' + l.label + '</button>';
     }).join('');
@@ -1215,42 +1210,6 @@
     profileEl.querySelector('.pf-filter').classList.toggle('on', interestFilterActive);
     profileEl.querySelector('.pf-filter .tg-state').textContent = interestFilterActive ? 'On' : 'Off';
     profileEl.querySelector('.pf-filter').style.display = (p.plus && !RT.plusComingSoon) ? '' : 'none';
-    const plusBtn = profileEl.querySelector('.pf-plus-btn');
-    const statusEl = profileEl.querySelector('.pf-plus-status');
-    const fineEl = profileEl.querySelector('.pf-fine');
-    const plusList0 = profileEl.querySelector('.pf-plus-list');
-    const plusH = profileEl.querySelector('.pf-plus-h');
-    if (RT.plusComingSoon) {
-      // PARKED: show a "coming soon" state + a waitlist CTA (no trial/checkout).
-      const onList = !!((P.get().comms || {}).plusWaitlist);
-      profileEl.querySelector('.pf-plus-state').textContent = 'Eventually Plus · coming soon';
-      if (plusH) plusH.innerHTML = 'Eventually <b>Plus</b> — coming soon';
-      if (plusList0) plusList0.innerHTML = '<li>Longer, personalized AI briefings</li><li>Ad-free listening &amp; browsing</li><li>Early access to new features</li>';
-      plusBtn.textContent = onList ? '✓ You\'re on the waitlist' : 'Notify me at launch';
-      plusBtn.dataset.act = 'waitlist';
-      plusBtn.disabled = false;
-      if (statusEl) statusEl.textContent = onList ? 'We\'ll email you when Eventually Plus launches.' : 'Eventually Plus is in the works. Join the waitlist to hear first.';
-      if (fineEl) fineEl.textContent = '';
-      profileEl.querySelector('.pf-logout').style.display = user ? '' : 'none';
-      renderAccount(); renderIdentities();
-      return;
-    }
-    // Plus / trial CTA — label + behaviour driven by the effective subscription state.
-    const pb = plusButton(subState);
-    plusBtn.textContent = pb.label;
-    plusBtn.dataset.act = pb.act;
-    plusBtn.disabled = (pb.act === 'none');
-    if (statusEl) statusEl.textContent = plusStatusLine(subState);
-    if (fineEl) fineEl.textContent = plusFineLine(subState);
-    // When the two-host conversation is the UNIVERSAL experience, the briefing is no
-    // longer a Plus-exclusive perk — reframe the benefit list honestly (ad-free + more
-    // to come) rather than advertising something everyone already gets.
-    const plusList = profileEl.querySelector('.pf-plus-list');
-    if (plusList && RT.twoHost) {
-      plusList.innerHTML = '<li>Ad-free listening &amp; browsing</li>' +
-        '<li>Longer, personalized briefings <span class="ps-opt">(coming soon)</span></li>' +
-        '<li>Priority access to new features</li>';
-    }
     profileEl.querySelector('.pf-logout').style.display = user ? '' : 'none';
     renderAccount();
     renderIdentities();
@@ -1270,7 +1229,7 @@
     const p = P.get();
 
     if (!user) {
-      box.innerHTML = '<p class="pf-hint">Sign in to view and manage your name, contact details and address.</p>' +
+      box.innerHTML = '<p class="pf-hint">Sign in to view and manage your name, contact details and preferences.</p>' +
         '<button class="pf-acct-signin">Sign in</button>';
       return;
     }
@@ -1311,22 +1270,6 @@
     }
 
     h += row('contactEmail', 'Contact email', p.contactEmail, { type: 'email', ph: 'you@email.com' });
-
-    // Home address — composite; editing opens a sub-form with autocomplete.
-    if (acctEditing === 'address') {
-      const a = p.address || {};
-      const f = function (k, ph) { return '<input class="pf-addr-f" data-k="' + k + '" placeholder="' + ph + '" value="' + esc(a[k] || '') + '">'; };
-      h += '<div class="pf-acct-addr" data-field="address">' +
-        '<label class="pf-acct-k">Home address</label>' +
-        '<input class="pf-addr-search" placeholder="Search your address…" autocomplete="off">' +
-        '<div class="pf-addr-sug"></div>' +
-        f('line1', 'Address line 1') + f('line2', 'Address line 2 (optional)') +
-        f('city', 'City') + f('region', 'Region / state') + f('postcode', 'Postcode') + f('country', 'Country') +
-        '<div class="pf-acct-btns"><button class="pf-acct-save" data-save="address">Save address</button>' +
-        '<button class="pf-acct-cancel" type="button">Cancel</button></div></div>';
-    } else {
-      h += row('address', 'Home address', fmtAddress(p.address), {});
-    }
 
     // Communication preferences (always-interactive toggles).
     const comms = p.comms || {};
@@ -1425,13 +1368,8 @@
       window.EventuallyToast('Host language: ' + (l ? l.label : lang.dataset.lang) + '. Press ▶ to hear it.');
       return;
     }
-    const rec = e.target.closest('.pf-rec[data-id]');
-    if (rec) {
-      const ev = D.getById(rec.dataset.id);
-      profileEl.classList.remove('open'); globe.flyTo(ev.lat, ev.lon);
-      setTimeout(function () { openEvent(ev.id); }, 600);
-      return;
-    }
+    const svrow = e.target.closest('.pf-savedrow');
+    if (svrow) { profileEl.classList.remove('open'); openSaved(); return; }
     const link = e.target.closest('.pf-id-link');
     if (link && link.dataset.link === 'google' && authReal) {
       window.EventuallyToast('Opening Google to link it to this account…');
@@ -1487,13 +1425,6 @@
       });
     }, 350);
   });
-  profileEl.querySelector('.pf-plus-btn').addEventListener('click', function () {
-    const act = this.dataset.act;
-    if (act === 'cancel') return cancelPlusFlow();
-    if (act === 'resume') return resumePlusFlow();
-    if (act === 'none') return;               // trial used, no paid path yet
-    goPlus();                                 // trial / buy / demo — goPlus gates + branches
-  });
   profileEl.querySelector('.pf-notify').addEventListener('click', enableNotifications);
   profileEl.querySelector('.pf-filter').addEventListener('click', function () {
     interestFilterActive = !interestFilterActive;
@@ -1501,6 +1432,148 @@
     window.EventuallyToast(interestFilterActive ? 'Globe filtered to your interests.' : 'Showing all events.');
   });
   profileEl.querySelector('.pf-logout').addEventListener('click', function () { logout(); profileEl.classList.remove('open'); });
+
+  /* ---------- Saved events: its own panel — month calendar + day list ---------- */
+  const savedEl = document.getElementById('saved');
+  const svWD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const svMO = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  let svMonth = null;      // Date at the 1st of the viewed month
+  let svSelKey = null;     // 'YYYY-MM-DD' of the selected day
+  function svKey(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  // Saved event IDs → event objects with a valid date, grouped by day key, sorted by time.
+  function savedByDay() {
+    const map = {};
+    (P.get().saved || []).forEach(function (id) {
+      const ev = D.getById(id);
+      if (!ev || !ev.date || isNaN(ev.date.getTime())) return;
+      const k = svKey(ev.date); (map[k] = map[k] || []).push(ev);
+    });
+    Object.keys(map).forEach(function (k) { map[k].sort(function (a, b) { return a.date - b.date; }); });
+    return map;
+  }
+  function openSaved() {
+    const byDay = savedByDay(), keys = Object.keys(byDay).sort();
+    const todayK = svKey(new Date());
+    // Open on the soonest UPCOMING saved day (else the latest saved, else this month).
+    const focusK = keys.filter(function (k) { return k >= todayK; })[0] || keys[keys.length - 1] || todayK;
+    const fd = new Date(focusK + 'T00:00:00');
+    svMonth = new Date(fd.getFullYear(), fd.getMonth(), 1);
+    svSelKey = byDay[focusK] ? focusK : null;
+    savedEl.classList.add('open');
+    renderSaved();
+  }
+  function renderSaved() {
+    const byDay = savedByDay();
+    savedEl.querySelector('.sv-count').textContent = (P.get().saved || []).length;
+    const y = svMonth.getFullYear(), m = svMonth.getMonth();
+    savedEl.querySelector('.sv-month').innerHTML = svMO[m] + ' <span class="sv-yr">' + y + '</span>';
+    const startBlank = (new Date(y, m, 1).getDay() + 6) % 7;   // Monday-first
+    const daysIn = new Date(y, m + 1, 0).getDate();
+    const todayK = svKey(new Date());
+    let cells = '';
+    for (let i = 0; i < startBlank; i++) cells += '<div class="sv-cell sv-empty"></div>';
+    for (let day = 1; day <= daysIn; day++) {
+      const k = svKey(new Date(y, m, day)), evs = byDay[k] || [], cls = ['sv-cell'];
+      if (!evs.length) cls.push('sv-muted');
+      if (k === todayK) cls.push('sv-today');
+      if (k === svSelKey) cls.push('sv-sel');
+      // 1–2 saved → dots; 3+ (a busy day) → a count badge.
+      const mark = evs.length >= 3 ? '<span class="sv-badge">' + evs.length + '</span>'
+        : (evs.length ? '<span class="sv-dots">' + new Array(evs.length).fill('<i></i>').join('') + '</span>' : '');
+      cells += '<div class="' + cls.join(' ') + '" data-k="' + k + '">' + day + mark + '</div>';
+    }
+    savedEl.querySelector('.sv-grid').innerHTML = cells;
+    renderSavedDay(byDay);
+    renderSavedRecs();
+  }
+  // "For you" — interest-based upcoming picks near you that you HAVEN'T saved yet, so the
+  // calendar doubles as a place to discover more to save. Tapping one opens its detail.
+  function savedRecs() {
+    const saved = {}; (P.get().saved || []).forEach(function (id) { saved[id] = 1; });
+    const interests = P.effectiveInterests(D.getById);
+    const loc = P.get().location;
+    return D.getEvents()
+      .filter(function (e) { return !saved[e.id]; })
+      .filter(function (e) { return D.typeForDate(e, selectedDate) !== 'past'; })
+      .filter(function (e) { return !interests.length || interests.indexOf(e.category) > -1; })
+      .map(function (e) { return { e: e, d: loc ? ((e.lat - loc.lat) * (e.lat - loc.lat) + (e.lon - loc.lon) * (e.lon - loc.lon)) : 0 }; })
+      .sort(function (a, b) { return a.d - b.d; })
+      .slice(0, 4).map(function (x) { return x.e; });
+  }
+  function renderSavedRecs() {
+    const fy = savedEl.querySelector('.sv-foryou'), list = savedEl.querySelector('.sv-fy-list');
+    const recs = savedRecs();
+    if (!recs.length) { fy.style.display = 'none'; return; }
+    fy.style.display = '';
+    list.innerHTML = recs.map(function (ev) {
+      const d = ev.date && !isNaN(ev.date.getTime()) ? ev.date : null;
+      const when = d ? (svWD[d.getDay()] + ' ' + d.getDate() + ' ' + svMO[d.getMonth()].slice(0, 3)) : '';
+      const bits = [when, ev.city, ev.priceLabel].filter(Boolean).join('  ·  ');
+      return '<button class="sv-fy-item" data-id="' + esc(ev.id) + '">' +
+        '<span class="sv-fy-dot" style="background:' + (ev.categoryColor || 'var(--clay)') + '"></span>' +
+        '<span class="sv-fy-main"><span class="sv-fy-title">' + esc(ev.name) + '</span>' +
+        (bits ? '<span class="sv-fy-sub">' + esc(bits) + '</span>' : '') + '</span></button>';
+    }).join('');
+  }
+  function renderSavedDay(byDay) {
+    byDay = byDay || savedByDay();
+    const titleEl = savedEl.querySelector('.sv-day-title'), countEl = savedEl.querySelector('.sv-day-count'), listEl = savedEl.querySelector('.sv-list');
+    if (!(P.get().saved || []).length) {
+      titleEl.textContent = 'No saved events yet'; countEl.textContent = '';
+      listEl.innerHTML = '<div class="sv-empty-state">Tap the <b>☆</b> on any event to save it here.<br>Your saved events appear on this calendar.</div>';
+      return;
+    }
+    const evs = (svSelKey && byDay[svSelKey]) || [];
+    if (!svSelKey || !evs.length) {
+      titleEl.textContent = 'Pick a day'; countEl.textContent = '';
+      listEl.innerHTML = '<div class="sv-empty-state">Select a highlighted day to see what you’ve saved.</div>';
+      return;
+    }
+    const d = new Date(svSelKey + 'T00:00:00');
+    titleEl.textContent = svWD[d.getDay()] + ' ' + d.getDate();
+    countEl.textContent = evs.length + ' event' + (evs.length === 1 ? '' : 's');
+    listEl.innerHTML = evs.map(function (ev) {
+      const t = ev.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+      return '<div class="sv-item" data-id="' + esc(ev.id) + '">' +
+        '<span class="sv-time">' + esc(t) + '</span>' +
+        '<div class="sv-it-main"><div class="sv-it-title">' + esc(ev.name) + '</div>' +
+          '<div class="sv-it-sub">' + esc(ev.city || '') + (ev.priceLabel ? '<span class="sv-dot">·</span>' + esc(ev.priceLabel) : '') + '</div>' +
+        '</div></div>';
+    }).join('');
+  }
+  // Keep the panel fresh if the user saves/unsaves while it's open.
+  function refreshSaved() { if (savedEl.classList.contains('open')) renderSaved(); }
+  savedEl.querySelector('.sv-close').addEventListener('click', function () { savedEl.classList.remove('open'); });
+  savedEl.querySelector('.sv-prev').addEventListener('click', function () { svMonth = new Date(svMonth.getFullYear(), svMonth.getMonth() - 1, 1); renderSaved(); });
+  savedEl.querySelector('.sv-next').addEventListener('click', function () { svMonth = new Date(svMonth.getFullYear(), svMonth.getMonth() + 1, 1); renderSaved(); });
+  savedEl.querySelector('.sv-grid').addEventListener('click', function (e) {
+    const cell = e.target.closest('.sv-cell');
+    if (!cell || cell.classList.contains('sv-muted') || cell.classList.contains('sv-empty')) return;
+    svSelKey = cell.dataset.k; renderSaved();
+  });
+  // Swipe left/right across the calendar to page months (mobile).
+  let svTouchX = null;
+  const svCal = savedEl.querySelector('.sv-cal');
+  svCal.addEventListener('touchstart', function (e) { svTouchX = e.changedTouches[0].clientX; }, { passive: true });
+  svCal.addEventListener('touchend', function (e) {
+    if (svTouchX == null) return;
+    const dx = e.changedTouches[0].clientX - svTouchX; svTouchX = null;
+    if (Math.abs(dx) < 45) return;                                  // ignore small drags / taps
+    svMonth = new Date(svMonth.getFullYear(), svMonth.getMonth() + (dx < 0 ? 1 : -1), 1);
+    renderSaved();
+  }, { passive: true });
+  function svOpenEvent(id) {
+    const ev = D.getById(id); if (!ev) return;
+    savedEl.classList.remove('open');
+    globe.flyTo(ev.lat, ev.lon);
+    setTimeout(function () { openEvent(ev.id); }, 500);
+  }
+  savedEl.querySelector('.sv-list').addEventListener('click', function (e) {
+    const it = e.target.closest('.sv-item'); if (it) svOpenEvent(it.dataset.id);
+  });
+  savedEl.querySelector('.sv-fy-list').addEventListener('click', function (e) {
+    const it = e.target.closest('.sv-fy-item'); if (it) svOpenEvent(it.dataset.id);
+  });
 
   /* ---------- web notifications (frontend demo) ---------- */
   function enableNotifications() {
@@ -1532,7 +1605,7 @@
     adbar.innerHTML = M.adSlotHTML('banner');
     M.mountAdSense(adbar);
     const plus = adbar.querySelector('.ad-plus');
-    if (plus) plus.addEventListener('click', openProfile);
+    if (plus) plus.addEventListener('click', openPlus);
   }
   function applyMonetization() {
     const showAds = RT.adsEnabled && (RT.plusComingSoon || !P.get().plus);   // admin can disable ads globally
@@ -1585,7 +1658,9 @@
     const act = it.dataset.act; closeMenu();
     if (act === 'signin') openAuth();
     else if (act === 'signout') logout();
-    else if (act === 'profile' || act === 'saved' || act === 'plus') openProfile();
+    else if (act === 'saved') openSaved();
+    else if (act === 'plus') openPlus();
+    else if (act === 'profile') openProfile();
     else if (act === 'create') requireLogin(function () { coordinator.open(); });
     else if (act === 'types') openTypes();
     else if (act === 'help') openHelp();
@@ -1623,15 +1698,70 @@
     });
   }
   function openHelp() {
+    const CAT_DESC = {
+      'Music': 'concerts, gigs, festivals', 'Tech': 'conferences, hackathons, meetups',
+      'Business': 'networking, talks, expos', 'Arts': 'exhibitions, theatre, galleries',
+      'Food & Drink': 'tastings, markets, pop-ups', 'Sports': 'games, matches, races',
+      'Film & Media': 'screenings, premieres', 'Community': 'fairs, local gatherings',
+      'Nightlife': 'clubs, DJ sets, parties', 'Comedy': 'stand-up, improv shows'
+    };
+    const colours = Object.keys(D.CATEGORIES).map(function (c) {
+      return '<span class="help-cat"><span class="help-sw" style="background:' + D.CATEGORIES[c] + '"></span>' +
+        '<span class="help-cat-t"><b>' + esc(c) + '</b>' + (CAT_DESC[c] ? '<span class="help-cat-d"> — ' + esc(CAT_DESC[c]) + '</span>' : '') + '</span></span>';
+    }).join('');
     openModal('Help centre',
       '<div class="help">' +
       '<details open><summary>What is Eventually?</summary><p>A live directory of events worldwide on an interactive globe. Spin it, tap any glowing marker, and see everything happening at that spot.</p></details>' +
-      '<details><summary>How do I save events?</summary><p>Tap the ☆ on any event card. Saved events feed your personalized recommendations from the Host.</p></details>' +
+      '<details><summary>What do the glowing spikes on the globe mean?</summary><p>Each glowing marker is a place with events on. The <b>bigger, brighter and more it pulses</b>, the more (and hotter) the activity there — so the biggest markers are the busiest hotspots, and a pulsing glow means something is live right now. Its <b>colour</b> shows the main type of event at that spot. Tap a marker to see everything there, and the AI Host will focus on it.</p></details>' +
+      '<details><summary>What do the event colours mean?</summary><p>Every event is colour-coded by type — on the globe markers, on event cards, and on the banner at the top of each event:</p><div class="help-cats">' + colours + '</div></details>' +
+      '<details><summary>How do the dates &amp; timeline work?</summary><p>The bar along the bottom is a day scrubber. Drag it, or use the ‹ › day arrows, to move between days — the globe and results update to show what\'s on for that day. Tap <b>Today</b> to jump back to now.</p></details>' +
+      '<details><summary>How do I save events &amp; use the calendar?</summary><p>Tap the ☆ on any event to save it. Open <b>⋯ menu → Saved events</b> to see them on a month calendar: days with saved events are dotted (busy days show a count), and tapping a day lists what you saved. A <b>“For you”</b> section suggests more to save based on your interests.</p></details>' +
+      '<details><summary>What do “Starts in” countdowns &amp; reminders mean?</summary><p>Upcoming events show a live <b>“Starts in”</b> countdown so you know exactly how long until they begin. Turn on <b>Event notifications</b> in your Profile to be reminded about events you\'ve saved and new ones near you.</p></details>' +
+      '<details><summary>What happens when I tap “Get Tickets”? Is Eventually free?</summary><p>Eventually is <b>free</b> — browsing, saving, and the AI Host cost nothing. <b>Get Tickets</b> sends you to the official seller (e.g. Ticketmaster) to buy there; Eventually is a discovery platform and doesn\'t sell tickets itself.</p></details>' +
       '<details><summary>What is the eventually Host?</summary><p>Your live AI concierge — it narrates what\'s happening worldwide and tailors picks to your location and interests. Press play to hear it, with a music bed behind it.</p></details>' +
       '<details><summary>How do I list my event?</summary><p>Open the ⋯ menu → Create an event, drop a pin on the map, and publish straight to the globe.</p></details>' +
-      '<details><summary>What is Eventually Plus?</summary><p>Your personal AI event concierge: personalized daily briefings, intelligent interest-based recommendations, travel-aware city briefings, saved-event reminders and premium AI narration — all ad-free and sponsor-free.</p></details>' +
+      '<details><summary>What is Eventually Plus?</summary><p>Your personal AI event concierge: longer personalized briefings, ad-free listening &amp; browsing, travel-aware city briefings, saved-event reminders and early access to new features.</p></details>' +
       '</div>');
   }
+  // Eventually Plus — its OWN Help-centre-style modal (blurred backdrop), not buried in Profile.
+  function plusModalHTML() {
+    const onList = !!((P.get().comms || {}).plusWaitlist);
+    let feats, statusLine, fineLine = '', btnLabel, btnAct, btnDisabled = false;
+    if (RT.plusComingSoon) {
+      feats = ['Longer, personalized AI briefings', 'Ad-free listening & browsing', 'Travel-aware city briefings & reminders', 'Early access to new features'];
+      statusLine = onList ? "We'll email you when Eventually Plus launches." : 'Eventually Plus is in the works. Join the waitlist to hear first.';
+      btnLabel = onList ? "✓ You're on the waitlist" : 'Notify me at launch';
+      btnAct = 'waitlist';
+    } else {
+      feats = RT.twoHost
+        ? ['Ad-free listening & browsing', 'Longer, personalized briefings (coming soon)', 'Priority access to new features']
+        : ['Personalized daily briefings', 'Smart, interest-based recommendations', 'Travel-aware city briefings & reminders', 'Premium AI narration · ad-free'];
+      const pb = plusButton(subState);
+      btnLabel = pb.label; btnAct = pb.act; btnDisabled = (pb.act === 'none');
+      statusLine = plusStatusLine(subState); fineLine = plusFineLine(subState);
+    }
+    return '<div class="plus-modal">' +
+      '<div class="plus-hero">Your AI Event <b>Concierge</b></div>' +
+      '<ul class="plus-feats">' + feats.map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('') + '</ul>' +
+      (statusLine ? '<p class="plus-status">' + esc(statusLine) + '</p>' : '') +
+      '<button class="plus-cta" data-act="' + btnAct + '"' + (btnDisabled ? ' disabled' : '') + '>' + esc(btnLabel) + '</button>' +
+      (fineLine ? '<p class="plus-fine">' + esc(fineLine) + '</p>' : '') +
+      '</div>';
+  }
+  function openPlus() {
+    openModal('Eventually Plus', plusModalHTML(), function (body) {
+      const btn = body.querySelector('.plus-cta');
+      if (btn) btn.addEventListener('click', function () {
+        const act = this.dataset.act;
+        if (act === 'cancel') { closeModal(); return cancelPlusFlow(); }
+        if (act === 'resume') { closeModal(); return resumePlusFlow(); }
+        if (act === 'none') return;
+        goPlus();                       // waitlist / trial / buy — goPlus branches
+      });
+    });
+  }
+  // Re-render the Plus modal in place (e.g. after joining the waitlist).
+  function refreshPlusModal() { if (modal.classList.contains('open') && modal.querySelector('.plus-modal')) openPlus(); }
   function openContact() {
     openModal('Contact sales',
       '<p class="modal-lead">Partner with Eventually — sponsorships, featured placements and ticketing.</p>' +
@@ -1758,19 +1888,19 @@
   function goPlus() {
     // Plus is PARKED ("coming soon") → collect waitlist interest instead of upgrading.
     if (RT.plusComingSoon) { joinWaitlist(); return; }
-    if (subState && subState.is_plus) { openProfile(); return; }   // already Plus → manage
+    if (subState && subState.is_plus) { openPlus(); return; }   // already Plus → manage
     requireLogin(function () { beginUpgrade(); }, PLUS_AUTH_REASON);
   }
   // "Notify me" — records interest in a future Eventually Plus. Reuses the profile's
   // existing `comms` prefs (no new table); signed-in only (we need an email to notify).
   function joinWaitlist() {
     const already = (P.get().comms || {}).plusWaitlist;
-    if (already) { window.EventuallyToast("You're on the Eventually Plus waitlist — we'll let you know."); openProfile(); return; }
+    if (already) { window.EventuallyToast("You're on the Eventually Plus waitlist — we'll let you know."); return; }
     requireLogin(function () {
       const comms = Object.assign({}, P.get().comms || {}, { plusWaitlist: true });
       P.set({ comms: comms });
       if (acctEnabled()) A.saveProfile({ comms: comms });
-      renderProfile();
+      refreshProfile(); refreshPlusModal();
       window.EventuallyToast('🎉 You\'re on the Eventually Plus waitlist — we\'ll notify you at launch.');
     }, 'Sign in to join the Eventually Plus waitlist — we\'ll email you when it launches.');
   }
@@ -1783,7 +1913,7 @@
         return;
       }
       applySub(s);
-      if (s.is_plus) { openProfile(); return; }
+      if (s.is_plus) { openPlus(); return; }
       if (s.trial_available) { startTrialFlow(); return; }
       if (billingEnabled()) {
         window.EventuallyToast('Opening secure checkout…');
@@ -1791,7 +1921,7 @@
         return;
       }
       window.EventuallyToast(s.trial_used ? 'Your free trial has already been used.' : 'Eventually Plus is coming soon.');
-      openProfile();
+      openPlus();
     });
   }
   function trialErr(reason) {
@@ -1810,7 +1940,7 @@
       if (res && res.ok) {
         applySub(res);
         window.EventuallyToast('Your ' + (res.trial_days || 3) + '-day Eventually Plus trial is live — enjoy your AI Event Concierge.');
-        openProfile();
+        openPlus();
       } else {
         window.EventuallyToast(trialErr(res && res.reason));
         refreshSubscription();

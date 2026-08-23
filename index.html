@@ -130,24 +130,19 @@
       <button class="pf-close" aria-label="Close">✕</button>
     </header>
     <div class="pf-body">
-      <section class="pf-sec">
-        <div class="pf-row"><span class="pf-k">Location</span><span class="pf-loc">not set</span></div>
-        <div class="pf-row"><span class="pf-k">Saved events</span><span><b class="pf-saved-n">0</b></span></div>
-      </section>
-
       <section class="pf-sec pf-account">
         <div class="pf-label">Account details</div>
         <div class="pf-acct"></div>
       </section>
 
       <section class="pf-sec">
-        <div class="pf-label">Your interests</div>
-        <div class="pf-interests"></div>
+        <div class="pf-row"><span class="pf-k">Location</span><span class="pf-loc">not set</span></div>
+        <button class="pf-row pf-savedrow" type="button"><span class="pf-k">Saved events</span><span class="pf-savedval"><b class="pf-saved-n">0</b> <span class="pf-chev">›</span></span></button>
       </section>
 
       <section class="pf-sec">
-        <div class="pf-label">For you</div>
-        <div class="pf-recs"></div>
+        <div class="pf-label">Your interests</div>
+        <div class="pf-interests"></div>
       </section>
 
       <section class="pf-sec">
@@ -161,19 +156,6 @@
         <button class="pf-toggle pf-filter" style="display:none"><span>Filter globe to my interests</span><span class="tg-state">Off</span></button>
       </section>
 
-      <section class="pf-plus">
-        <div class="pf-plus-h">Your AI Event <b>Concierge</b></div>
-        <ul class="pf-plus-list">
-          <li>Personalized daily briefings</li>
-          <li>Smart, interest-based recommendations</li>
-          <li>Travel-aware city briefings & reminders</li>
-          <li>Premium AI narration · ad-free</li>
-        </ul>
-        <p class="pf-plus-status"></p>
-        <button class="pf-plus-btn">Unlock Plus — $7/mo</button>
-        <p class="pf-fine">Demo only — no payment is taken.</p>
-      </section>
-
       <section class="pf-sec pf-identities" style="display:none">
         <div class="pf-label">Sign-in methods</div>
         <div class="pf-id-list"></div>
@@ -181,6 +163,38 @@
       </section>
 
       <button class="pf-logout" style="display:none">Sign out</button>
+    </div>
+  </aside>
+
+  <!-- Saved events — its own panel: month calendar + day list -->
+  <aside id="saved" class="saved">
+    <header class="sv-head">
+      <div>
+        <h2 class="sv-title">Saved events</h2>
+        <p class="sv-sub"><b class="sv-count">0</b> saved</p>
+      </div>
+      <button class="sv-close" aria-label="Close">✕</button>
+    </header>
+    <div class="sv-body">
+      <div class="sv-cal">
+        <div class="sv-cal-head">
+          <div class="sv-month">—</div>
+          <div class="sv-nav">
+            <button class="sv-prev" aria-label="Previous month">‹</button>
+            <button class="sv-next" aria-label="Next month">›</button>
+          </div>
+        </div>
+        <div class="sv-weekdays"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>
+        <div class="sv-grid"></div>
+      </div>
+      <div class="sv-day">
+        <div class="sv-day-head"><h3 class="sv-day-title">—</h3><span class="sv-day-count"></span></div>
+        <div class="sv-list"></div>
+      </div>
+      <div class="sv-foryou" style="display:none">
+        <div class="sv-fy-head">For you</div>
+        <div class="sv-fy-list"></div>
+      </div>
     </div>
   </aside>
 
