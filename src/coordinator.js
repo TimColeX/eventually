@@ -84,8 +84,6 @@
             '</div>' +
             '<label>Description<textarea class="f-desc" rows="3" placeholder="Tell people what to expect…"></textarea></label>' +
             '<label>Ticket / source link <span class="co-opt">(optional)</span><input class="f-url" placeholder="https://yourtickets.com/show"></label>' +
-            '<div class="co-catcolor"><span class="co-catdot"></span>' +
-              '<span class="co-catcolor-t">Shows in the <b class="co-catname">Music</b> colour on the globe &amp; card — set automatically by category.</span></div>' +
           '</div>' +
           '<div class="co-col co-col-side">' +
             '<div class="co-loc">' +
@@ -97,15 +95,19 @@
                 '<div class="latlon">lat <strong class="ll-lat"></strong> · lon <strong class="ll-lon"></strong></div>' +
               '</div>' +
             '</div>' +
+            '<div class="co-catcolor"><span class="co-catdot"></span>' +
+              '<span class="co-catcolor-t">Shows in the <b class="co-catname">Music</b> colour on the globe &amp; card — set automatically by category.</span></div>' +
             '<label class="co-feature"><input type="checkbox" class="f-feature">' +
               '<span class="co-feature-txt"><b>✦ Feature this event</b>' +
               '<small>Premium placement — distinct highlight, a spike, and top of search. Billed via Eventually Plus.</small></span>' +
             '</label>' +
-            '<button class="co-publish">Publish event ✦</button>' +
-            '<button class="co-cancel-edit" type="button" style="display:none">Cancel edit</button>' +
-            '<p class="co-note">Your event is geo-located and published live to the globe.</p>' +
           '</div>' +
         '</div></div>' +
+        '<div class="co-foot">' +
+          '<button class="co-cancel-edit" type="button" style="display:none">Cancel edit</button>' +
+          '<button class="co-publish">Publish event ✦</button>' +
+          '<p class="co-note">Your event is geo-located and published live to the globe.</p>' +
+        '</div>' +
       '</div>';
 
     // The event colour is AUTOMATIC — derived from the category (same colour the spike uses).

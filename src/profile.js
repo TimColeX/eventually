@@ -14,6 +14,7 @@
     location: null,        // { city, lat, lon, source:'gps'|'manual' }
     interests: [],         // explicit category interests
     saved: [],             // saved event ids
+    savedSnap: {},         // id -> lightweight snapshot {id,name,city,date,category,categoryColor,priceLabel,lat,lon,venue,endsAt}
     searches: [],          // recent search strings
     attended: [],          // event ids marked attended
     plus: false,           // Eventually Plus member
@@ -37,12 +38,29 @@
     setPlus: function (b) { state.plus = !!b; persist(); },
     setNotify: function (b) { state.notify = !!b; persist(); },
 
-    toggleSaved: function (id) {
+    toggleSaved: function (id, snap) {
+      if (!state.savedSnap) state.savedSnap = {};
       const i = state.saved.indexOf(id);
-      if (i > -1) state.saved.splice(i, 1); else state.saved.push(id);
+      if (i > -1) { state.saved.splice(i, 1); delete state.savedSnap[id]; }
+      else { state.saved.push(id); if (snap) state.savedSnap[id] = snap; }
       persist(); return state.saved.indexOf(id) > -1;
     },
     isSaved: function (id) { return state.saved.indexOf(id) > -1; },
+    // Attach/refresh the snapshot for an already-saved event (so it survives data reloads).
+    saveSnap: function (id, snap) { if (!state.savedSnap) state.savedSnap = {}; if (snap && state.saved.indexOf(id) > -1) { state.savedSnap[id] = snap; persist(); } },
+    savedSnaps: function () { return state.savedSnap || {}; },
+    // Remove one saved event outright (id + snapshot).
+    removeSaved: function (id) {
+      const i = state.saved.indexOf(id); if (i > -1) state.saved.splice(i, 1);
+      if (state.savedSnap) delete state.savedSnap[id];
+      persist(); return i > -1;
+    },
+    // Bulk-remove (used by auto-prune of past / ghost events). Returns how many were removed.
+    removeSavedMany: function (ids) {
+      if (!ids || !ids.length) return 0;
+      let n = 0; ids.forEach(function (id) { const i = state.saved.indexOf(id); if (i > -1) { state.saved.splice(i, 1); n++; } if (state.savedSnap) delete state.savedSnap[id]; });
+      if (n) persist(); return n;
+    },
 
     toggleInterest: function (cat) {
       const i = state.interests.indexOf(cat);

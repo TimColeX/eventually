@@ -541,7 +541,7 @@
   function refreshLiveEvents() {
     if (!(window.EventuallyAPI && window.EventuallyAPI.config.remote)) return Promise.resolve();
     return window.EventuallyAPI.fetchEvents({}).then(function (evs) {
-      if (evs) { D.replaceAll(evs); markMine(); globe.setClusters(D.getClusters()); refreshMarkers(); updateStats(); rerenderPlace(); if (timeline && timeline._drawSpark) timeline._drawSpark(); }
+      if (evs) { D.replaceAll(evs); markMine(); globe.setClusters(D.getClusters()); refreshMarkers(); updateStats(); rerenderPlace(); if (timeline && timeline._drawSpark) timeline._drawSpark(); pruneSaved(); }
     }).catch(function () {});
   }
   const coordinator = new window.EventuallyCoordinator(document.getElementById('coordinator'), {
@@ -941,7 +941,7 @@
     const act = e.target.closest('[data-act]'); if (!act) return;
     const ev = D.getById(activeEventId);
     if (act.dataset.act === 'save') {
-      const on = P.toggleSaved(ev.id); act.classList.toggle('on', on); act.textContent = on ? '★' : '☆';
+      const on = P.toggleSaved(ev.id, snapOf(ev)); act.classList.toggle('on', on); act.textContent = on ? '★' : '☆';
       if (acctEnabled()) A.setUserEvent('save', ev.id, snap(ev), on);
       syncReminders(); refreshSaved();
       window.EventuallyToast(on ? 'Saved to your events.' : 'Removed from saved.'); return;
@@ -1441,19 +1441,54 @@
   const svMO = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   let svMonth = null;      // Date at the 1st of the viewed month
   let svSelKey = null;     // 'YYYY-MM-DD' of the selected day
+  let svView = 'calendar'; // 'calendar' | 'list'
   function svKey(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
-  // Saved event IDs → event objects with a valid date, grouped by day key, sorted by time.
+  // A lightweight snapshot of a live event, stored with the save so it SURVIVES data reloads
+  // (fixes "ghost" saved events that vanish when their id leaves the loaded window).
+  function snapOf(ev) {
+    return { id: ev.id, name: ev.name, city: ev.city, category: ev.category,
+      categoryColor: ev.categoryColor, priceLabel: ev.priceLabel, lat: ev.lat, lon: ev.lon, venue: ev.venue || null,
+      date: (ev.date && ev.date.toISOString) ? ev.date.toISOString() : (ev.date || null),
+      endsAt: (ev.endsAt && ev.endsAt.toISOString) ? ev.endsAt.toISOString() : (ev.endsAt || null) };
+  }
+  function snapToEvent(s) { return Object.assign({}, s, { date: s.date ? new Date(s.date) : null, endsAt: s.endsAt ? new Date(s.endsAt) : null }); }
+  // Resolve every saved id → event object: prefer LIVE data (refreshing the snapshot), else the
+  // stored SNAPSHOT; a ghost (neither) resolves to null and is dropped from the view.
+  function savedEventObjs() {
+    const snaps = P.savedSnaps ? P.savedSnaps() : {};
+    return (P.get().saved || []).map(function (id) {
+      const live = D.getById(id);
+      if (live) { if (P.saveSnap) P.saveSnap(id, snapOf(live)); return live; }
+      const s = snaps[id]; return s ? snapToEvent(s) : null;
+    }).filter(Boolean);
+  }
+  // Auto-prune: remove PAST/finished events + broken GHOSTS (no live data AND no snapshot).
+  // Guarded on data being loaded so a real-but-not-yet-loaded event isn't wrongly removed.
+  function pruneSaved() {
+    if (!D.getEvents || !D.getEvents().length) return 0;
+    const snaps = P.savedSnaps ? P.savedSnaps() : {};
+    const now = Date.now(), remove = [];
+    (P.get().saved || []).forEach(function (id) {
+      const live = D.getById(id), s = snaps[id];
+      if (!live && !s) { remove.push(id); return; }                    // ghost
+      const ev = live || snapToEvent(s);
+      const end = ev.endsAt || ev.date;
+      if (end && !isNaN(new Date(end).getTime()) && new Date(end).getTime() < now) remove.push(id);   // finished
+    });
+    return P.removeSavedMany ? P.removeSavedMany(remove) : 0;
+  }
   function savedByDay() {
     const map = {};
-    (P.get().saved || []).forEach(function (id) {
-      const ev = D.getById(id);
-      if (!ev || !ev.date || isNaN(ev.date.getTime())) return;
+    savedEventObjs().forEach(function (ev) {
+      if (!ev.date || isNaN(ev.date.getTime())) return;
       const k = svKey(ev.date); (map[k] = map[k] || []).push(ev);
     });
     Object.keys(map).forEach(function (k) { map[k].sort(function (a, b) { return a.date - b.date; }); });
     return map;
   }
   function openSaved() {
+    pruneSaved();                                     // drop finished/ghost events first
+    svView = 'calendar';                              // always open on the calendar
     const byDay = savedByDay(), keys = Object.keys(byDay).sort();
     const todayK = svKey(new Date());
     // Open on the soonest UPCOMING saved day (else the latest saved, else this month).
@@ -1464,9 +1499,20 @@
     savedEl.classList.add('open');
     renderSaved();
   }
+  function syncSavedTabs() {
+    savedEl.querySelectorAll('.sv-vtab').forEach(function (b) { b.classList.toggle('on', b.dataset.view === svView); });
+  }
   function renderSaved() {
-    const byDay = savedByDay();
     savedEl.querySelector('.sv-count').textContent = (P.get().saved || []).length;
+    syncSavedTabs();
+    const calView = savedEl.querySelector('.sv-calview'), listView = savedEl.querySelector('.sv-listview');
+    if (svView === 'list') {
+      calView.style.display = 'none'; listView.style.display = '';
+      renderSavedListView();
+      return;
+    }
+    calView.style.display = ''; listView.style.display = 'none';
+    const byDay = savedByDay();
     const y = svMonth.getFullYear(), m = svMonth.getMonth();
     savedEl.querySelector('.sv-month').innerHTML = svMO[m] + ' <span class="sv-yr">' + y + '</span>';
     const startBlank = (new Date(y, m, 1).getDay() + 6) % 7;   // Monday-first
@@ -1543,6 +1589,28 @@
         '</div></div>';
     }).join('');
   }
+  // LIST view: every saved event (soonest first), each with a ✕ to remove it straight away.
+  function renderSavedListView() {
+    const listView = savedEl.querySelector('.sv-listview');
+    const evs = savedEventObjs().sort(function (a, b) { return (a.date || 0) - (b.date || 0); });
+    if (!evs.length) {
+      listView.innerHTML = '<div class="sv-empty-state">No saved events.<br>Tap the <b>☆</b> on any event to save it here.</div>';
+      return;
+    }
+    listView.innerHTML = evs.map(function (ev) {
+      const d = ev.date && !isNaN(ev.date.getTime()) ? ev.date : null;
+      const when = d ? (svWD[d.getDay()] + ' ' + d.getDate() + ' ' + svMO[d.getMonth()].slice(0, 3) + ' · ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })) : 'Date TBC';
+      const sub = [ev.city, ev.priceLabel].filter(Boolean).join('  ·  ');
+      return '<div class="sv-lrow">' +
+        '<button class="sv-litem" data-id="' + esc(ev.id) + '">' +
+          '<span class="sv-ldot" style="background:' + (ev.categoryColor || 'var(--clay)') + '"></span>' +
+          '<span class="sv-lmain"><span class="sv-ltitle">' + esc(ev.name) + '</span>' +
+          '<span class="sv-lsub">' + esc(when) + (sub ? '<span class="sv-dot">·</span>' + esc(sub) : '') + '</span></span>' +
+        '</button>' +
+        '<button class="sv-ldel" data-del="' + esc(ev.id) + '" aria-label="Remove from saved" title="Remove">✕</button>' +
+        '</div>';
+    }).join('');
+  }
   // Keep the panel fresh if the user saves/unsaves while it's open.
   function refreshSaved() { if (savedEl.classList.contains('open')) renderSaved(); }
   savedEl.querySelector('.sv-close').addEventListener('click', function () { savedEl.classList.remove('open'); });
@@ -1565,16 +1633,29 @@
     renderSaved();
   }, { passive: true });
   function svOpenEvent(id) {
-    const ev = D.getById(id); if (!ev) return;
+    const live = D.getById(id);
+    const snaps = P.savedSnaps ? P.savedSnaps() : {}, s = snaps[id];
+    const lat = live ? live.lat : (s ? s.lat : null), lon = live ? live.lon : (s ? s.lon : null);
     savedEl.classList.remove('open');
-    globe.flyTo(ev.lat, ev.lon);
-    setTimeout(function () { openEvent(ev.id); }, 500);
+    if (lat != null && lon != null) globe.flyTo(lat, lon);
+    if (live) setTimeout(function () { openEvent(id); }, 500);
+    else window.EventuallyToast("This saved event isn't live right now — showing its location.");
   }
   savedEl.querySelector('.sv-list').addEventListener('click', function (e) {
     const it = e.target.closest('.sv-item'); if (it) svOpenEvent(it.dataset.id);
   });
   savedEl.querySelector('.sv-fy-list').addEventListener('click', function (e) {
     const it = e.target.closest('.sv-fy-item'); if (it) svOpenEvent(it.dataset.id);
+  });
+  // Calendar | List view toggle.
+  savedEl.querySelectorAll('.sv-vtab').forEach(function (b) {
+    b.addEventListener('click', function () { svView = b.dataset.view; renderSaved(); });
+  });
+  // List view: tap a row to open it; ✕ removes it straight from saved.
+  savedEl.querySelector('.sv-listview').addEventListener('click', function (e) {
+    const del = e.target.closest('[data-del]');
+    if (del) { P.removeSaved(del.dataset.del); renderSaved(); window.EventuallyToast('Removed from saved.'); return; }
+    const it = e.target.closest('.sv-litem'); if (it) svOpenEvent(it.dataset.id);
   });
 
   /* ---------- web notifications (frontend demo) ---------- */
@@ -1647,8 +1728,8 @@
     h += '<div class="dd-sep"></div>';
     h += '<button class="dd-item" data-act="help">Help centre</button>';
     h += '<button class="dd-item" data-act="contact">Contact sales</button>';
-    if (RT.plusComingSoon) h += '<button class="dd-item dd-plus" data-act="plus">✦ Eventually Plus · coming soon</button>';
-    else if (!p.plus) h += '<button class="dd-item dd-plus" data-act="plus">✦ Get Eventually Plus</button>';
+    if (RT.plusComingSoon) h += '<button class="dd-item" data-act="plus">Eventually Plus</button>';
+    else if (!p.plus) h += '<button class="dd-item" data-act="plus">Get Eventually Plus</button>';
     if (user) h += '<div class="dd-sep"></div><button class="dd-item dd-muted" data-act="signout">Sign out</button>';
     dropdown.innerHTML = h;
   }
@@ -1751,7 +1832,8 @@
       statusLine = plusStatusLine(subState); fineLine = plusFineLine(subState);
     }
     return '<div class="plus-modal">' +
-      '<div class="plus-hero">Your AI Event <b>Concierge</b></div>' +
+      '<div class="plus-hero">Your AI Event <b>Concierge</b>' +
+        (RT.plusComingSoon ? '<span class="plus-soon">Coming soon</span>' : '') + '</div>' +
       '<ul class="plus-feats">' + feats.map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('') + '</ul>' +
       (statusLine ? '<p class="plus-status">' + esc(statusLine) + '</p>' : '') +
       '<button class="plus-cta" data-act="' + btnAct + '"' + (btnDisabled ? ' disabled' : '') + '>' + esc(btnLabel) + '</button>' +
@@ -2189,6 +2271,7 @@
       rerenderPlace();
       if (timeline && timeline._drawSpark) timeline._drawSpark();
       setGlobeLoading(false);
+      pruneSaved();                     // drop finished/ghost saved events → correct badge count
       syncReminders();                  // saved events are now resolvable → (re)schedule
       launchSignature();                // real data in → accurate "near you" count
     });

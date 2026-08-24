@@ -175,26 +175,33 @@
       </div>
       <button class="sv-close" aria-label="Close">✕</button>
     </header>
+    <div class="sv-viewtabs">
+      <button class="sv-vtab on" data-view="calendar">Calendar</button>
+      <button class="sv-vtab" data-view="list">List</button>
+    </div>
     <div class="sv-body">
-      <div class="sv-cal">
-        <div class="sv-cal-head">
-          <div class="sv-month">—</div>
-          <div class="sv-nav">
-            <button class="sv-prev" aria-label="Previous month">‹</button>
-            <button class="sv-next" aria-label="Next month">›</button>
+      <div class="sv-calview">
+        <div class="sv-cal">
+          <div class="sv-cal-head">
+            <div class="sv-month">—</div>
+            <div class="sv-nav">
+              <button class="sv-prev" aria-label="Previous month">‹</button>
+              <button class="sv-next" aria-label="Next month">›</button>
+            </div>
           </div>
+          <div class="sv-weekdays"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>
+          <div class="sv-grid"></div>
         </div>
-        <div class="sv-weekdays"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>
-        <div class="sv-grid"></div>
+        <div class="sv-day">
+          <div class="sv-day-head"><h3 class="sv-day-title">—</h3><span class="sv-day-count"></span></div>
+          <div class="sv-list"></div>
+        </div>
+        <div class="sv-foryou" style="display:none">
+          <div class="sv-fy-head">For you</div>
+          <div class="sv-fy-list"></div>
+        </div>
       </div>
-      <div class="sv-day">
-        <div class="sv-day-head"><h3 class="sv-day-title">—</h3><span class="sv-day-count"></span></div>
-        <div class="sv-list"></div>
-      </div>
-      <div class="sv-foryou" style="display:none">
-        <div class="sv-fy-head">For you</div>
-        <div class="sv-fy-list"></div>
-      </div>
+      <div class="sv-listview" style="display:none"></div>
     </div>
   </aside>
 
