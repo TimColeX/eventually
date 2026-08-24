@@ -612,7 +612,11 @@
         } else proceed();
         return;
       }
-      // Refreshes / subsequent rotations: fetch + play the briefing (no stinger).
+      // TWO-HOST is a PLAY-ONCE-then-music model — it must NOT loop. If a stray rotation
+      // reaches here for two-host (e.g. the idle ticker firing while speaking), settle to the
+      // music bed instead of re-fetching + replaying the briefing forever (a UX + cost bug).
+      if (this.twoHost) { this._endFreeIntro(); return; }
+      // Legacy per-line / single-voice refresh path (not used by the two-host experience).
       this._openerDone = true;
       this._setBuffering(true);
       this.getBriefing().then(function (b) { self._setBuffering(false); self._playBriefingResult(b); })
@@ -672,10 +676,14 @@
     // can always swap in and play, no fresh tap gesture required.
     try { this._primeAudio(); } catch (e) { try { this._audio.pause(); } catch (e2) {} }
     clearInterval(this._voiceTween); clearTimeout(this._gapTimer); clearTimeout(this._introTimer);
+    // Kill the idle caption-ticker while we sit on the music bed. It served no purpose here
+    // (rotation is a no-op during music-hold) and, crucially, it fired `_rotate` during the next
+    // city switch → the legacy refresh path → an infinite re-fetch/replay loop. The ticker is
+    // restarted only when the Host is fully paused (stop()).
+    if (this._timer) { clearInterval(this._timer); this._timer = null; }
     this.onSpeakEnd();                                    // swell the music back up
     this.icPlay.style.display = 'none';                   // button = "music playing"
     this.icPause.style.display = '';
-    if (!this._timer) this._timer = setInterval(this._rotate.bind(this), this.IDLE);
   };
 
   // Play a resolved briefing result: Plus audio segments, else the free browser show.
