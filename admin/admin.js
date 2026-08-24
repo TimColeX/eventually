@@ -345,7 +345,8 @@
   const PROVIDERS = [
     { id: 'fish', label: 'Fish Audio', note: 'native two-voice · cheapest (~$0.015/briefing)', model: true, speedTemp: true,
       models: [['s2.1-pro-free', 's2.1-pro-free (free — works now)'], ['s2.1-pro', 's2.1-pro (needs API credit)'], ['s2-pro', 's2-pro (needs API credit)']] },
-    { id: 'elevenlabs', label: 'ElevenLabs', note: 'two voices stitched · higher cost', model: false, speedTemp: false }
+    { id: 'elevenlabs', label: 'ElevenLabs', note: 'two voices stitched · higher cost', model: false, speedTemp: false },
+    { id: 'easyvoice', label: 'EasyVoice', note: 'Kokoro-82M · stitched · $9.99/mo unlimited (free key = 5k chars/day to test)', model: false, speedTemp: false }
   ];
   function providerVoiceId(h, prov) {
     if (h && h.voiceIds && h.voiceIds[prov]) return h.voiceIds[prov];
@@ -355,10 +356,13 @@
   }
   function hostFields(n, h) {
     h = h || {};
-    const seed = (n === 1 ? '536d3a5e000945adb7038665781a4aca' : '933563129e564b19a115bedd57b7406a');
+    // Recommended default voice IDs per provider (a free Kokoro pair for EasyVoice so the
+    // user can Test immediately) — used only when no id is already saved.
+    const seeds = { fish: (n === 1 ? '536d3a5e000945adb7038665781a4aca' : '933563129e564b19a115bedd57b7406a'),
+                    easyvoice: (n === 1 ? 'af_aoede' : 'am_michael') };
     // One voice-ID field per provider; only the active provider's is shown (toggled live).
     const voiceFields = PROVIDERS.map(function (p) {
-      const val = providerVoiceId(h, p.id) || (p.id === 'fish' ? seed : '');
+      const val = providerVoiceId(h, p.id) || seeds[p.id] || '';
       return '<div class="ad-field ai-provfield" data-prov="' + p.id + '"><label>' + esc(p.label) + ' voice ID</label>' +
         '<input id="ai-h' + n + '-vid-' + p.id + '" value="' + esc(val) + '" placeholder="' + esc(p.label) + ' voice / reference id"></div>';
     }).join('');
