@@ -336,50 +336,76 @@
     bindDailySection($, body);
   }
 
-  /* -------- AI Host Manager: provider toggle (Fish / ElevenLabs) + host voices -------- */
+  /* -------- AI Host Manager: pluggable voice providers + host voices --------
+   * PROVIDER REGISTRY — the ONE place voice platforms are declared. To add a new one:
+   *   1. add an entry here (id, label, note; whether it has a model dropdown / speed+temp);
+   *   2. add a synth adapter for that `id` in backend/31_briefing.ts (synthBytes) — the
+   *      per-provider voice ids are already stored generically in host.voiceIds[id];
+   *   3. it then appears in the "Voice provider" dropdown automatically, with its own fields. */
+  const PROVIDERS = [
+    { id: 'fish', label: 'Fish Audio', note: 'native two-voice · cheapest (~$0.015/briefing)', model: true, speedTemp: true,
+      models: [['s2.1-pro-free', 's2.1-pro-free (free — works now)'], ['s2.1-pro', 's2.1-pro (needs API credit)'], ['s2-pro', 's2-pro (needs API credit)']] },
+    { id: 'elevenlabs', label: 'ElevenLabs', note: 'two voices stitched · higher cost', model: false, speedTemp: false }
+  ];
+  function providerVoiceId(h, prov) {
+    if (h && h.voiceIds && h.voiceIds[prov]) return h.voiceIds[prov];
+    if (prov === 'fish') return h.fishVoiceId || h.voiceId || '';
+    if (prov === 'elevenlabs') return h.elVoiceId || '';
+    return '';
+  }
   function hostFields(n, h) {
     h = h || {};
+    const seed = (n === 1 ? '536d3a5e000945adb7038665781a4aca' : '933563129e564b19a115bedd57b7406a');
+    // One voice-ID field per provider; only the active provider's is shown (toggled live).
+    const voiceFields = PROVIDERS.map(function (p) {
+      const val = providerVoiceId(h, p.id) || (p.id === 'fish' ? seed : '');
+      return '<div class="ad-field ai-provfield" data-prov="' + p.id + '"><label>' + esc(p.label) + ' voice ID</label>' +
+        '<input id="ai-h' + n + '-vid-' + p.id + '" value="' + esc(val) + '" placeholder="' + esc(p.label) + ' voice / reference id"></div>';
+    }).join('');
     return '<div class="ad-sec aff-row" style="padding:14px"><h3 class="ad-sub">Host ' + n + '</h3>' +
       '<label class="ad-toggle"><input type="checkbox" id="ai-h' + n + '-en"' + (h.enabled === false ? '' : ' checked') + '> Enabled</label>' +
       '<div class="ad-row">' +
         '<div class="ad-field"><label>Name</label><input id="ai-h' + n + '-name" value="' + esc(h.name || (n === 1 ? 'Ethan' : 'Sarah')) + '"></div>' +
         '<div class="ad-field"><label>Role</label><input id="ai-h' + n + '-role" value="' + esc(h.role || (n === 1 ? 'Primary host' : 'Co-host')) + '"></div>' +
       '</div>' +
-      '<div class="ad-row">' +
-        '<div class="ad-field"><label>Fish voice ID (reference_id)</label><input id="ai-h' + n + '-fvid" value="' + esc(h.fishVoiceId || h.voiceId || (n === 1 ? '536d3a5e000945adb7038665781a4aca' : '933563129e564b19a115bedd57b7406a')) + '" placeholder="Fish reference_id"></div>' +
-        '<div class="ad-field"><label>ElevenLabs voice ID</label><input id="ai-h' + n + '-evid" value="' + esc(h.elVoiceId || '') + '" placeholder="EL voice id (for the ElevenLabs option)"></div>' +
-      '</div>' +
+      '<div class="ad-row">' + voiceFields + '</div>' +
       '<div class="ad-field"><label>Personality / speaking style</label><textarea id="ai-h' + n + '-pers">' + esc(h.personality || '') + '</textarea></div>' +
       '<div><button class="ad-save" id="ai-h' + n + '-play" type="button">▶ Test Host ' + n + ' voice</button>' +
         '<audio id="ai-h' + n + '-audio" controls style="width:100%;display:none;margin-top:6px"></audio>' +
         '<span class="ad-saved" id="ai-h' + n + '-msg"></span></div></div>';
   }
   function aiHostManagerHTML() {
-    // One dropdown encodes provider + host-mode. Two-host works on BOTH providers
-    // (Fish native multi-speaker; ElevenLabs stitched from per-turn clips).
-    const cur = (aiCfg.provider === 'elevenlabs' ? 'el' : 'fish') + '-' + (aiCfg.hostMode === 'two' ? 'two' : 'single');
+    const prov = aiCfg.provider || 'fish';
+    const mode = aiCfg.hostMode === 'two' ? 'two' : 'single';
     const model = aiCfg.model || 's2.1-pro-free';
     const vs = aiCfg.voiceSettings || {};
     const opt = function (v, c, label) { return '<option value="' + v + '"' + (c === v ? ' selected' : '') + '>' + label + '</option>'; };
+    const provOpts = PROVIDERS.map(function (p) { return opt(p.id, prov, p.label + ' — ' + p.note); }).join('');
+    // Per-provider model dropdowns (only providers that have one) — each toggled by provider.
+    const modelBlocks = PROVIDERS.filter(function (p) { return p.model; }).map(function (p) {
+      return '<div class="ad-field ai-provfield" data-prov="' + p.id + '"><label>' + esc(p.label) + ' model</label><select id="ai-model-' + p.id + '">' +
+        p.models.map(function (m) { return opt(m[0], model, m[1]); }).join('') + '</select></div>';
+    }).join('');
+    // Speed/temp rows (only providers that support prosody tuning) — toggled by provider.
+    const speedTemp = PROVIDERS.filter(function (p) { return p.speedTemp; }).map(function (p) {
+      return '<div class="ad-row ai-provfield" data-prov="' + p.id + '">' +
+        '<div class="ad-field"><label>' + esc(p.label) + ' voice speed (0.5–2.0)</label><input id="ai-speed" type="number" step="0.05" min="0.5" max="2" value="' + (vs.speed != null ? vs.speed : 1.1) + '"></div>' +
+        '<div class="ad-field"><label>' + esc(p.label) + ' expressiveness / temp (0–1)</label><input id="ai-temp" type="number" step="0.05" min="0" max="1" value="' + (vs.temperature != null ? vs.temperature : 0.8) + '"></div>' +
+        '<div class="ad-field"><p class="ad-hint" style="margin:0">Higher speed = snappier; higher temp = more expressive.</p></div></div>';
+    }).join('');
     return '<div class="ad-sec"><h2>AI Host Manager</h2>' +
-      '<p class="ad-hint">Switch the AI Host between <b>Fish Audio</b> and <b>ElevenLabs</b> and between one or two hosts — anytime. ' +
-      'Two-host is a real conversation on either provider (Fish = native multi-speaker, ~$0.015/briefing; ElevenLabs = the two voices stitched, higher cost). ' +
-      'Set each host\'s voice ID for each provider below, then <b>test before switching live</b>. Changes apply to briefings generated after Save.</p>' +
+      '<p class="ad-hint">Pick a <b>voice provider</b> and <b>one or two hosts</b> — only the active provider\'s settings show. Two-host is a real conversation on any provider. ' +
+      'Set the active provider\'s voice ID for each host, <b>test before switching live</b>, then Save. Changes apply to briefings generated after Save.</p>' +
       '<div class="ad-row">' +
-        '<div class="ad-field"><label>Host Mode &amp; provider</label><select id="ai-mode">' +
-          opt('fish-two', cur, 'Two hosts — Fish Audio (native)') + opt('el-two', cur, 'Two hosts — ElevenLabs (stitched)') +
-          opt('fish-single', cur, 'Single host — Fish Audio') + opt('el-single', cur, 'Single host — ElevenLabs') + '</select></div>' +
-        '<div class="ad-field"><label>Fish model</label><select id="ai-model">' + opt('s2.1-pro-free', model, 's2.1-pro-free (free — works now)') + opt('s2.1-pro', model, 's2.1-pro (needs API credit)') + opt('s2-pro', model, 's2-pro (needs API credit)') + '</select></div>' +
+        '<div class="ad-field"><label>Voice provider</label><select id="ai-provider">' + provOpts + '</select></div>' +
+        '<div class="ad-field"><label>Hosts</label><select id="ai-mode2">' + opt('two', mode, 'Two hosts (conversation)') + opt('single', mode, 'Single host') + '</select></div>' +
+        modelBlocks +
       '</div>' +
+      speedTemp +
       '<div class="ad-row">' +
         '<div class="ad-field"><label>Target length (seconds)</label><input id="ai-secs" type="number" min="20" max="180" value="' + (aiCfg.maxSeconds || 70) + '"></div>' +
         '<div class="ad-field"><label>Max events per briefing</label><input id="ai-events" type="number" min="2" max="10" value="' + (aiCfg.maxEvents || 6) + '"></div>' +
         '<div class="ad-field"><label>Tone (optional)</label><input id="ai-tone" value="' + esc(aiCfg.tone || '') + '" placeholder="e.g. warm, upbeat, local"></div>' +
-      '</div>' +
-      '<div class="ad-row">' +
-        '<div class="ad-field"><label>Fish voice speed (0.5–2.0)</label><input id="ai-speed" type="number" step="0.05" min="0.5" max="2" value="' + (vs.speed != null ? vs.speed : 1.1) + '"></div>' +
-        '<div class="ad-field"><label>Fish expressiveness / temp (0–1)</label><input id="ai-temp" type="number" step="0.05" min="0" max="1" value="' + (vs.temperature != null ? vs.temperature : 0.8) + '"></div>' +
-        '<div class="ad-field"><p class="ad-hint" style="margin:0">Speed/temperature apply to Fish. Higher speed = snappier; higher temp = more expressive.</p></div>' +
       '</div>' +
       hostFields(1, aiCfg.host1) + hostFields(2, aiCfg.host2) +
       '<div class="ad-sec aff-row" style="padding:14px"><h3 class="ad-sub">Test the conversation (uses the selected provider + both voices)</h3>' +
@@ -406,14 +432,24 @@
     au.src = segs[i++].url; au.play().catch(function () {});
   }
   function bindAiHostManager($) {
-    const providerOf = function () { return ($('ai-mode').value || 'fish-single').indexOf('el-') === 0 ? 'elevenlabs' : 'fish'; };
-    function testHost(n) {
+    const providerOf = function () { return ($('ai-provider') && $('ai-provider').value) || 'fish'; };
+    const provModel = function () { const el = $('ai-model-' + providerOf()); return el ? el.value : (aiCfg.model || 's2.1-pro-free'); };
+    const provSpeed = function () { const el = $('ai-speed'); return el ? parseFloat(el.value) : (aiCfg.voiceSettings && aiCfg.voiceSettings.speed) || 1.1; };
+    const provTemp = function () { const el = $('ai-temp'); return el ? parseFloat(el.value) : (aiCfg.voiceSettings && aiCfg.voiceSettings.temperature) || 0.8; };
+    const hostVid = function (n) { const el = $('ai-h' + n + '-vid-' + providerOf()); return el ? el.value.trim() : ''; };
+    // Show ONLY the active provider's settings (model / speed+temp / per-host voice ID fields).
+    function applyProviderVisibility() {
       const prov = providerOf();
-      const vid = (prov === 'elevenlabs' ? $('ai-h' + n + '-evid').value : $('ai-h' + n + '-fvid').value).trim();
+      document.querySelectorAll('.ai-provfield').forEach(function (el) { el.style.display = (el.dataset.prov === prov) ? '' : 'none'; });
+    }
+    if ($('ai-provider')) $('ai-provider').onchange = applyProviderVisibility;
+    applyProviderVisibility();
+    function testHost(n) {
+      const prov = providerOf(), vid = hostVid(n);
       const btn = $('ai-h' + n + '-play'), msg = $('ai-h' + n + '-msg'), au = $('ai-h' + n + '-audio');
       if (!vid) { msg.textContent = 'Set a ' + prov + ' voice ID first.'; msg.style.color = '#b3402a'; return; }
       btn.disabled = true; msg.textContent = 'Generating (' + prov + ')…'; msg.style.color = '';
-      invokeBriefing({ test_voice: true, provider: prov, reference_id: vid, model: $('ai-model').value, speed: parseFloat($('ai-speed').value), temperature: parseFloat($('ai-temp').value), text: $('ai-h' + n + '-name').value + ' here — welcome to Eventually. Here\'s what\'s happening around you this weekend.' }).then(function (d) {
+      invokeBriefing({ test_voice: true, provider: prov, reference_id: vid, model: provModel(), speed: provSpeed(), temperature: provTemp(), text: $('ai-h' + n + '-name').value + ' here — welcome to Eventually. Here\'s what\'s happening around you this weekend.' }).then(function (d) {
         btn.disabled = false;
         if (d.error || !d.url) { msg.textContent = 'Failed: ' + (d.error || 'no audio'); msg.style.color = '#b3402a'; return; }
         au.src = d.url; au.style.display = ''; au.play().catch(function () {});
@@ -423,12 +459,11 @@
     if ($('ai-h1-play')) $('ai-h1-play').onclick = function () { testHost(1); };
     if ($('ai-h2-play')) $('ai-h2-play').onclick = function () { testHost(2); };
     if ($('ai-conv-play')) $('ai-conv-play').onclick = function () {
-      const prov = providerOf();
-      const ids = prov === 'elevenlabs' ? [$('ai-h1-evid').value.trim(), $('ai-h2-evid').value.trim()] : [$('ai-h1-fvid').value.trim(), $('ai-h2-fvid').value.trim()];
+      const prov = providerOf(), ids = [hostVid(1), hostVid(2)];
       const btn = $('ai-conv-play'), msg = $('ai-conv-msg'), au = $('ai-conv-audio');
       if (!ids[0] || !ids[1]) { msg.textContent = 'Set both ' + prov + ' voice IDs first.'; msg.style.color = '#b3402a'; return; }
       btn.disabled = true; msg.textContent = 'Generating conversation (' + prov + ')…'; msg.style.color = '';
-      invokeBriefing({ test_conversation: true, provider: prov, reference_id: ids, model: $('ai-model').value, speed: parseFloat($('ai-speed').value), temperature: parseFloat($('ai-temp').value), text: $('ai-conv').value }).then(function (d) {
+      invokeBriefing({ test_conversation: true, provider: prov, reference_id: ids, model: provModel(), speed: provSpeed(), temperature: provTemp(), text: $('ai-conv').value }).then(function (d) {
         btn.disabled = false;
         if (d.error || !(d.segments && d.segments.length)) { msg.textContent = 'Failed: ' + (d.error || 'no audio'); msg.style.color = '#b3402a'; return; }
         playSegments(au, d.segments);
@@ -436,19 +471,28 @@
       });
     };
     if ($('ai-save')) $('ai-save').onclick = function () {
-      const mv = $('ai-mode').value;
-      const provider = mv.indexOf('el-') === 0 ? 'elevenlabs' : 'fish';
-      const hostMode = /-two$/.test(mv) ? 'two' : 'single';
-      function host(n) { return { name: $('ai-h' + n + '-name').value.trim(), fishVoiceId: $('ai-h' + n + '-fvid').value.trim(), elVoiceId: $('ai-h' + n + '-evid').value.trim(), role: $('ai-h' + n + '-role').value.trim(), personality: $('ai-h' + n + '-pers').value.trim(), enabled: $('ai-h' + n + '-en').checked }; }
-      const patch = { aiHost: { provider: provider, hostMode: hostMode, model: $('ai-model').value, maxSeconds: parseInt($('ai-secs').value, 10) || 70, maxEvents: parseInt($('ai-events').value, 10) || 6, tone: $('ai-tone').value.trim(),
-        voiceSettings: { speed: parseFloat($('ai-speed').value) || 1.1, temperature: parseFloat($('ai-temp').value) || 0.8 }, host1: host(1), host2: host(2) } };
+      const provider = providerOf();
+      const hostMode = ($('ai-mode2') && $('ai-mode2').value === 'two') ? 'two' : 'single';
+      // Build each host's per-provider voice map from ALL provider fields (they're all rendered,
+      // just hidden) so switching providers never loses another provider's voice IDs.
+      function host(n) {
+        const cur = (n === 1 ? aiCfg.host1 : aiCfg.host2) || {};
+        const voiceIds = Object.assign({}, cur.voiceIds || {});
+        PROVIDERS.forEach(function (p) { const el = $('ai-h' + n + '-vid-' + p.id); if (el) voiceIds[p.id] = el.value.trim(); });
+        return { name: $('ai-h' + n + '-name').value.trim(), role: $('ai-h' + n + '-role').value.trim(), personality: $('ai-h' + n + '-pers').value.trim(),
+          enabled: $('ai-h' + n + '-en').checked, voiceIds: voiceIds,
+          fishVoiceId: voiceIds.fish || '', elVoiceId: voiceIds.elevenlabs || '' };   // legacy mirror (back-compat)
+      }
+      const patch = { aiHost: { provider: provider, hostMode: hostMode, model: provModel(), maxSeconds: parseInt($('ai-secs').value, 10) || 70, maxEvents: parseInt($('ai-events').value, 10) || 6, tone: $('ai-tone').value.trim(),
+        voiceSettings: { speed: provSpeed() || 1.1, temperature: provTemp() || 0.8 }, host1: host(1), host2: host(2) } };
       const btn = $('ai-save'); btn.disabled = true;
       patchConfig(patch).then(function (r) {
         btn.disabled = false;
         const m = $('ai-msg');
         if (r && r.error) { m.textContent = 'Error: ' + r.error.message; m.style.color = '#b3402a'; return; }
         aiCfg = patch.aiHost;
-        m.textContent = 'Saved ✓' + (hostMode === 'two' ? ' — Two-Host (' + provider + ') LIVE for all users' : ' — Single-Host (' + provider + ') live'); m.style.color = '#3a7d44';
+        const plabel = (PROVIDERS.find(function (p) { return p.id === provider; }) || {}).label || provider;
+        m.textContent = 'Saved ✓ — ' + (hostMode === 'two' ? 'Two-Host' : 'Single-Host') + ' (' + plabel + ') LIVE for all users'; m.style.color = '#3a7d44';
       });
     };
   }
