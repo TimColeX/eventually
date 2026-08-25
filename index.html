@@ -14,13 +14,11 @@
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles/main.css" />
   <!-- GOOGLE ADSENSE (website / installed-PWA only — NOT native apps).
-       To activate real ads: (1) get approved at adsense.google.com (needs a custom
-       domain — GitHub Pages *.github.io is usually rejected), (2) uncomment the loader
-       below with your publisher id, (3) set ADSENSE.enabled/client/slots in src/monetize.js.
-       The ad containers (bottom banner, in-feed cards, detail panel) already reserve
-       space, so no layout shifts when this goes live.
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXX" crossorigin="anonymous"></script>
-  -->
+       Loader ACTIVE with the real publisher id so AdSense can verify + review the site
+       (custom domain eventually-app.com is set). Ads still render ONLY once
+       ADSENSE.enabled + slot ids are set in src/monetize.js — until then this script
+       loads but shows nothing. Ad containers already reserve space (no layout shift). -->
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9120618442042757" crossorigin="anonymous"></script>
 </head>
 <body>
   <!-- background -->
@@ -111,6 +109,7 @@
         <button type="submit">Send magic link</button>
       </form>
       <p class="auth-fine">We'll email you a secure sign-in link. No password needed.</p>
+      <p class="auth-legal">By continuing you agree to our <a href="terms.html" target="_blank" rel="noopener">Terms</a> and <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</p>
     </div>
   </div>
 

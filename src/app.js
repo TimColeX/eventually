@@ -1806,6 +1806,7 @@
       '<details><summary>What is the eventually Host?</summary><p>Your live AI concierge — it narrates what\'s happening worldwide and tailors picks to your location and interests. Press play to hear it, with a music bed behind it.</p></details>' +
       '<details><summary>How do I list my event?</summary><p>Open the ⋯ menu → Create an event, drop a pin on the map, and publish straight to the globe.</p></details>' +
       '<details><summary>What is Eventually Plus?</summary><p>Your personal AI event concierge: longer personalized briefings, ad-free listening &amp; browsing, travel-aware city briefings, saved-event reminders and early access to new features.</p></details>' +
+      '<div class="help-legal"><a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a> · <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a></div>' +
       '</div>');
   }
   // My events — manage/edit/delete your published events in its OWN modal (separate from Create).
