@@ -560,13 +560,20 @@
   // ceiling (cache hits + empty areas cost nothing) — it's the worst case if EVERY
   // capped generation were a fresh full briefing.
   function budgetCeilingText(n) {
-    const provider = (aiCfg.provider === 'elevenlabs') ? 'ElevenLabs' : 'Fish';
+    const prov = aiCfg.provider || 'fish';
     const chars = Math.round((parseInt(aiCfg.maxSeconds, 10) || 70) * 15);
+    if (!n || n <= 0) {
+      return '<b>Unlimited</b> — no hard cap on new generations per day. Cost/usage tracks how many populated areas are opened per day; empty areas and cache hits are free. Enter a number to cap it.';
+    }
+    if (prov === 'easyvoice') {
+      // EasyVoice is FLAT-RATE ($9.99/mo Pro), so the risk isn't a surprise bill — it's the
+      // 10M chars/month fair-use cap. Frame the ceiling as % of that cap, not $.
+      const moChars = n * chars * 30, cap = 10000000, pct = Math.round((moChars / cap) * 100);
+      return 'Active voice: <b>EasyVoice</b> (flat <b>$9.99/mo</b> Pro, 10M chars/mo fair-use). At ~' + chars + ' chars/briefing, ' + n + '/day ≈ <b>' + moChars.toLocaleString() + ' chars/month</b> worst-case (~' + pct + '% of the fair-use cap). Real usage is far lower — cache hits + empty areas are free.';
+    }
+    const provider = prov === 'elevenlabs' ? 'ElevenLabs' : 'Fish';
     const price = provider === 'ElevenLabs' ? 0.15 : 0.015;   // $ per 1,000 chars
     const per = (chars / 1000) * price;                       // $ per new full briefing
-    if (!n || n <= 0) {
-      return '<b>Unlimited</b> — no hard spend ceiling. Cost tracks how many populated areas are opened per day; empty areas and cache hits are free. Enter a number to cap it.';
-    }
     const day = n * per, mo = Math.round(day * 30);
     return 'Active voice: <b>' + provider + '</b> (~' + chars + ' chars/briefing at ~$' + price.toFixed(3) + '/1k). Worst-case ceiling: <b>$' + day.toFixed(2) + '/day</b> · <b>$' + mo.toLocaleString() + '/month</b>. Real spend is usually far lower (cache hits + empty areas cost nothing).';
   }
