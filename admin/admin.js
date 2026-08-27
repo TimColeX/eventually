@@ -330,10 +330,11 @@
   // The old fill-in-the-blank template editor (host_script) is retired — Claude now
   // authors BOTH tiers, so everything lives in the one "AI Host briefing" section.
   function drawHost(body) {
-    body.innerHTML = aiHostManagerHTML() + dailySectionHTML();
+    body.innerHTML = aiHostManagerHTML() + dailySectionHTML() + cityRadioHTML();
     const $ = function (id) { return document.getElementById(id); };
     bindAiHostManager($);
     bindDailySection($, body);
+    bindCityRadio($);
   }
 
   /* -------- AI Host Manager: pluggable voice providers + host voices --------
@@ -434,6 +435,115 @@
     let i = 0; au.style.display = '';
     au.onended = function () { if (i < segs.length) { au.src = segs[i++].url; au.play().catch(function () {}); } };
     au.src = segs[i++].url; au.play().catch(function () {});
+  }
+
+  /* -------- City radio (cached AI filler segments per city) --------
+   * When a city has no more events, the hosts play these CACHED segments with music
+   * between. Generated once per city (AI), reused forever; regen only when edited here.
+   * All CRUD goes through the briefing Edge Function's admin-gated `city_admin` modes. */
+  const CR_ORDER = ['intro', 'history', 'culture', 'events', 'outro'];
+  function cityRadioHTML() {
+    return '<div class="ad-sec"><h2>City radio (filler)</h2>' +
+      '<p class="ad-hint">When a city runs out of events, the hosts play these <b>cached</b> segments — facts, history, culture and typical events — with music between, so the station never falls silent. Generated once per city by AI and reused forever (no per-play voice cost). Edit any script and <b>Save</b> to re-voice it, or <b>Regenerate</b> to have the AI rewrite the whole city.</p>' +
+      '<div class="ad-row">' +
+        '<div class="ad-field" style="flex:2"><label>Generate or open a city</label><input id="cr-city" placeholder="e.g. Toronto"></div>' +
+        '<div class="ad-field" style="align-self:flex-end"><button class="ad-save" id="cr-gen" type="button">Generate / open</button></div>' +
+      '</div>' +
+      '<div class="ad-saved" id="cr-msg"></div>' +
+      '<div class="ad-field"><label>Cities with content</label><div class="ad-list" id="cr-list">Loading…</div></div>' +
+      '<div id="cr-editor" style="display:none;margin-top:14px;border-top:1px solid var(--line);padding-top:14px">' +
+        '<h3 class="ad-sub">Editing: <span id="cr-editing"></span></h3>' +
+        '<div id="cr-segs"></div>' +
+        '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">' +
+          '<button class="ad-save" id="cr-save" type="button">Save &amp; re-voice</button>' +
+          '<button class="ad-save" id="cr-regen" type="button">Regenerate (AI)</button>' +
+          '<button class="ad-save" id="cr-play" type="button">▶ Preview</button>' +
+          '<button class="ad-save ad-danger" id="cr-del" type="button">Delete city</button>' +
+        '</div>' +
+        '<audio id="cr-audio" controls style="width:100%;display:none;margin-top:8px"></audio>' +
+        '<div class="ad-saved" id="cr-emsg"></div>' +
+      '</div></div>';
+  }
+  function crSegFields(segs) {
+    const byType = {}; (segs || []).forEach(function (s) { byType[s.seg_type] = s; });
+    return CR_ORDER.map(function (t) {
+      const s = byType[t] || {};
+      return '<div class="ad-field"><label>' + t + ' — host ' + ((s.speaker || 0) + 1) + ' · ' + (s.source || 'ai') + '</label>' +
+        '<textarea id="cr-seg-' + t + '" rows="2">' + esc(s.script || '') + '</textarea></div>';
+    }).join('');
+  }
+  function bindCityRadio($) {
+    let editing = null;
+    const setMsg = function (id, t, ok) { const m = $(id); if (m) { m.textContent = t || ''; m.style.color = t ? (ok ? '#3a7d44' : '#b3402a') : ''; } };
+    function loadList() {
+      invokeBriefing({ city_admin: 'list' }).then(function (d) {
+        const el = $('cr-list'); if (!el) return;
+        if (d.error) { el.innerHTML = '<span class="ad-hint">' + esc(d.error) + '</span>'; return; }
+        const cities = (d && d.cities) || [];
+        if (!cities.length) { el.innerHTML = '<span class="ad-hint">No cities yet — generate one above, or they appear automatically as users explore quiet cities.</span>'; return; }
+        el.innerHTML = cities.map(function (c) {
+          return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0"><b style="flex:1">' + esc(c.city_key) + '</b>' +
+            '<span class="ad-hint">' + c.segments + ' segs · ' + esc(c.source) + '</span>' +
+            '<button class="ad-save" style="padding:3px 10px" data-open="' + esc(c.city_key) + '">Edit</button></div>';
+        }).join('');
+        el.querySelectorAll('[data-open]').forEach(function (b) { b.onclick = function () { openCity(b.getAttribute('data-open')); }; });
+      });
+    }
+    function openCity(city) {
+      setMsg('cr-msg', 'Loading ' + city + '…');
+      invokeBriefing({ city_admin: 'get', city: city }).then(function (d) {
+        if (d.error) { setMsg('cr-msg', d.error); return; }
+        setMsg('cr-msg', ''); editing = d.city;
+        $('cr-editing').textContent = editing;
+        $('cr-segs').innerHTML = crSegFields(d.segments);
+        $('cr-editor').style.display = ''; $('cr-audio').style.display = 'none'; setMsg('cr-emsg', '');
+      });
+    }
+    if ($('cr-gen')) $('cr-gen').onclick = function () {
+      const city = ($('cr-city').value || '').trim(); if (!city) { setMsg('cr-msg', 'Enter a city name.'); return; }
+      const btn = $('cr-gen'); btn.disabled = true; setMsg('cr-msg', 'Generating ' + city + ' (first time ~20s)…');
+      invokeBriefing({ city_admin: 'generate', city: city }).then(function (d) {
+        btn.disabled = false;
+        if (d.error || !d.ok) { setMsg('cr-msg', 'Failed: ' + (d.error || 'no content generated')); return; }
+        setMsg('cr-msg', 'Ready ✓', true); loadList(); openCity(d.city);
+      });
+    };
+    if ($('cr-save')) $('cr-save').onclick = function () {
+      if (!editing) return;
+      const segments = CR_ORDER.map(function (t) { const ta = $('cr-seg-' + t); return ta ? { seg_type: t, script: ta.value } : null; }).filter(Boolean);
+      const btn = $('cr-save'); btn.disabled = true; setMsg('cr-emsg', 'Saving…');
+      invokeBriefing({ city_admin: 'save', city: editing, segments: segments }).then(function (d) {
+        btn.disabled = false;
+        if (d.error) { setMsg('cr-emsg', d.error); return; }
+        setMsg('cr-emsg', 'Saved ✓ — will re-voice on next play', true); loadList();
+      });
+    };
+    if ($('cr-regen')) $('cr-regen').onclick = function () {
+      if (!editing || !confirm('Regenerate ' + editing + ' with AI? This replaces the current scripts.')) return;
+      const btn = $('cr-regen'); btn.disabled = true; setMsg('cr-emsg', 'Regenerating (~20s)…');
+      invokeBriefing({ city_admin: 'delete', city: editing })
+        .then(function () { return invokeBriefing({ city_admin: 'generate', city: editing }); })
+        .then(function (d) {
+          btn.disabled = false;
+          if (d.error || !d.ok) { setMsg('cr-emsg', 'Failed: ' + (d.error || 'no content')); return; }
+          setMsg('cr-emsg', 'Regenerated ✓', true); openCity(editing); loadList();
+        });
+    };
+    if ($('cr-play')) $('cr-play').onclick = function () {
+      if (!editing) return;
+      setMsg('cr-emsg', 'Loading audio…');
+      invokeBriefing({ city_admin: 'generate', city: editing }).then(function (d) {
+        if (d.error || !(d.segments && d.segments.length)) { setMsg('cr-emsg', 'No audio'); return; }
+        setMsg('cr-emsg', '', true); playSegments($('cr-audio'), d.segments);
+      });
+    };
+    if ($('cr-del')) $('cr-del').onclick = function () {
+      if (!editing || !confirm('Delete all radio content for ' + editing + '?')) return;
+      invokeBriefing({ city_admin: 'delete', city: editing }).then(function () {
+        $('cr-editor').style.display = 'none'; editing = null; setMsg('cr-msg', 'Deleted ✓', true); loadList();
+      });
+    };
+    loadList();
   }
   function bindAiHostManager($) {
     const providerOf = function () { return ($('ai-provider') && $('ai-provider').value) || 'fish'; };
