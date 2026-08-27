@@ -30,6 +30,9 @@
     this.getCityFiller = opts.getCityFiller || null;  // () -> Promise<{segments,filler}|null> (cached city radio filler for the current city)
     this.MUSIC_GAP = 4200;                        // ~4s music swell between radio-filler segments (uses the play-button bed)
     this._fillerPlaying = false;                  // true while cached city filler segments are playing (incl. music gaps)
+    this.REPLAY_MS = 180000;                      // continuous radio: after settling on music, re-run the show (~3 min)
+    this.FILLER_COOLDOWN = 180000;                // never replay the city segments within 3 min of last playing them
+    this._lastFillerAt = 0; this._replayTimer = null;
     this.onHomeReset = opts.onHomeReset || null;  // () -> void ("back to my area" clicked)
     this.onMuteToggle = opts.onMuteToggle || null;  // () -> bool (new muted state)
     this.initialMuted = !!opts.initialMuted;
@@ -192,6 +195,7 @@
   AIHost.prototype.switchLocation = function (city) {
     if (!this.speaking && !this._musicHold) return;
     this._gen++;                                 // invalidate ANY in-flight generation for the old city (#4)
+    clearTimeout(this._replayTimer); this._replayTimer = null;   // cancel any pending continuous-radio replay
     this._identCity = city || this._focusCity || null;   // spoken "heading to <city>" masks the fetch
     this._primeAudio();                          // iOS: keep the audio element alive within THIS tap gesture
     const self = this;
@@ -698,6 +702,26 @@
     this.onSpeakEnd();                                    // swell the music back up
     this.icPlay.style.display = 'none';                   // button = "music playing"
     this.icPause.style.display = '';
+    // CONTINUOUS RADIO: after ~3 min on the music bed, bring the show back around for the
+    // current city (re-checks events; replays city segments only if the 3-min cooldown has
+    // passed). Cancelled the moment the user switches city, pauses, or stops.
+    clearTimeout(this._replayTimer); this._replayTimer = null;
+    if (this.twoHost && this.REPLAY_MS > 0) {
+      const self = this;
+      this._replayTimer = setTimeout(function () { self._radioReplay(); }, this.REPLAY_MS);
+    }
+  };
+  // Continuous-radio re-engage: resume the show for the CURRENT city after the music pause.
+  // Only fires if still holding on the music bed (user hasn't switched/paused). Skips the
+  // welcome/intro (deduped anyway) and goes straight to the briefing → filler.
+  AIHost.prototype._radioReplay = function () {
+    clearTimeout(this._replayTimer); this._replayTimer = null;
+    if (!this._musicHold || !this.twoHost) return;         // user acted → cancel
+    this._musicHold = false; this.speaking = true;
+    this._premiumPlaying = false; this._fillerPlaying = false;
+    this._openerDone = false;                              // re-run the show for the current city
+    this.icPlay.style.display = 'none'; this.icPause.style.display = '';
+    this._rotate();
   };
 
   // ── CITY RADIO FILLER ───────────────────────────────────────────────────────────
@@ -710,6 +734,7 @@
     if (!this.speaking || myGen !== this._gen) { return; }          // switched away / stopped → abort
     if (!segs || i >= segs.length) { this._fillerPlaying = false; this._endFreeIntro(); return; }
     this._fillerPlaying = true;
+    if (i === 0) this._lastFillerAt = Date.now();          // cooldown anchor (no repeat within 3 min)
     const seg = segs[i], self = this;
     this._audioSpeak(seg.url, seg.text || '', function () {
       if (!self.speaking || myGen !== self._gen) { self._fillerPlaying = false; return; }
@@ -724,6 +749,9 @@
     const self = this; if (myGen == null) myGen = this._gen;
     if (!this.speaking || myGen !== this._gen) return;
     if (!this.getCityFiller) { this._endFreeIntro(); return; }
+    // COOLDOWN: don't replay the city segments within 3 min of last playing them — settle
+    // to music instead (the replay timer will bring the show back around later).
+    if (Date.now() - this._lastFillerAt < this.FILLER_COOLDOWN) { this._endFreeIntro(); return; }
     this._setBuffering(true);
     Promise.resolve(this.getCityFiller()).then(function (f) {
       self._setBuffering(false);
@@ -883,6 +911,7 @@
   // Music-only controls (free tier, after the intro).
   AIHost.prototype._musicPause = function () {
     this._musicHold = false;
+    clearTimeout(this._replayTimer); this._replayTimer = null;   // paused → cancel the radio replay
     this.onPause();                                      // stop the music bed
     this.icPlay.style.display = ''; this.icPause.style.display = 'none';
   };
@@ -890,6 +919,8 @@
     this._musicHold = true;
     this.onPlay();                                       // resume the music bed (no narration)
     this.icPlay.style.display = 'none'; this.icPause.style.display = '';
+    clearTimeout(this._replayTimer);                     // resumed → bring the show back around (~3 min)
+    if (this.twoHost && this.REPLAY_MS > 0) { const self = this; this._replayTimer = setTimeout(function () { self._radioReplay(); }, this.REPLAY_MS); }
   };
 
   AIHost.prototype.play = function () {
@@ -979,6 +1010,7 @@
     this.briefingPlaying = false;
     this._switchPending = false;
     this._premiumPlaying = false;
+    this._fillerPlaying = false;
     this._musicHold = false;
     this._pendingBriefing = null;
     this._identCity = null;
@@ -989,6 +1021,7 @@
     try { this._audio.pause(); } catch (e) {}
     clearInterval(this._ampTimer); clearInterval(this._voiceTween);
     clearTimeout(this._introTimer); clearTimeout(this._gapTimer); clearTimeout(this._readTimer); clearTimeout(this._switchFade);
+    clearTimeout(this._replayTimer); this._replayTimer = null; clearTimeout(this._fillerGap);   // cancel continuous-radio replay + filler
     this.onPause();                         // stop the music bed
     if (!this._timer) this._timer = setInterval(this._rotate.bind(this), this.IDLE);   // resume silent ticker
   };

@@ -410,6 +410,7 @@
       '<div class="ad-row">' +
         '<div class="ad-field"><label>Target length (seconds)</label><input id="ai-secs" type="number" min="20" max="180" value="' + (aiCfg.maxSeconds || 70) + '"></div>' +
         '<div class="ad-field"><label>Max events per briefing</label><input id="ai-events" type="number" min="2" max="10" value="' + (aiCfg.maxEvents || 6) + '"></div>' +
+        '<div class="ad-field"><label>Look-ahead (days)</label><input id="ai-days" type="number" min="1" max="90" value="' + (aiCfg.daysAhead || 30) + '"><div class="ad-hint" style="margin:2px 0 0">How far ahead the hosts mention events. Beyond this, a city plays cached filler.</div></div>' +
         '<div class="ad-field"><label>Tone (optional)</label><input id="ai-tone" value="' + esc(aiCfg.tone || '') + '" placeholder="e.g. warm, upbeat, local"></div>' +
       '</div>' +
       hostFields(1, aiCfg.host1) + hostFields(2, aiCfg.host2) +
@@ -597,7 +598,7 @@
           enabled: $('ai-h' + n + '-en').checked, voiceIds: voiceIds,
           fishVoiceId: voiceIds.fish || '', elVoiceId: voiceIds.elevenlabs || '' };   // legacy mirror (back-compat)
       }
-      const patch = { aiHost: { provider: provider, hostMode: hostMode, model: provModel(), maxSeconds: parseInt($('ai-secs').value, 10) || 70, maxEvents: parseInt($('ai-events').value, 10) || 6, tone: $('ai-tone').value.trim(),
+      const patch = { aiHost: { provider: provider, hostMode: hostMode, model: provModel(), maxSeconds: parseInt($('ai-secs').value, 10) || 70, maxEvents: parseInt($('ai-events').value, 10) || 6, daysAhead: Math.min(90, Math.max(1, parseInt($('ai-days').value, 10) || 30)), tone: $('ai-tone').value.trim(),
         voiceSettings: { speed: provSpeed() || 1.1, temperature: provTemp() || 0.8 }, host1: host(1), host2: host(2) } };
       const btn = $('ai-save'); btn.disabled = true;
       patchConfig(patch).then(function (r) {
