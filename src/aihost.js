@@ -27,6 +27,9 @@
     this.getWelcome = opts.getWelcome || null;    // () -> Promise<{url,text}|null> (official cached "Welcome to Eventually…")
     this.getIntro = opts.getIntro || null;        // ({have}) -> Promise<{changed,sig,segments}|null> (one-time host self-intro)
     this.getIdent = opts.getIdent || null;        // (city) -> Promise<{url,text}|null> (cached "heading to <city>" switch ident)
+    this.getCityFiller = opts.getCityFiller || null;  // () -> Promise<{segments,filler}|null> (cached city radio filler for the current city)
+    this.MUSIC_GAP = 4200;                        // ~4s music swell between radio-filler segments (uses the play-button bed)
+    this._fillerPlaying = false;                  // true while cached city filler segments are playing (incl. music gaps)
     this.onHomeReset = opts.onHomeReset || null;  // () -> void ("back to my area" clicked)
     this.onMuteToggle = opts.onMuteToggle || null;  // () -> bool (new muted state)
     this.initialMuted = !!opts.initialMuted;
@@ -200,6 +203,13 @@
       this.icPlay.style.display = 'none'; this.icPause.style.display = '';
       this._rotate();
       return;
+    }
+    // Mid city-radio-filler: stop the sequence immediately (Section 3 — a globe spin
+    // interrupts). If a segment is actively playing, fall through to the crossfade below;
+    // if we're in a between-segment music gap, apply the switch right now.
+    if (this._fillerPlaying) {
+      clearTimeout(this._fillerGap); this._fillerPlaying = false;
+      if (!this._premiumPlaying) { this._applySwitch(); return; }
     }
     if (this._premiumPlaying) {                 // crossfade out the current clip, then switch
       this._voiceVol(0, 0.5);
@@ -501,6 +511,7 @@
     if (!this.getLine) return;
     if (this.briefingPlaying) return;          // the browser-voice briefing owns the audio right now
     if (this._premiumPlaying) return;          // a cached clip is playing (two-host briefing/ident) → never re-fetch/replay over it
+    if (this._fillerPlaying) return;           // cached city radio-filler is playing (or in a music gap) → don't re-fetch over it
     if (this._musicHold) return;               // free intro done → music bed only, no caption rotation
     const self = this;
     // Briefing mode: Plus = SHARED, cached ElevenLabs briefing (premium voice from the
@@ -521,9 +532,11 @@
           self.getBriefing(quick).then(function (b) {            // quick → short "headline" (fast synth) on a switch
             if (stale()) { self._setBuffering(false); return; } // a newer city started → ignore this result (#4/#5)
             self._setBuffering(false);
-            if (b && b.segments && b.segments.length) self._playFreeIntro(b.segments, 0);
-            else self._endFreeIntro();                       // no audio → music only, no browser voice
-          }).catch(function () { self._setBuffering(false); if (stale()) return; self._endFreeIntro(); });
+            if (b && b.segments && b.segments.length) {
+              if (b.filler) self._playFillerSegs(b.segments, 0, myGen);   // quiet city → already the cached radio filler
+              else self._playSegmentsThen(b.segments, 0, function () { self._continueWithFiller(myGen); });  // events → then city filler (radio)
+            } else self._continueWithFiller(myGen);          // no event audio → try city filler, else music
+          }).catch(function () { self._setBuffering(false); if (stale()) return; self._continueWithFiller(myGen); });
         };
         // On a CITY SWITCH, play a short cached "heading to <city>" ident FIRST (instant),
         // masking the new briefing's generation latency; then fetch + play the (short) briefing.
@@ -669,6 +682,7 @@
     this._musicHold = true;                               // music continues on its own
     this._introDone = true;
     this._premiumPlaying = false;
+    this._fillerPlaying = false; clearTimeout(this._fillerGap);   // city radio-filler (if any) is done
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     // Keep the voice element WARM (muted silent loop) instead of pausing it. On iOS Safari a
     // media element that has gone idle often refuses a later programmatic play() — which made
@@ -684,6 +698,39 @@
     this.onSpeakEnd();                                    // swell the music back up
     this.icPlay.style.display = 'none';                   // button = "music playing"
     this.icPause.style.display = '';
+  };
+
+  // ── CITY RADIO FILLER ───────────────────────────────────────────────────────────
+  // After the event briefing (or for a quiet city), keep the station going with the city's
+  // CACHED modular segments (facts/history/culture/typical events), a ~4s Eventually-music
+  // swell between each, then settle on the music bed. All audio is cached + reused (the
+  // play-button bed is reused for the transitions), so this adds no per-play AI cost.
+  AIHost.prototype._playFillerSegs = function (segs, i, myGen) {
+    if (myGen == null) myGen = this._gen;
+    if (!this.speaking || myGen !== this._gen) { return; }          // switched away / stopped → abort
+    if (!segs || i >= segs.length) { this._fillerPlaying = false; this._endFreeIntro(); return; }
+    this._fillerPlaying = true;
+    const seg = segs[i], self = this;
+    this._audioSpeak(seg.url, seg.text || '', function () {
+      if (!self.speaking || myGen !== self._gen) { self._fillerPlaying = false; return; }
+      self.onSpeakEnd();                                            // 🎵 swell the bed to the front (the "~5s music")
+      clearTimeout(self._fillerGap);
+      self._fillerGap = setTimeout(function () { self._playFillerSegs(segs, i + 1, myGen); }, self.MUSIC_GAP);
+    }, true /* no browser fallback */, { text: seg.text || '', kind: 'greeting', lang: 'en-US' });
+  };
+  // Fetch the current city's cached filler and play it (radio-style). Cheap: cached after
+  // the first ever visit to that city. On failure/none → settle to the music bed.
+  AIHost.prototype._continueWithFiller = function (myGen) {
+    const self = this; if (myGen == null) myGen = this._gen;
+    if (!this.speaking || myGen !== this._gen) return;
+    if (!this.getCityFiller) { this._endFreeIntro(); return; }
+    this._setBuffering(true);
+    Promise.resolve(this.getCityFiller()).then(function (f) {
+      self._setBuffering(false);
+      if (!self.speaking || myGen !== self._gen) return;
+      if (f && f.segments && f.segments.length) self._playFillerSegs(f.segments, 0, myGen);
+      else self._endFreeIntro();
+    }).catch(function () { self._setBuffering(false); if (self.speaking && myGen === self._gen) self._endFreeIntro(); });
   };
 
   // Play a resolved briefing result: Plus audio segments, else the free browser show.

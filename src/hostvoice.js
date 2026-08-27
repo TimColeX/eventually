@@ -85,6 +85,22 @@
           return null;
         }).catch(function () { return null; });
     },
+    // CITY RADIO FILLER — the city's cached modular segments (facts/history/culture/typical
+    // events) played when events run out, to keep the station going. All cached + reused
+    // (generated once per city, ever). opts: {city,lat,lon,lang}
+    // -> Promise<{segments:[{url,text,speaker,seg}], filler:true, music:'between'}|null>
+    getCityFiller: function (opts) {
+      if (!ENABLED) return Promise.resolve(null);
+      var o = opts || {};
+      if (!o.city) return Promise.resolve(null);   // filler needs a real city name
+      return fetch(BASE + '/functions/v1/briefing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': ANON, 'Authorization': 'Bearer ' + ANON },
+        body: JSON.stringify({ filler: true, city: o.city, lat: (o.lat != null ? o.lat : null), lon: (o.lon != null ? o.lon : null), lang: (o.lang || 'en').slice(0, 2) })
+      }).then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) { return (j && j.segments && j.segments.length) ? { segments: j.segments, filler: true, music: j.music || 'between' } : null; })
+        .catch(function () { return null; });
+    },
     // Fire-and-forget PRE-WARM: generate + cache a city's briefing in the background so a
     // later tap is a ~2s cache hit instead of a 15-60s cold generation. Uses the SAME
     // params as the switch fetch (quick:true) so the cache key matches. Result ignored.

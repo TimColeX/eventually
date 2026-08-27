@@ -387,6 +387,16 @@
       if (!window.EventuallyHostVoice || !window.EventuallyHostVoice.getIdent) return Promise.resolve(null);
       return window.EventuallyHostVoice.getIdent(city, P.get().language || 'en');
     },
+    // CITY RADIO FILLER for the CURRENT city — cached modular segments (facts/history/
+    // culture/typical events) played after events run out to keep the station going.
+    // Same location model as getBriefing; cached per city so it adds no per-play AI cost.
+    getCityFiller: function () {
+      if (!window.EventuallyHostVoice || !window.EventuallyHostVoice.getCityFiller) return Promise.resolve(null);
+      const loc = activeBriefingLocation || P.get().location;
+      const city = (loc && loc.city) ? loc.city : null;
+      if (!city) return Promise.resolve(null);
+      return window.EventuallyHostVoice.getCityFiller({ city: city, lat: loc && loc.lat, lon: loc && loc.lon, lang: P.get().language || 'en' });
+    },
     // Admin-tunable delivery for the free browser voice (rate/pitch).
     getVoiceSettings: function () { return RT.hostVoice || {}; },
     // "Back to my area" — return the Host (and the map) to the user's home location.
@@ -1806,7 +1816,7 @@
       '<details><summary>What is the eventually Host?</summary><p>Your live AI concierge — it narrates what\'s happening worldwide and tailors picks to your location and interests. Press play to hear it, with a music bed behind it.</p></details>' +
       '<details><summary>How do I list my event?</summary><p>Open the ⋯ menu → Create an event, drop a pin on the map, and publish straight to the globe.</p></details>' +
       '<details><summary>What is Eventually Plus?</summary><p>Your personal AI event concierge: longer personalized briefings, ad-free listening &amp; browsing, travel-aware city briefings, saved-event reminders and early access to new features.</p></details>' +
-      '<div class="help-legal"><a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a> · <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a></div>' +
+      '<div class="help-legal"><a href="about.html" target="_blank" rel="noopener">About</a> · <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a> · <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a></div>' +
       '</div>');
   }
   // My events — manage/edit/delete your published events in its OWN modal (separate from Create).
