@@ -972,6 +972,7 @@
         '<div class="ad-row">' +
         field('cf-pri', 'Priority spikes', sp.priority) + field('cf-fair', 'Continent-fair spikes', sp.fair) + field('cf-spon', 'Sponsored spikes', sp.sponsored) +
         '</div>' +
+        '<div class="ad-row"><div class="ad-field"><label>Globe time window (days)</label><input id="cf-win" type="number" min="1" max="365" value="' + (c.windowDays || 60) + '"><div class="ad-hint" style="margin:2px 0 0">How far ahead an event can be and still appear on the globe. Higher = more markers/spikes (up to your event data).</div></div></div>' +
         '<label class="ad-toggle"><input type="checkbox" id="cf-ads"' + (c.adsEnabled === false ? '' : ' checked') + '> Show ads (non-Plus)</label>' +
         '<label class="ad-toggle"><input type="checkbox" id="cf-host"' + (c.hostEnabled === false ? '' : ' checked') + '> AI Host enabled</label></div>' +
 
@@ -1009,6 +1010,7 @@
         const lines = function (id) { return document.getElementById(id).value.split(/[\n,]+/).map(function (s) { return s.trim(); }).filter(Boolean); };
         const merged = Object.assign({}, c, {
           spikes: { priority: +val('cf-pri'), fair: +val('cf-fair'), sponsored: +val('cf-spon') },
+          windowDays: Math.min(365, Math.max(1, +val('cf-win') || 60)),
           adsEnabled: document.getElementById('cf-ads').checked,
           hostEnabled: document.getElementById('cf-host').checked,
           pinnedLocations: pinned, hiddenCities: lines('cf-hidc'), hiddenEvents: lines('cf-hide')

@@ -2246,6 +2246,12 @@
         if (!cfg) return;
         if (cfg.spikes) RT.spikes = Object.assign({}, RT.spikes, cfg.spikes);
         if (typeof cfg.maxClusters === 'number') RT.maxClusters = cfg.maxClusters;
+        // Admin-tunable globe time window (days). Re-load the globe with the wider window so
+        // more upcoming events appear as markers (the RPC default is 60).
+        if (typeof cfg.windowDays === 'number' && cfg.windowDays > 0 && window.EventuallyAPI.setWindowDays) {
+          window.EventuallyAPI.setWindowDays(cfg.windowDays);
+          if (cfg.windowDays !== 60) refreshLiveEvents();
+        }
         if (typeof cfg.adsEnabled === 'boolean') RT.adsEnabled = cfg.adsEnabled;
         if (typeof cfg.hostEnabled === 'boolean') RT.hostEnabled = cfg.hostEnabled;
         if (cfg.hostLines) RT.hostLines = cfg.hostLines;

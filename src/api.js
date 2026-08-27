@@ -75,7 +75,12 @@
     };
   }
 
-  // GET events for a viewport (defaults to the whole globe + the 60-day window).
+  // Admin-tunable look-ahead for the globe (days). Default 60; set via setWindowDays from
+  // app_config.windowDays. Controls how far ahead an event can be and still show as a marker.
+  let windowDays = 60;
+  function setWindowDays(n) { const v = Number(n); if (Number.isFinite(v) && v > 0) windowDays = Math.min(365, Math.max(1, Math.round(v))); }
+
+  // GET events for a viewport (defaults to the whole globe + the admin window, default 60 days).
   function fetchEvents(opts) {
     if (!REMOTE) return Promise.resolve(null);
     const o = opts || {};
@@ -84,6 +89,7 @@
       min_lon: o.minLon != null ? o.minLon : -180,
       max_lat: o.maxLat != null ? o.maxLat : 90,
       max_lon: o.maxLon != null ? o.maxLon : 180,
+      to_ts: new Date(Date.now() + windowDays * 86400000).toISOString(),   // admin-tunable window
       cats: o.categories || null
     };
     return fetch(BASE + '/rest/v1/rpc/events_in_view', {
@@ -155,6 +161,7 @@
     boot: boot,
     onData: onData,
     fetchEvents: fetchEvents,
+    setWindowDays: setWindowDays,
     toEvent: toEvent,
     getConfig: getConfig,
     search: search,
