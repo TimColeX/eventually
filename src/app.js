@@ -905,10 +905,19 @@
         '<p class="evd-note">Hosted natively on Eventually — no external ticketing needed.</p></div>';
     } else if (ev.ticketUrl) {
       // Single, clean CTA → the official provider via the /go redirect (affiliate
-      // resolved server-side). No prices, no "buy through Eventually".
+      // resolved server-side). No prices, no "buy through Eventually". The LABEL adapts:
+      // "Get Tickets" only for ticketed events (a price, or a known ticket seller); free /
+      // community / feed events (e.g. university, library, museum) say "View event" so we
+      // never falsely promise a purchase.
+      var ticketed = (ev.sources || []).some(function (s) { return s.price != null; }) ||
+        /ticketmaster|seatgeek|eventbrite|ticketweb|axs|stubhub|dice/i.test(String(ev.source || '') + ' ' + (ev.sources || []).map(function (s) { return s.source || ''; }).join(' '));
+      var cta = ticketed ? 'Get Tickets ↗' : 'View event ↗';
+      var note = ticketed
+        ? "You'll be taken to " + esc(ev.sourceLabel || 'the official provider') + " to book. Eventually doesn't sell tickets."
+        : "You'll be taken to " + esc(ev.sourceLabel || 'the source') + " for details. Eventually doesn't sell tickets.";
       avail = '<div class="evd-section">' +
-        '<a class="evd-tickets" data-tickets="' + esc(ev.id) + '" href="' + esc(ticketUrl(ev)) + '" target="_blank" rel="noopener nofollow">Get Tickets ↗</a>' +
-        '<p class="evd-note">You\'ll be taken to ' + esc(ev.sourceLabel || 'the official provider') + ' to book. Eventually doesn\'t sell tickets.</p></div>';
+        '<a class="evd-tickets" data-tickets="' + esc(ev.id) + '" href="' + esc(ticketUrl(ev)) + '" target="_blank" rel="noopener nofollow">' + cta + '</a>' +
+        '<p class="evd-note">' + note + '</p></div>';
     } else {
       avail = '<div class="evd-section"><p class="evd-note">Ticket link coming soon for this event.</p></div>';
     }
@@ -1812,7 +1821,7 @@
       '<details><summary>How do the dates &amp; timeline work?</summary><p>The bar along the bottom is a day scrubber. Drag it, or use the ‹ › day arrows, to move between days — the globe and results update to show what\'s on for that day. Tap <b>Today</b> to jump back to now.</p></details>' +
       '<details><summary>How do I save events &amp; use the calendar?</summary><p>Tap the ☆ on any event to save it. Open <b>⋯ menu → Saved events</b> to see them on a month calendar: days with saved events are dotted (busy days show a count), and tapping a day lists what you saved. A <b>“For you”</b> section suggests more to save based on your interests.</p></details>' +
       '<details><summary>What do “Starts in” countdowns &amp; reminders mean?</summary><p>Upcoming events show a live <b>“Starts in”</b> countdown so you know exactly how long until they begin. Turn on <b>Event notifications</b> in your Profile to be reminded about events you\'ve saved and new ones near you.</p></details>' +
-      '<details><summary>What happens when I tap “Get Tickets”? Is Eventually free?</summary><p>Eventually is <b>free</b> — browsing, saving, and the AI Host cost nothing. <b>Get Tickets</b> sends you to the official seller (e.g. Ticketmaster) to buy there; Eventually is a discovery platform and doesn\'t sell tickets itself.</p></details>' +
+      '<details><summary>What happens when I tap the event button? Is Eventually free?</summary><p>Eventually is <b>free</b> — browsing, saving, and the AI Host cost nothing. Each event links to its official source: <b>Get Tickets</b> for ticketed events (e.g. Ticketmaster) to buy there, or <b>View event</b> for free/community listings (like a university or library) to see details and register. Eventually is a discovery platform and never sells tickets itself.</p></details>' +
       '<details><summary>What is the eventually Host?</summary><p>Your live AI concierge — it narrates what\'s happening worldwide and tailors picks to your location and interests. Press play to hear it, with a music bed behind it.</p></details>' +
       '<details><summary>How do I list my event?</summary><p>Open the ⋯ menu → Create an event, drop a pin on the map, and publish straight to the globe.</p></details>' +
       '<details><summary>What is Eventually Plus?</summary><p>Your personal AI event concierge: longer personalized briefings, ad-free listening &amp; browsing, travel-aware city briefings, saved-event reminders and early access to new features.</p></details>' +
