@@ -155,16 +155,71 @@
         return '<div class="ad-li"><span>' + esc(c.city) + '</span><span>' + c.n + '</span></div>';
       }).join('') + '</div>';
       html += '</div>';
+      html += '<div class="ad-sec" id="ad-health"><h2>Event data sources — health</h2><p class="ad-hint">Loading provider status…</p></div>';
       html += '<div class="ad-sec" id="ad-src"><h2>Event sources</h2><p class="ad-hint">Counting per source…</p></div>';
       html += '<div class="ad-sec" id="ad-dq"><h2>Data quality</h2><p class="ad-hint">Checking event coordinates…</p></div>';
       html += '<div class="ad-sec" id="ad-bu"><h2>Daily briefing usage</h2><p class="ad-hint">Counting Claude calls…</p></div>';
       html += '<div class="ad-sec" id="ad-el"><h2>AI Host voice usage</h2><p class="ad-hint">Measuring cache performance…</p></div>';
       body.innerHTML = html;
+      renderSyncHealth();
       renderSourceBreakdown();
       renderDataQuality();
       renderBriefingUsage();
       renderAudioUsage();
     });
+  }
+
+  // Event-data pipeline health — one card per provider (status dot, last successful sync,
+  // last run counts + errors) with a "Sync now" button. Reads admin_sync_health (39_sync_runs).
+  function syncRel(ts) {
+    if (!ts) return 'never';
+    const s = Math.max(0, (Date.now() - new Date(ts).getTime()) / 1000);
+    if (s < 90) return Math.round(s) + 's ago';
+    if (s < 5400) return Math.round(s / 60) + ' min ago';
+    if (s < 172800) return Math.round(s / 3600) + ' h ago';
+    return Math.round(s / 86400) + ' d ago';
+  }
+  function syncDot(status, lastSuccess) {
+    const okRecent = lastSuccess && (Date.now() - new Date(lastSuccess).getTime()) < 26 * 3600 * 1000;
+    if (!lastSuccess || status === 'failed') return ['🔴', 'Offline'];
+    if (status === 'partial') return ['🟡', 'Degraded'];
+    if (!okRecent) return ['🟠', 'Stale'];
+    return ['🟢', 'Healthy'];
+  }
+  function renderSyncHealth() {
+    const box = document.getElementById('ad-health'); if (!box) return;
+    sb.rpc('admin_sync_health').then(function (r) {
+      const d = r.data;
+      if (!d || d.error) { box.innerHTML = '<h2>Event data sources — health</h2><p class="ad-hint">Unavailable (' + esc((d && d.error) || (r.error && r.error.message) || 'error') + '). Have you run <b>39_sync_runs.sql</b>?</p>'; return; }
+      let h = '<h2>Event data sources — health</h2><p class="ad-hint">Each provider syncs into Supabase; the globe reads only from Supabase, so one provider failing never empties it. “Sync now” pulls fresh events immediately.</p>';
+      (d || []).forEach(function (p) {
+        const last = p.last || {}, st = syncDot(last.status, p.last_success);
+        h += '<div class="aff-row" style="padding:12px;margin-top:8px;border:1px solid var(--line);border-radius:10px">' +
+          '<div style="display:flex;align-items:center;gap:8px"><b style="flex:1">' + st[0] + ' ' + esc(p.provider) + ' — ' + st[1] + '</b>' +
+          '<button class="ad-save" style="padding:4px 12px" data-sync="' + esc(p.provider) + '">Sync now</button></div>' +
+          '<div class="ad-hint" style="margin-top:6px">Last successful sync: <b>' + syncRel(p.last_success) + '</b>' +
+          (last.finished_at ? ' · last run ' + syncRel(last.finished_at) + ' (' + esc(last.status || '?') + ')' : ' · no runs yet') + '</div>' +
+          (last.status ? '<div class="ad-hint">Fetched ' + (last.fetched || 0) + ' · upserted ' + (last.upserted || 0) + ' · removed ' + (last.removed || 0) + ' · countries ' + (last.countries_ok || 0) + '✓/' + (last.countries_failed || 0) + '✗' + (last.duration_ms ? ' · ' + Math.round(last.duration_ms / 1000) + 's' : '') + '</div>' : '') +
+          (last.error_message ? '<div class="ad-hint" style="color:#b3402a">Last error: ' + esc(last.error_message) + '</div>' : '') +
+          '<span class="ad-saved" id="sync-msg-' + esc(p.provider) + '"></span></div>';
+      });
+      box.innerHTML = h;
+      box.querySelectorAll('[data-sync]').forEach(function (btn) { btn.onclick = function () { triggerSync(btn.getAttribute('data-sync'), btn); }; });
+    }).catch(function () { box.innerHTML = '<h2>Event data sources — health</h2><p class="ad-hint">Unavailable.</p>'; });
+  }
+  function triggerSync(provider, btn) {
+    const fn = provider === 'predicthq' ? 'ingest-predicthq' : 'ingest-ticketmaster';
+    const msg = document.getElementById('sync-msg-' + provider);
+    btn.disabled = true; if (msg) { msg.textContent = 'Syncing ' + provider + '… (up to a minute)'; msg.style.color = ''; }
+    sb.functions.invoke(fn, { body: {} }).then(function (r) {
+      btn.disabled = false;
+      const d = r.data || {};
+      if (r.error || d.error) { if (msg) { msg.textContent = 'Failed: ' + ((r.error && r.error.message) || d.error); msg.style.color = '#b3402a'; } return; }
+      const fetched = d.fetched != null ? d.fetched : (d.kept || 0);
+      const up = d.upEvents != null ? d.upEvents : (d.upserted || 0);
+      if (msg) { msg.textContent = 'Done · ' + (d.status || 'ok') + ' · fetched ' + fetched + ' · upserted ' + up; msg.style.color = '#3a7d44'; }
+      renderSyncHealth();
+    }).catch(function (e) { btn.disabled = false; if (msg) { msg.textContent = 'Failed: ' + String(e); msg.style.color = '#b3402a'; } });
   }
 
   // ElevenLabs cache performance + spend, by category. Proves the caching is working:
