@@ -191,8 +191,11 @@
     sb.rpc('admin_sync_health').then(function (r) {
       const d = r.data;
       if (!d || d.error) { box.innerHTML = '<h2>Event data sources — health</h2><p class="ad-hint">Unavailable (' + esc((d && d.error) || (r.error && r.error.message) || 'error') + '). Have you run <b>39_sync_runs.sql</b>?</p>'; return; }
+      // Providers we've intentionally disabled (redundant / no valid key) are hidden here.
+      // (PredictHQ dedups against Ticketmaster → 0 net events, and its trial token expired.)
+      const CR_HIDDEN = { predicthq: 1 };
       let h = '<h2>Event data sources — health</h2><p class="ad-hint">Each provider syncs into Supabase; the globe reads only from Supabase, so one provider failing never empties it. “Sync now” pulls fresh events immediately.</p>';
-      (d || []).forEach(function (p) {
+      (d || []).filter(function (p) { return !CR_HIDDEN[p.provider]; }).forEach(function (p) {
         const last = p.last || {}, st = syncDot(last.status, p.last_success);
         h += '<div class="aff-row" style="padding:12px;margin-top:8px;border:1px solid var(--line);border-radius:10px">' +
           '<div style="display:flex;align-items:center;gap:8px"><b style="flex:1">' + st[0] + ' ' + esc(p.provider) + ' — ' + st[1] + '</b>' +
@@ -1040,6 +1043,15 @@
         '<div class="ad-field"><label>Hidden cities (one per line)</label><textarea id="cf-hidc">' + esc(hidC) + '</textarea></div>' +
         '<div class="ad-field"><label>Hidden event IDs (one per line, e.g. tm_… or nat_…)</label><textarea id="cf-hide">' + esc(hidE) + '</textarea></div></div>' +
 
+        '<div class="ad-sec"><h2>Event feeds (iCal / RSS)</h2>' +
+        '<p class="ad-hint">Grow your OWN inventory for free. Paste a public <b>.ics</b> (iCal) or <b>RSS</b> feed URL from a venue, university, tourism board, library or community calendar. Set the feed’s default <b>city + coordinates</b> (used when an event has no built-in location) and a category. Events flow onto the globe like any other source. Click <b>Save all</b>, then <b>Sync feeds now</b>. iCal feeds work best.</p>' +
+        '<div id="feed-list"></div>' +
+        '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">' +
+          '<button class="ad-save" id="feed-add" type="button">+ Add feed</button>' +
+          '<button class="ad-save" id="feed-sync" type="button">⟳ Sync feeds now</button>' +
+          '<span class="ad-saved" id="feed-msg"></span>' +
+        '</div></div>' +
+
         '<div><button class="ad-save" id="cf-save">Save all</button><span class="ad-saved" id="cf-msg"></span></div>';
 
       // pinned rows
@@ -1056,6 +1068,58 @@
       (pins.length ? pins : []).forEach(pinRow);
       document.getElementById('pin-add').onclick = function () { pinRow({ city: '', type: 'priority' }); };
 
+      // ---- Event feeds (iCal / RSS) ----
+      const FEED_CATS = ['Music', 'Tech', 'Business', 'Arts', 'Food & Drink', 'Sports', 'Film & Media', 'Community', 'Nightlife', 'Comedy'];
+      const feedList = document.getElementById('feed-list');
+      function feedRow(f) {
+        f = f || {};
+        const row = document.createElement('div');
+        row.className = 'feed-row'; row.style.cssText = 'border:1px solid var(--line);border-radius:8px;padding:8px;margin-top:8px';
+        row.innerHTML =
+          '<div class="ad-field"><input class="fd-url" placeholder="Feed URL (.ics or RSS)" value="' + esc(f.url || '') + '"></div>' +
+          '<div class="ad-row">' +
+            '<div class="ad-field"><input class="fd-name" placeholder="Source name (e.g. Regina Library)" value="' + esc(f.name || '') + '"></div>' +
+            '<div class="ad-field"><input class="fd-city" placeholder="City" value="' + esc(f.city || '') + '"></div>' +
+          '</div>' +
+          '<div class="ad-row">' +
+            '<div class="ad-field"><input class="fd-lat" type="number" step="0.0001" placeholder="Default latitude" value="' + (f.lat != null ? f.lat : '') + '"></div>' +
+            '<div class="ad-field"><input class="fd-lon" type="number" step="0.0001" placeholder="Default longitude" value="' + (f.lon != null ? f.lon : '') + '"></div>' +
+            '<div class="ad-field"><select class="fd-cat">' + FEED_CATS.map(function (c2) { return '<option value="' + c2 + '"' + (f.category === c2 ? ' selected' : '') + '>' + c2 + '</option>'; }).join('') + '</select></div>' +
+          '</div>' +
+          '<button class="ad-chip fd-del" type="button">remove</button>';
+        row.querySelector('.fd-del').onclick = function () { row.remove(); };
+        feedList.appendChild(row);
+      }
+      ((c.eventFeeds && c.eventFeeds.length) ? c.eventFeeds : []).forEach(feedRow);
+      document.getElementById('feed-add').onclick = function () { feedRow({}); };
+      function collectFeeds() {
+        const feeds = [];
+        feedList.querySelectorAll('.feed-row').forEach(function (row) {
+          const url = row.querySelector('.fd-url').value.trim(); if (!url) return;
+          const lat = parseFloat(row.querySelector('.fd-lat').value), lon = parseFloat(row.querySelector('.fd-lon').value);
+          feeds.push({ url: url, name: row.querySelector('.fd-name').value.trim(), city: row.querySelector('.fd-city').value.trim(),
+            lat: Number.isFinite(lat) ? lat : null, lon: Number.isFinite(lon) ? lon : null, category: row.querySelector('.fd-cat').value });
+        });
+        return feeds;
+      }
+      document.getElementById('feed-sync').onclick = function () {
+        const feeds = collectFeeds();
+        const btn = this, msg = document.getElementById('feed-msg');
+        btn.disabled = true; msg.textContent = 'Saving + syncing feeds… (up to a minute)'; msg.style.color = '';
+        // Persist feeds (read-modify-write so we never clobber other config), then run the ingest.
+        sb.from('app_config').select('config').eq('id', 1).maybeSingle().then(function (rr) {
+          const conf = Object.assign({}, (rr.data && rr.data.config) || {}, { eventFeeds: feeds });
+          return sb.from('app_config').update({ config: conf, updated_at: new Date().toISOString() }).eq('id', 1);
+        }).then(function () {
+          return sb.functions.invoke('ingest-feeds', { body: {} });
+        }).then(function (r) {
+          btn.disabled = false;
+          const d = (r && r.data) || {};
+          if ((r && r.error) || d.error) { msg.textContent = 'Failed: ' + ((r.error && r.error.message) || d.error); msg.style.color = '#b3402a'; return; }
+          msg.textContent = 'Done · ' + (d.status || 'ok') + ' · feeds ' + (d.feedsOk || 0) + '✓/' + (d.feedsFailed || 0) + '✗ · fetched ' + (d.fetched || 0) + ' · upserted ' + (d.upEvents || 0); msg.style.color = '#3a7d44';
+        }).catch(function (e) { btn.disabled = false; msg.textContent = 'Failed: ' + String(e); msg.style.color = '#b3402a'; });
+      };
+
       document.getElementById('cf-save').onclick = function () {
         const pinned = [];
         list.querySelectorAll('.pin-row').forEach(function (row) {
@@ -1068,7 +1132,8 @@
           windowDays: Math.min(365, Math.max(1, +val('cf-win') || 60)),
           adsEnabled: document.getElementById('cf-ads').checked,
           hostEnabled: document.getElementById('cf-host').checked,
-          pinnedLocations: pinned, hiddenCities: lines('cf-hidc'), hiddenEvents: lines('cf-hide')
+          pinnedLocations: pinned, hiddenCities: lines('cf-hidc'), hiddenEvents: lines('cf-hide'),
+          eventFeeds: collectFeeds()
         });
         const btn = document.getElementById('cf-save'); btn.disabled = true;
         sb.from('app_config').update({ config: merged, updated_at: new Date().toISOString() }).eq('id', 1).then(function (r) {
