@@ -2250,6 +2250,7 @@
         // more upcoming events appear as markers (the RPC default is 60).
         if (typeof cfg.windowDays === 'number' && cfg.windowDays > 0 && window.EventuallyAPI.setWindowDays) {
           window.EventuallyAPI.setWindowDays(cfg.windowDays);
+          if (timeline && timeline.setMaxDays) timeline.setMaxDays(cfg.windowDays);   // let the scrubber reach the full window
           if (cfg.windowDays !== 60) refreshLiveEvents();
         }
         if (typeof cfg.adsEnabled === 'boolean') RT.adsEnabled = cfg.adsEnabled;

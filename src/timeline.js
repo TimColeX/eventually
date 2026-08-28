@@ -18,9 +18,13 @@
     const self = this;
     this.el.innerHTML =
       '<div class="tl-head">' +
+        '<button class="tl-btn tl-jump" data-step="-30" title="Back 1 month">−1M</button>' +
+        '<button class="tl-btn tl-jump" data-step="-7" title="Back 1 week">−1W</button>' +
         '<button class="tl-btn" data-step="-1" title="Previous day">‹</button>' +
         '<div class="tl-date"><span class="tl-label">SELECTED</span><strong class="tl-value"></strong></div>' +
         '<button class="tl-btn" data-step="1" title="Next day">›</button>' +
+        '<button class="tl-btn tl-jump" data-step="7" title="Forward 1 week">+1W</button>' +
+        '<button class="tl-btn tl-jump" data-step="30" title="Forward 1 month">+1M</button>' +
         '<button class="tl-today" title="Jump to today">● TODAY</button>' +
       '</div>' +
       '<div class="tl-track">' +
@@ -52,9 +56,21 @@
     this._update();
   };
 
+  // Extend/shrink the scrubbable range to match the admin globe window (default 60).
+  // Rebuilds the slider bounds, tick labels and density sparkline.
+  Timeline.prototype.setMaxDays = function (n) {
+    const v = Math.max(7, Math.min(365, Math.round(Number(n)) || 60));
+    if (v === this.max) return;
+    this.max = v;
+    if (this.range) { this.range.max = v; if (this.value > v) { this.set(v); return; } }
+    this._buildTicks();
+    this._drawSpark();
+  };
+
   Timeline.prototype._buildTicks = function () {
     let html = '';
-    for (let d = this.min; d <= this.max; d += 15) {
+    const step = this.max > 90 ? 30 : 15;          // coarser ticks on a long (120d+) window
+    for (let d = this.min; d <= this.max; d += step) {
       const dt = new Date(this.today); dt.setDate(dt.getDate() + d);
       const pct = (d - this.min) / (this.max - this.min) * 100;
       const lbl = dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
