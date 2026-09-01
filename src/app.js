@@ -1454,7 +1454,7 @@
   });
   profileEl.querySelector('.pf-logout').addEventListener('click', function () { logout(); profileEl.classList.remove('open'); });
 
-  /* ---------- Saved events: its own panel — month calendar + day list ---------- */
+  /* ---------- Saved Events: its own panel — month calendar + day list ---------- */
   const savedEl = document.getElementById('saved');
   const svWD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const svMO = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -1739,17 +1739,17 @@
     let h = '';
     if (user) h += '<div class="dd-user"><span class="avatar">' + user.name[0].toUpperCase() + '</span>' +
       '<div><strong>' + esc(user.name) + '</strong><small>' + (p.plus ? 'Eventually Plus' : 'Free plan') + '</small></div></div>';
-    else h += '<button class="dd-item dd-primary" data-act="signin">Sign in / Sign up</button>';
+    else h += '<button class="dd-item dd-primary" data-act="signin">Sign In / Sign Up</button>';
     h += '<button class="dd-item" data-act="profile">Profile</button>';
-    h += '<button class="dd-item" data-act="saved">Saved events <span class="dd-badge">' + p.saved.length + '</span></button>';
-    h += '<button class="dd-item" data-act="create">Create an event</button>';
-    if (user) h += '<button class="dd-item" data-act="myevents">My events</button>';
+    h += '<button class="dd-item" data-act="saved">Saved Events <span class="dd-badge">' + p.saved.length + '</span></button>';
+    h += '<button class="dd-item" data-act="create">Publish an Event</button>';
+    if (user) h += '<button class="dd-item" data-act="myevents">My Events</button>';
     h += '<div class="dd-sep"></div>';
-    h += '<button class="dd-item" data-act="help">Help centre</button>';
-    h += '<button class="dd-item" data-act="contact">Contact sales</button>';
+    h += '<button class="dd-item" data-act="help">Help Centre</button>';
+    h += '<button class="dd-item" data-act="contact">Contact Sales</button>';
     if (RT.plusComingSoon) h += '<button class="dd-item" data-act="plus">Eventually Plus</button>';
     else if (!p.plus) h += '<button class="dd-item" data-act="plus">Get Eventually Plus</button>';
-    if (user) h += '<div class="dd-sep"></div><button class="dd-item dd-muted" data-act="signout">Sign out</button>';
+    if (user) h += '<div class="dd-sep"></div><button class="dd-item dd-muted" data-act="signout">Sign Out</button>';
     dropdown.innerHTML = h;
   }
   function openMenu() { buildDropdown(); dropdown.classList.add('show'); menuBtn.setAttribute('aria-expanded', 'true'); }
@@ -1813,24 +1813,24 @@
       return '<span class="help-cat"><span class="help-sw" style="background:' + D.CATEGORIES[c] + '"></span>' +
         '<span class="help-cat-t"><b>' + esc(c) + '</b>' + (CAT_DESC[c] ? '<span class="help-cat-d"> — ' + esc(CAT_DESC[c]) + '</span>' : '') + '</span></span>';
     }).join('');
-    openModal('Help centre',
+    openModal('Help Centre',
       '<div class="help">' +
       '<details open><summary>What is Eventually?</summary><p>A live directory of events worldwide on an interactive globe. Spin it, tap any glowing marker, and see everything happening at that spot.</p></details>' +
       '<details><summary>What do the glowing spikes on the globe mean?</summary><p>Each glowing marker is a place with events on. The <b>bigger, brighter and more it pulses</b>, the more (and hotter) the activity there — so the biggest markers are the busiest hotspots, and a pulsing glow means something is live right now. Its <b>colour</b> shows the main type of event at that spot. Tap a marker to see everything there, and the AI Host will focus on it.</p></details>' +
       '<details><summary>What do the event colours mean?</summary><p>Every event is colour-coded by type — on the globe markers, on event cards, and on the banner at the top of each event:</p><div class="help-cats">' + colours + '</div></details>' +
       '<details><summary>How do the dates &amp; timeline work?</summary><p>The bar along the bottom is a day scrubber. Drag it, or use the ‹ › day arrows, to move between days — the globe and results update to show what\'s on for that day. Tap <b>Today</b> to jump back to now.</p></details>' +
-      '<details><summary>How do I save events &amp; use the calendar?</summary><p>Tap the ☆ on any event to save it. Open <b>⋯ menu → Saved events</b> to see them on a month calendar: days with saved events are dotted (busy days show a count), and tapping a day lists what you saved. A <b>“For you”</b> section suggests more to save based on your interests.</p></details>' +
+      '<details><summary>How do I save events &amp; use the calendar?</summary><p>Tap the ☆ on any event to save it. Open <b>⋯ menu → Saved Events</b> to see them on a month calendar: days with saved events are dotted (busy days show a count), and tapping a day lists what you saved. A <b>“For you”</b> section suggests more to save based on your interests.</p></details>' +
       '<details><summary>What do “Starts in” countdowns &amp; reminders mean?</summary><p>Upcoming events show a live <b>“Starts in”</b> countdown so you know exactly how long until they begin. Turn on <b>Event notifications</b> in your Profile to be reminded about events you\'ve saved and new ones near you.</p></details>' +
       '<details><summary>What happens when I tap the event button? Is Eventually free?</summary><p>Eventually is <b>free</b> — browsing, saving, and the AI Host cost nothing. Each event links to its official source: <b>Get Tickets</b> for ticketed events (e.g. Ticketmaster) to buy there, or <b>View event</b> for free/community listings (like a university or library) to see details and register. Eventually is a discovery platform and never sells tickets itself.</p></details>' +
       '<details><summary>What is the eventually Host?</summary><p>Your live AI concierge — it narrates what\'s happening worldwide and tailors picks to your location and interests. Press play to hear it, with a music bed behind it.</p></details>' +
-      '<details><summary>How do I list my event?</summary><p>Open the ⋯ menu → Create an event, drop a pin on the map, and publish straight to the globe.</p></details>' +
+      '<details><summary>How do I list my event?</summary><p>Open the ⋯ menu → Publish an Event, drop a pin on the map, and publish straight to the globe.</p></details>' +
       '<details><summary>What is Eventually Plus?</summary><p>Your personal AI event concierge: longer personalized briefings, ad-free listening &amp; browsing, travel-aware city briefings, saved-event reminders and early access to new features.</p></details>' +
       '<div class="help-legal"><a href="about.html" target="_blank" rel="noopener">About</a> · <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a> · <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a></div>' +
       '</div>');
   }
-  // My events — manage/edit/delete your published events in its OWN modal (separate from Create).
+  // My Events — manage/edit/delete your published events in its OWN modal (separate from Create).
   function openMyEvents() {
-    openModal('My events', '<div class="me-body"></div>', function (body) {
+    openModal('My Events', '<div class="me-body"></div>', function (body) {
       coordinator.mountMyEvents(body.querySelector('.me-body') || body, closeModal);
     });
   }
@@ -1875,7 +1875,7 @@
   // Re-render the Plus modal in place (e.g. after joining the waitlist).
   function refreshPlusModal() { if (modal.classList.contains('open') && modal.querySelector('.plus-modal')) openPlus(); }
   function openContact() {
-    openModal('Contact sales',
+    openModal('Contact Sales',
       '<p class="modal-lead">Partner with Eventually — sponsorships, featured placements and ticketing.</p>' +
       '<form class="contact-form">' +
         '<label>Name<input name="name" required></label>' +

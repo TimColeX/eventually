@@ -66,7 +66,7 @@
       '<div class="co-backdrop"></div>' +
       '<div class="co-modal">' +
         '<header class="co-head">' +
-          '<div><span class="co-kicker">Create an event</span>' +
+          '<div><span class="co-kicker">Publish an Event</span>' +
           '<h2 class="co-form-h">Publish to the globe</h2></div>' +
           '<button class="co-close" aria-label="Close">✕</button>' +
         '</header>' +
@@ -197,7 +197,7 @@
     this.el.querySelector('.co-cancel-edit').addEventListener('click', function () { self._resetForm(); });
   };
 
-  // "My events" — mounted into a SEPARATE modal (its own ⋯-menu item). Renders the manage
+  // "My Events" — mounted into a SEPARATE modal (its own ⋯-menu item). Renders the manage
   // list + engagement, and wires edit / publish-toggle / delete. `closeFn` closes that modal
   // so "Edit" can hand off to the Create modal.
   Coordinator.prototype.mountMyEvents = function (container, closeFn) {
