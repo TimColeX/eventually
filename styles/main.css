@@ -453,8 +453,15 @@ body {
   background: var(--paper); border: 1px solid var(--line-2); color: var(--ink);
   font-family: var(--font); font-size: 16px; outline: none; resize: vertical;   /* 16px avoids iOS zoom-on-focus */
 }
-/* iOS renders date/time inputs at an intrinsic width that can overflow — normalise them. */
-.co-body input[type="date"], .co-body input[type="time"] { -webkit-appearance: none; appearance: none; }
+/* iOS renders date/time inputs at an intrinsic width that can overflow — normalise them.
+   An EMPTY time input (e.g. the optional "End" time) also has NO content, so with
+   appearance:none it collapsed to just padding+border and rendered visibly shorter than the
+   filled "Start" field beside it. min-height pins both boxes to the same height whether or
+   not they hold a value; line-height keeps the text vertically centred. */
+.co-body input[type="date"], .co-body input[type="time"] {
+  -webkit-appearance: none; appearance: none;
+  min-height: 40px; line-height: 1.25;
+}
 .co-body input:focus, .co-body select:focus, .co-body textarea:focus { border-color: var(--clay); background: #fff; }
 /* Auto event-colour preview (derived from category — no manual picker) */
 .co-catcolor { display: flex; align-items: center; gap: 10px; margin: 2px 0 16px; padding: 11px 13px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line); }
