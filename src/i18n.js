@@ -47,7 +47,7 @@
       countdown: d => `Heads up — ${d.event} in ${d.city} kicks off in just ${d.min} minutes.`,
       region: d => `Over in ${d.region}, ${d.n} big ${c('en', d.cat)} events are underway right now.`,
       trending: d => `Trending tonight: ${d.event}, in ${d.city}. It's climbing fast, with ${n(d.likes, 'en')} likes.`,
-      sponsor: d => `This update is brought to you by ${d.sponsor}.`,
+      sponsor: d => d.text || `This update is brought to you by ${d.sponsor}.`,
       tip: () => `Tap any glowing marker on the globe, and you'll see everything happening there.`
     },
     es: {
@@ -62,7 +62,7 @@
       countdown: d => `${d.event} comienza en ${d.min} minutos en ${d.city}.`,
       region: d => `Hay ${d.n} grandes eventos de ${c('es', d.cat)} en curso en ${d.region}.`,
       trending: d => `Tendencia ahora: ${d.event} en ${d.city}, con ${n(d.likes, 'es')} me gusta.`,
-      sponsor: d => `Esta actualización es presentada por ${d.sponsor}.`,
+      sponsor: d => d.text || `Esta actualización es presentada por ${d.sponsor}.`,
       tip: () => `Toca cualquier punto brillante para ver todo lo que ocurre allí.`
     },
     fr: {
@@ -77,7 +77,7 @@
       countdown: d => `${d.event} commence dans ${d.min} minutes à ${d.city}.`,
       region: d => `${d.n} grands événements ${c('fr', d.cat)} sont en cours en ${d.region}.`,
       trending: d => `Tendance en ce moment : ${d.event} à ${d.city}, avec ${n(d.likes, 'fr')} mentions j'aime.`,
-      sponsor: d => `Cette mise à jour vous est présentée par ${d.sponsor}.`,
+      sponsor: d => d.text || `Cette mise à jour vous est présentée par ${d.sponsor}.`,
       tip: () => `Touchez un point lumineux pour voir tout ce qui s'y passe.`
     },
     ar: {
@@ -92,7 +92,7 @@
       countdown: d => `يبدأ ${d.event} خلال ${d.min} دقيقة في ${d.city}.`,
       region: d => `هناك ${d.n} فعاليات ${c('ar', d.cat)} كبرى جارية الآن في ${d.region}.`,
       trending: d => `الأكثر رواجًا الآن: ${d.event} في ${d.city}، مع ${n(d.likes, 'ar')} إعجاب.`,
-      sponsor: d => `هذا التحديث مقدَّم لكم من ${d.sponsor}.`,
+      sponsor: d => d.text || `هذا التحديث مقدَّم لكم من ${d.sponsor}.`,
       tip: () => `انقر على أي نقطة متوهجة لرؤية كل ما يحدث هناك.`
     },
     zh: {
@@ -107,7 +107,7 @@
       countdown: d => `${d.event} 将在 ${d.min} 分钟后于 ${d.city} 开始。`,
       region: d => `${d.region}目前有 ${d.n} 场大型${c('zh', d.cat)}活动正在进行。`,
       trending: d => `正在流行：${d.city} 的 ${d.event}，已获得 ${n(d.likes, 'zh')} 个赞。`,
-      sponsor: d => `本次播报由 ${d.sponsor} 赞助。`,
+      sponsor: d => d.text || `本次播报由 ${d.sponsor} 赞助。`,
       tip: () => `点击任意发光的点，查看那里正在发生的一切。`
     }
   };

@@ -5,10 +5,13 @@
   'use strict';
 
   // Revenue Stream 3 — AI Host sponsors (inserted into narration, never spammy).
-  const SPONSORS = [
-    'Coastal Hotels', 'ABC Airlines', 'Brightline Rail',
-    'Summit Outdoors', 'Aperol Spritz', 'Verve Mobile'
-  ];
+  // REAL sponsors only: this list is loaded at runtime from `briefing_sponsors` — the
+  // SAME table the Admin → "Sponsors" section writes to and the spoken briefing reads.
+  // (The old hardcoded demo names — Aperol Spritz, ABC Airlines … — were removed: with
+  // the app live they claimed sponsorships that don't exist.) Empty list = NO sponsor
+  // line is ever shown, so nothing appears until you actually sell one.
+  let adminSponsors = [];      // [{ scope, message, weight, active_from, active_to }]
+  let sponsorCity = null;      // the city the host is currently covering (for city-scoped sponsors)
 
   // Revenue Stream 1 — display ads (mock creatives for the 60px bottom zone).
   const ADS = [
@@ -84,7 +87,7 @@
   }
 
   const api = {
-    sponsors: SPONSORS,
+    get sponsors() { return adminSponsors; },   // live admin-configured sponsors (was a demo array)
     partners: PARTNERS,
     plusBenefits: PLUS_BENEFITS,
     adsense: ADSENSE,
@@ -124,18 +127,31 @@
 
     // Rate-limited host sponsorship line. Returns null for Plus members or if a
     // sponsorship played in the last ~75s (spec: at most one every several minutes).
+    // Sponsors come from Admin → Sponsors (briefing_sponsors). Load once at boot.
+    setSponsors: function (list) { adminSponsors = Array.isArray(list) ? list : []; },
+    // The city the Host is currently covering — decides which city-scoped sponsors apply.
+    setSponsorCity: function (city) { sponsorCity = city ? String(city).toLowerCase() : null; },
     nextSponsorLine: function (isPlus) {
-      if (isPlus) return null;
+      if (isPlus) return null;                                   // Plus is ad-free
       const now = Date.now();
-      if (now - lastSponsorAt < 75000) return null;
+      if (now - lastSponsorAt < 75000) return null;              // at most one every ~75s
+      const today = new Date().toISOString().slice(0, 10);
+      // Eligible = enabled, in its active window, and scoped to "world" or THIS city.
+      const pool = adminSponsors.filter(function (s) {
+        if (!s || s.enabled === false || !s.message) return false;
+        if (s.active_from && s.active_from > today) return false;
+        if (s.active_to && s.active_to < today) return false;
+        const sc = String(s.scope || 'world').toLowerCase();
+        return sc === 'world' || (sponsorCity && sc === sponsorCity);
+      });
+      if (!pool.length) return null;                             // no real sponsors → say nothing
+      const total = pool.reduce(function (a, s) { return a + Math.max(1, s.weight || 1); }, 0);
+      let r = Math.random() * total, pick = pool[0];
+      for (const s of pool) { r -= Math.max(1, s.weight || 1); if (r <= 0) { pick = s; break; } }
       lastSponsorAt = now;
-      const s = SPONSORS[Math.floor(Math.random() * SPONSORS.length)];
-      const forms = [
-        'This update is brought to you by ' + s + '.',
-        "Today's featured partner is " + s + '.',
-        'Your next few minutes on Eventually are sponsored by ' + s + '.'
-      ];
-      return { text: forms[Math.floor(Math.random() * forms.length)], sponsor: s };
+      // The admin message is read VERBATIM (same contract as the spoken briefing) —
+      // we never wrap an advertiser's copy in our own sentence.
+      return { text: String(pick.message), sponsor: String(pick.message) };
     },
 
     // Revenue Stream 5 — tag an outbound ticket URL with our affiliate ref.

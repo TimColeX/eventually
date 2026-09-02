@@ -149,7 +149,8 @@
         sinceSponsor++;
         if (sinceSponsor >= 4) {
           const s = ctx.monetize.nextSponsorLine(ctx.profile.get().plus);
-          if (s) { sinceSponsor = 0; return { kind: 'sponsor', data: { sponsor: s.sponsor }, sponsor: s.sponsor }; }
+          // `text` is the admin sponsor's verbatim message; i18n renders it as-is.
+          if (s) { sinceSponsor = 0; return { kind: 'sponsor', data: { text: s.text, sponsor: s.sponsor }, sponsor: s.sponsor }; }
         }
         const line = voices[i % voices.length]();
         i++;

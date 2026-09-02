@@ -437,6 +437,7 @@
     const prevCity = (activeBriefingLocation && activeBriefingLocation.city) || null;
     activeBriefingLocation = loc || null;
     const city = (loc && loc.city) ? loc.city : null;
+    if (M.setSponsorCity) M.setSponsorCity(city);      // city-scoped sponsors follow the Host
     if (aiHost && aiHost.setFocusCity) aiHost.setFocusCity(city);
     if (aiHost && aiHost.setExploring) aiHost.setExploring(isExploringNow(), (homeLoc() || {}).city || null);
     if (!city || city === prevCity || !aiHost) return;
@@ -754,13 +755,20 @@
   }
 
   // Revenue 4 — a location-based partner suggestion shown in the popup (non-Plus).
+  // DISABLED (same reason the demo sponsors were removed): the PARTNERS list is mock data,
+  // so this card told real users "Our featured restaurant partner is near <their city>"
+  // about businesses we have no relationship with. Rendering nothing until real partners
+  // exist. To re-enable, drop the early return and source `partnerFor` from real data.
   function partnerCardHTML(cluster) {
+    return '';
+    /* eslint-disable no-unreachable */
     if (P.get().plus) return '';
     const pn = M.partnerFor(cluster.lat * 100 + cluster.lon);
     return '<div class="partner"><span class="partner-tag">Partner</span>' +
       '<div class="partner-body"><strong>' + esc(pn.name) + '</strong>' +
       '<span>' + esc(pn.pitch) + ' Our featured ' + pn.type.toLowerCase() +
       ' partner is near ' + esc(cluster.city) + '.</span></div></div>';
+    /* eslint-enable no-unreachable */
   }
 
   // in-card filter + sort state
@@ -2253,6 +2261,11 @@
     if (el) el.classList.toggle('show', !!on);
   }
   if (window.EventuallyAPI && window.EventuallyAPI.config.remote) {
+    // Admin-configured sponsors for the Host bar (Admin → Sponsors). None → the Host
+    // never mentions a sponsor (the old hardcoded demo brands were removed).
+    if (window.EventuallyAPI.getSponsors && M.setSponsors) {
+      window.EventuallyAPI.getSponsors().then(function (list) { M.setSponsors(list); }).catch(function () {});
+    }
     // Pull admin-tunable runtime config (spike budget, ad/host toggles…).
     if (window.EventuallyAPI.getConfig) {
       window.EventuallyAPI.getConfig().then(function (cfg) {

@@ -113,6 +113,17 @@
     });
   }
 
+  // Admin-configured AI Host sponsors (Admin → AI Host Script → Sponsors). Public read
+  // (RLS allows select; writes are admin-only). Resolves [] when none are configured, so
+  // the Host simply never mentions a sponsor. Same table the spoken briefing uses.
+  function getSponsors() {
+    if (!REMOTE) return Promise.resolve([]);
+    return fetch(BASE + '/rest/v1/briefing_sponsors?select=scope,message,weight,enabled,active_from,active_to&enabled=is.true', { headers: headers() })
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (rows) { return rows || []; })
+      .catch(function () { return []; });
+  }
+
   // Remote app config (admin-tunable). Resolves null if unavailable → code defaults.
   function getConfig() {
     if (!REMOTE) return Promise.resolve(null);
@@ -164,6 +175,7 @@
     setWindowDays: setWindowDays,
     toEvent: toEvent,
     getConfig: getConfig,
+    getSponsors: getSponsors,
     search: search,
     dailyBriefing: dailyBriefing
   };
