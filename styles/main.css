@@ -200,6 +200,14 @@ body {
   background: #ece2d4; color: var(--ink); border: 0; font-size: 14px;
 }
 .place-close:hover { background: var(--clay); color: var(--cream); }
+/* Publishing allowance chip in the Publish-an-Event header (see coordinator _refreshQuota). */
+.co-quota {
+  display: inline-block; margin-top: 6px; padding: 3px 9px; border-radius: 999px;
+  font-family: var(--mono); font-size: 11px; letter-spacing: .02em;
+  background: var(--cream); border: 1px solid var(--line-2); color: var(--muted);
+}
+.co-quota.is-low  { color: #8A6318; border-color: rgba(138,99,24,.35); background: #F7F1E3; }
+.co-quota.is-full { color: var(--clay); border-color: rgba(203,90,60,.4); background: #FBEFE9; font-weight: 700; }
 /* Honest empty state when a searched place has nothing on (see openEmptyPlace). */
 .place-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 34px 18px; }
 .place-empty .pe-icon { font-size: 30px; color: var(--line-2); line-height: 1; }

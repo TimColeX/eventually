@@ -31,6 +31,7 @@
     this.onUpdate = opts.onUpdate;         // (eventObj) -> Promise<bool>  (edit existing)
     this.onDelete = opts.onDelete;         // (eventId) -> Promise<bool>
     this.onSetPublished = opts.onSetPublished; // (eventId, bool) -> Promise
+    this.getQuota = opts.getQuota || null;     // () -> Promise<publishing_quota jsonb|null>
     this.getCreatorStats = opts.getCreatorStats; // () -> Promise<[{event_id,title,...,saves,likes,attends,published}]>
     this.getDefaultLocation = opts.getDefaultLocation; // () -> {lat,lon,city}|null (user's set location)
     this.onFlyTo = opts.onFlyTo;           // (lat, lon) -> void
@@ -48,6 +49,23 @@
     // Canvas has no size until the modal is visible → draw on the next frame.
     const self = this;
     requestAnimationFrame(function () { self._drawMap(); });
+    this._refreshQuota();
+  };
+  // Show the remaining allowance ("3 of 10 posts used this year") in the header. Purely
+  // informational — the limit itself is enforced by the database on insert, so a stale
+  // or missing number here can never let someone over the line.
+  Coordinator.prototype._refreshQuota = function () {
+    const el = this.el.querySelector('.co-quota');
+    if (!el || !this.getQuota) return;
+    const self = this;
+    Promise.resolve(this.getQuota()).then(function (q) {
+      if (!q || q.error || q.enabled === false || q.unlimited) { el.hidden = true; return; }
+      const used = +q.used || 0, cap = +q.capacity || 0, left = Math.max(0, cap - used);
+      el.textContent = used + ' of ' + cap + ' posts used this year' + (left === 0 ? ' — limit reached' : '');
+      el.className = 'co-quota' + (left === 0 ? ' is-full' : (left <= 2 ? ' is-low' : ''));
+      el.hidden = false;
+      if (self.editId) el.hidden = true;      // editing an existing event doesn't use a slot
+    }, function () { el.hidden = true; });
   };
   Coordinator.prototype.close = function () { this.el.classList.remove('open'); };
 
@@ -67,7 +85,10 @@
       '<div class="co-modal">' +
         '<header class="co-head">' +
           '<div><span class="co-kicker">Publish an Event</span>' +
-          '<h2 class="co-form-h">Publish to the globe</h2></div>' +
+          '<h2 class="co-form-h">Publish to the globe</h2>' +
+          // Filled in by _refreshQuota() once the server answers; hidden until then so
+          // an offline/demo session never shows an empty or wrong allowance.
+          '<span class="co-quota" hidden></span></div>' +
           '<button class="co-close" aria-label="Close">✕</button>' +
         '</header>' +
         '<div class="co-body"><div class="co-cols">' +
@@ -211,10 +232,12 @@
       const id = b.dataset.id, act = b.dataset.meAct;
       const ev = (self._myEvents || []).find(function (x) { return x.event_id === id; });
       if (act === 'edit') { if (ev) { self._meClose(); self.open(); self._editEvent(ev); } }
-      else if (act === 'toggle') { if (self.onSetPublished) Promise.resolve(self.onSetPublished(id, !(ev && ev.published !== false))).then(function () { self._renderAnalyticsInto(body); }); }
-      else if (act === 'delete') {
-        if (!confirm('Delete "' + (ev ? ev.title : 'this event') + '" permanently? This cannot be undone.')) return;
-        if (self.onDelete) Promise.resolve(self.onDelete(id)).then(function () { if (self.editId === id) self._resetForm(); self._renderAnalyticsInto(body); });
+      else if (act === 'toggle') {
+        const on = !(ev && ev.published !== false);
+        // Taking a listing off the globe is reversible and does NOT return the posting
+        // slot it used — say so plainly rather than letting people discover it later.
+        if (!on && !confirm('Remove "' + (ev ? ev.title : 'this event') + '" from the globe?\n\nYou can put it back at any time. This does not return the posting slot it used.')) return;
+        if (self.onSetPublished) Promise.resolve(self.onSetPublished(id, on)).then(function () { self._renderAnalyticsInto(body); });
       }
     });
   };
@@ -380,8 +403,11 @@
           '<small>' + esc(e.city || '') + ' · ★ ' + (+e.saves || 0) + ' · ♥ ' + (+e.likes || 0) + ' · ✓ ' + (+e.attends || 0) + ' going</small></div>' +
           '<div class="an-r-actions">' +
             '<button class="an-act" data-me-act="edit" data-id="' + esc(e.event_id) + '">Edit</button>' +
-            '<button class="an-act" data-me-act="toggle" data-id="' + esc(e.event_id) + '">' + (pub ? 'Unpublish' : 'Publish') + '</button>' +
-            '<button class="an-act an-danger" data-me-act="delete" data-id="' + esc(e.event_id) + '">Delete</button>' +
+            // "Remove from globe" replaces Delete: the listing comes off the map but the
+            // record (and the posting slot it used) stays. Permanent deletion is admin-only —
+            // otherwise publish → delete → publish would loop around the yearly limit.
+            '<button class="an-act' + (pub ? ' an-danger' : '') + '" data-me-act="toggle" data-id="' + esc(e.event_id) + '">' +
+              (pub ? 'Remove from globe' : 'Put back on globe') + '</button>' +
           '</div></div>';
       });
       body.innerHTML = html + '</div>';

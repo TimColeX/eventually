@@ -67,11 +67,13 @@
   /* ---------- toast ---------- */
   const toastEl = document.getElementById('toast');
   let toastT;
-  window.EventuallyToast = function (msg) {
+  // `ms` lets a longer message (e.g. the publishing-limit wall, which carries a date and
+  // an email address) stay on screen long enough to actually be read.
+  window.EventuallyToast = function (msg, ms) {
     toastEl.textContent = msg;
     toastEl.classList.add('show');
     clearTimeout(toastT);
-    toastT = setTimeout(function () { toastEl.classList.remove('show'); }, 2600);
+    toastT = setTimeout(function () { toastEl.classList.remove('show'); }, ms || 2600);
   };
 
   /* ---------- globe ---------- */
@@ -94,7 +96,7 @@
     const interests = (interestFilterActive && P.get().plus) ? P.effectiveInterests(D.getById) : null;
     const selMs = selectedDate.getTime();
     D.getClusters().forEach(function (c) {
-      let vis = 0, live = 0, soon = 0, maxPop = 0, col = null, bestPop = -1, featured = false, editor = false, likeSum = 0, nat = false;
+      let vis = 0, live = 0, soon = 0, maxPop = 0, col = null, bestPop = -1, featured = false, editor = false, likeSum = 0, nat = false, natCount = 0;
       const ids = c.eventIds;
       for (let k = 0; k < ids.length; k++) {
         const ev = D.getById(ids[k]);
@@ -108,7 +110,7 @@
         else if (ev.date.getTime() - selMs <= WEEK_MS) soon++;   // starts within 7 days
         if (ev.sponsored) featured = true;
         if (ev.editor) editor = true;
-        if (ev.is_native) nat = true;        // Eventually-published (native) event here
+        if (ev.is_native) { nat = true; natCount++; }   // Eventually-published (native) event here
         const p = D.popularity(ev);
         if (p > maxPop) maxPop = p;
         if (p > bestPop) { bestPop = p; col = ev.categoryColor; }
@@ -123,6 +125,9 @@
       c._score = live * 3 + maxPop * 4 + (soon > 0 ? 1.5 : 0) + (featured ? 6 : 0) +
         (editor ? 4 : 0) + Math.min(4, vis * 0.05) + Math.min(3, likeSum / 3000);
       c._hasNative = nat;
+      // Only pulse a spike when EVERY event under it was published on Eventually. A mixed
+      // cluster (1 native among 40 imported) would over-signal and make the marker a lie.
+      c._allNative = vis > 0 && natCount === vis;
       c._eligible = featured || editor || live > 0 || vis >= 10;
       // Native (Eventually-published) clusters always show their dot, at any zoom.
       c._lodMin = nat ? 0 : ((c._visible >= 14) ? 0.95 : (c._visible >= 5 ? 1.4 : 2.0));
@@ -557,13 +562,32 @@
       if (evs) { D.replaceAll(evs); markMine(); globe.setClusters(D.getClusters()); refreshMarkers(); updateStats(); rerenderPlace(); if (timeline && timeline._drawSpark) timeline._drawSpark(); pruneSaved(); }
     }).catch(function () {});
   }
+  // The publishing wall. Reached only when the server refuses, so it always tells the
+  // truth. With a ROLLING window we can name the exact date their oldest post ages out
+  // — much better than a dead end — and give them a route to ask for more capacity.
+  function showPublishLimit(used, capacity, nextSlotISO) {
+    const email = (RT.publishing && RT.publishing.contactEmail) || 'info@eventually-app.com';
+    let when = '';
+    if (nextSlotISO) {
+      const d = new Date(nextSlotISO + 'T00:00:00');
+      if (!isNaN(d)) when = ' Your next slot opens on ' + d.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' }) + '.';
+    }
+    window.EventuallyToast('You\'ve used all ' + capacity + ' of your posting slots for the year.' + when +
+      ' Need more? Email ' + email, 9000);
+  }
   const coordinator = new window.EventuallyCoordinator(document.getElementById('coordinator'), {
     // Returns a Promise<boolean>: true = published. When signed in we write the
     // native event to Supabase (attributed to the user); otherwise demo/local only.
     onPublish: function (evt) {
       if (acctEnabled()) {
         return A.publishEvent(evt).then(function (r) {
-          if (r && r.error) { window.EventuallyToast('Publish failed: ' + r.error.message); return { ok: false }; }
+          if (r && r.error) {
+            // The publishing-limit trigger raises PUBLISH_LIMIT_REACHED|used|capacity|nextSlotDate.
+            // Turn that into a plain-English wall instead of a database error.
+            const m = String((r.error && r.error.message) || '').match(/PUBLISH_LIMIT_REACHED\|(\d+)\|(-?\d+)\|([\d-]*)/);
+            if (m) { showPublishLimit(+m[1], +m[2], m[3]); return { ok: false }; }
+            window.EventuallyToast('Publish failed: ' + r.error.message); return { ok: false };
+          }
           if (evt.sponsored && billingEnabled()) handleFeature(evt);   // settle free/paid featuring
           // Native events are PENDING admin review — don't show on the globe yet.
           return { ok: true, live: false, message: 'Submitted for review — it goes live once an admin approves it.' };
@@ -595,6 +619,7 @@
         return refreshLiveEvents().then(function () { return true; });
       });
     },
+    getQuota: function () { return acctEnabled() && A.publishingQuota ? A.publishingQuota() : Promise.resolve(null); },
     getCreatorStats: function () {
       if (!acctEnabled()) return Promise.resolve([]);
       return A.creatorStats();
@@ -2339,6 +2364,7 @@
         RT.twoHost = !!(cfg.aiHost && cfg.aiHost.hostMode === 'two');
         // Admin can re-enable Plus later by setting plus.comingSoon = false.
         if (cfg.plus && typeof cfg.plus.comingSoon === 'boolean') RT.plusComingSoon = cfg.plus.comingSoon;
+        if (cfg.publishing) RT.publishing = cfg.publishing;      // limits + contact email for the publishing wall
         if (aiHost.setTwoHost) aiHost.setTwoHost(RT.twoHost, {
           h1: (cfg.aiHost && cfg.aiHost.host1 && cfg.aiHost.host1.name) || 'Ethan',
           h2: (cfg.aiHost && cfg.aiHost.host2 && cfg.aiHost.host2.name) || 'Sarah'

@@ -70,7 +70,7 @@
       '<div class="ad-tabs">' +
         tabBtn('overview', 'Overview') + tabBtn('review', 'Review Events') +
         tabBtn('affiliate', 'Affiliate') + tabBtn('host', 'AI Host') +
-        tabBtn('globe', 'Globe & Display') +
+        tabBtn('globe', 'Globe & Display') + tabBtn('publishing', 'Publishing') +
       '</div><div id="ad-body"></div>';
     main.querySelectorAll('.ad-tab').forEach(function (b) {
       b.onclick = function () { tab = b.dataset.tab; renderDashboard(); };
@@ -82,7 +82,155 @@
     else if (tab === 'review') renderReview(body);
     else if (tab === 'affiliate') renderAffiliate(body);
     else if (tab === 'host') renderHost(body);
+    else if (tab === 'publishing') renderPublishing(body);
     else renderGlobe(body);
+  }
+
+  /* ---------------- Publishing limits (native events) ----------------
+   * Rules live in app_config.config.publishing so they change from here, never in code.
+   * Extra capacity is granted per user with a validity window — payment happens offline,
+   * so an admin grant IS the fulfilment step. Grants are a ledger, never a counter, so
+   * you keep the who/when/why/invoice trail.
+   */
+  function renderPublishing(body) {
+    body.innerHTML = '<div class="ad-center">Loading config…</div>';
+    sb.from('app_config').select('config').eq('id', 1).maybeSingle().then(function (r) {
+      const c = (r.data && r.data.config) || {};
+      const p = c.publishing || {};
+      const lim = p.limits || {};
+      const num = function (id, label, v, min) {
+        return '<div class="ad-field"><label>' + label + '</label><input id="' + id + '" type="number" min="' + (min == null ? 0 : min) + '" value="' + (v == null ? 0 : v) + '"></div>';
+      };
+      body.innerHTML =
+        '<div class="ad-sec"><h2>Publishing limits</h2>' +
+        '<p class="ad-hint">How many events a user may publish per rolling window. Enforced by the database on insert, so it cannot be bypassed from the browser. Admins are never limited.</p>' +
+        '<label class="ad-toggle"><input type="checkbox" id="pb-on"' + (p.enabled === false ? '' : ' checked') + '> Enforce publishing limits</label>' +
+        '<div class="ad-row">' + num('pb-days', 'Rolling window (days)', p.windowDays || 365, 1) +
+          '<div class="ad-field"><label>Contact email (shown at the limit)</label><input id="pb-email" value="' + esc(p.contactEmail || 'info@eventually-app.com') + '"></div></div>' +
+        '<p class="ad-hint" style="margin:14px 0 4px"><strong>Posts allowed per plan</strong> — use −1 for unlimited.</p>' +
+        '<div class="ad-row">' +
+          num('pb-free', 'free', lim.free != null ? lim.free : 10, -1) +
+          num('pb-partner', 'partner', lim.partner != null ? lim.partner : 25, -1) +
+          num('pb-venue', 'venue', lim.venue != null ? lim.venue : 50, -1) +
+          num('pb-plus', 'plus', lim.plus != null ? lim.plus : 25, -1) +
+        '</div>' +
+        '<button class="ad-btn" id="pb-save">Save limits</button> <span id="pb-msg" class="ad-hint"></span></div>' +
+
+        '<div class="ad-sec"><h2>Find a publisher</h2>' +
+        '<p class="ad-hint">Look someone up by email to see their usage, change their plan, or grant extra slots after an offline payment.</p>' +
+        '<div class="ad-row"><div class="ad-field" style="flex:1"><label>Email or user id</label>' +
+          '<input id="pb-q" placeholder="name@example.com"></div>' +
+          '<div class="ad-field"><label>&nbsp;</label><button class="ad-btn" id="pb-find">Look up</button></div></div>' +
+        '<div id="pb-result"></div></div>';
+
+      document.getElementById('pb-save').onclick = function () {
+        const btn = document.getElementById('pb-save'), m = document.getElementById('pb-msg');
+        const v = function (id) { return +document.getElementById(id).value; };
+        btn.disabled = true;
+        patchConfig({ publishing: Object.assign({}, p, {
+          enabled: document.getElementById('pb-on').checked,
+          windowDays: Math.max(1, v('pb-days') || 365),
+          contactEmail: document.getElementById('pb-email').value.trim(),
+          limits: { free: v('pb-free'), partner: v('pb-partner'), venue: v('pb-venue'), plus: v('pb-plus') }
+        }) }).then(function (rr) {
+          btn.disabled = false;
+          if (rr && rr.error) { m.textContent = 'Error: ' + rr.error.message; m.style.color = '#b3402a'; return; }
+          m.textContent = 'Saved — applies on next app load.'; m.style.color = '';
+        });
+      };
+      document.getElementById('pb-find').onclick = lookupPublisher;
+      document.getElementById('pb-q').addEventListener('keydown', function (e) { if (e.key === 'Enter') lookupPublisher(); });
+    });
+  }
+
+  function lookupPublisher() {
+    const q = document.getElementById('pb-q').value.trim();
+    const out = document.getElementById('pb-result');
+    if (!q) { out.innerHTML = ''; return; }
+    out.innerHTML = '<p class="ad-hint">Looking up…</p>';
+    sb.rpc('admin_publisher_lookup', { p_q: q }).then(function (r) {
+      const d = r && r.data;
+      if (!d || !d.found) { out.innerHTML = '<p class="ad-hint">No user found for “' + esc(q) + '”.</p>'; return; }
+      const qt = d.quota || {}, plan = qt.plan || 'free';
+      const cap = qt.unlimited ? '∞' : qt.capacity;
+      const msg = '<span id="pb-msg2" class="ad-hint"></span>';
+      out.innerHTML =
+        '<p class="ad-hint" style="margin-top:14px"><strong>' + esc(d.email || d.user_id) + '</strong> — ' +
+          (qt.used || 0) + ' of ' + cap + ' posts used' +
+          (qt.next_slot_at ? ' · next slot frees up ' + esc(qt.next_slot_at) : '') +
+          ' · plan <strong>' + esc(plan) + '</strong>' + (qt.extra ? ' (includes +' + qt.extra + ' granted)' : '') + '</p>' +
+        '<div class="ad-row"><div class="ad-field"><label>Plan</label><select id="pb-plan">' +
+          ['free', 'partner', 'venue', 'plus'].map(function (k) {
+            return '<option value="' + k + '"' + (plan === k ? ' selected' : '') + '>' + k + '</option>';
+          }).join('') + '</select></div>' +
+          '<div class="ad-field"><label>&nbsp;</label><button class="ad-btn" id="pb-plan-save">Set plan</button></div></div>' +
+        '<p class="ad-hint" style="margin:16px 0 4px"><strong>Grant extra slots</strong> — for capacity paid for offline. Leave “valid to” blank for no expiry.</p>' +
+        '<div class="ad-row">' +
+          '<div class="ad-field"><label>Slots</label><input id="pb-slots" type="number" min="1" value="10"></div>' +
+          '<div class="ad-field"><label>Valid from</label><input id="pb-from" type="date" value="' + new Date().toISOString().slice(0, 10) + '"></div>' +
+          '<div class="ad-field"><label>Valid to</label><input id="pb-to" type="date"></div>' +
+          '<div class="ad-field"><label>Invoice / ref</label><input id="pb-ref" placeholder="INV-1042"></div>' +
+        '</div>' +
+        '<div class="ad-row"><div class="ad-field" style="flex:1"><label>Note</label>' +
+          '<input id="pb-note" placeholder="Paid offline — Globe Theatre 2026/27 season"></div></div>' +
+        '<button class="ad-btn" id="pb-grant">Grant slots</button> ' + msg +
+        '<p class="ad-hint" style="margin:16px 0 4px"><strong>Grant history</strong></p>' + creditRows(d.credits || []) +
+        '<p class="ad-hint" style="margin:16px 0 4px"><strong>Recent posts</strong></p>' + postRows(d.recent || []);
+
+      const say = function (t, bad) {
+        const m = document.getElementById('pb-msg2');
+        if (m) { m.textContent = t; m.style.color = bad ? '#b3402a' : ''; }
+      };
+      document.getElementById('pb-plan-save').onclick = function () {
+        sb.rpc('admin_set_publishing_plan', { p_user: d.user_id, p_plan: document.getElementById('pb-plan').value })
+          .then(function (rr) {
+            if (rr && rr.error) { say('Error: ' + rr.error.message, true); return; }
+            lookupPublisher();
+          });
+      };
+      document.getElementById('pb-grant').onclick = function () {
+        const slots = +document.getElementById('pb-slots').value;
+        if (!slots || slots < 1) { say('Enter at least 1 slot.', true); return; }
+        sb.rpc('admin_grant_slots', {
+          p_user: d.user_id, p_slots: slots,
+          p_valid_from: document.getElementById('pb-from').value || null,
+          p_valid_to: document.getElementById('pb-to').value || null,
+          p_note: document.getElementById('pb-note').value || null,
+          p_order_ref: document.getElementById('pb-ref').value || null
+        }).then(function (rr) {
+          if (rr && rr.error) { say('Grant failed: ' + rr.error.message, true); return; }
+          lookupPublisher();
+        });
+      };
+      out.querySelectorAll('[data-revoke]').forEach(function (b) {
+        b.onclick = function () {
+          if (!confirm('Revoke this grant? The slots stop counting immediately.')) return;
+          sb.rpc('admin_revoke_slots', { p_id: b.dataset.revoke }).then(function () { lookupPublisher(); });
+        };
+      });
+    }, function (e) { out.innerHTML = '<p class="ad-hint">Lookup failed: ' + esc(String((e && e.message) || e)) + '</p>'; });
+  }
+
+  function creditRows(rows) {
+    if (!rows.length) return '<p class="ad-hint">No extra slots granted.</p>';
+    return '<div class="ad-list">' + rows.map(function (c) {
+      const dead = !!c.revoked_at;
+      return '<div class="ad-list-row"' + (dead ? ' style="opacity:.5"' : '') + '>' +
+        '<div><strong>+' + c.slots + ' slots</strong> ' +
+        '<span class="ad-hint">' + esc(c.valid_from || '') + ' → ' + esc(c.valid_to || 'no end') +
+        (c.order_ref ? ' · ' + esc(c.order_ref) : '') + (c.note ? ' · ' + esc(c.note) : '') +
+        (dead ? ' · REVOKED' : '') + '</span></div>' +
+        (dead ? '' : '<button class="ad-btn" data-revoke="' + esc(c.id) + '">Revoke</button>') +
+        '</div>';
+    }).join('') + '</div>';
+  }
+  function postRows(rows) {
+    if (!rows.length) return '<p class="ad-hint">No events published yet.</p>';
+    return '<div class="ad-list">' + rows.map(function (e) {
+      return '<div class="ad-list-row"><div><strong>' + esc(e.title || '(untitled)') + '</strong> ' +
+        '<span class="ad-hint">' + esc(e.city || '') + ' · posted ' + esc(String(e.created_at || '').slice(0, 10)) +
+        ' · ' + esc(e.moderation || 'approved') + (e.published === false ? ' · off globe' : '') + '</span></div></div>';
+    }).join('') + '</div>';
   }
 
   /* ---------------- Review / moderate pending events ---------------- */
@@ -1030,7 +1178,8 @@
         '<div class="ad-row">' +
         field('cf-pri', 'Priority spikes', sp.priority) + field('cf-fair', 'Continent-fair spikes', sp.fair) + field('cf-spon', 'Sponsored spikes', sp.sponsored) +
         '</div>' +
-        '<div class="ad-row"><div class="ad-field"><label>Globe time window (days)</label><input id="cf-win" type="number" min="1" max="365" value="' + (c.windowDays || 60) + '"><div class="ad-hint" style="margin:2px 0 0">How far ahead an event can be and still appear on the globe. Higher = more markers/spikes (up to your event data).</div></div></div>' +
+        '<div class="ad-row"><div class="ad-field"><label>Globe time window (days)</label><input id="cf-win" type="number" min="1" max="365" value="' + (c.windowDays || 60) + '"><div class="ad-hint" style="margin:2px 0 0">How far ahead an event can be and still appear on the globe. Higher = more markers/spikes (up to your event data).</div></div>' +
+        '<div class="ad-field"><label>Max events loaded (globe cap)</label><input id="cf-max" type="number" min="500" max="10000" step="100" value="' + (c.globeMaxEvents || 3000) + '"><div class="ad-hint" style="margin:2px 0 0">Events fetched per visit, spread fairly across the world. Events published on Eventually are ALWAYS included and never count against this. Raising it increases Supabase egress on every visit (~275&nbsp;KB per 1,000 events).</div></div></div>' +
         '<label class="ad-toggle"><input type="checkbox" id="cf-ads"' + (c.adsEnabled === false ? '' : ' checked') + '> Show ads (non-Plus)</label>' +
         '<label class="ad-toggle"><input type="checkbox" id="cf-host"' + (c.hostEnabled === false ? '' : ' checked') + '> AI Host enabled</label></div>' +
 
@@ -1130,6 +1279,7 @@
         const merged = Object.assign({}, c, {
           spikes: { priority: +val('cf-pri'), fair: +val('cf-fair'), sponsored: +val('cf-spon') },
           windowDays: Math.min(365, Math.max(1, +val('cf-win') || 60)),
+          globeMaxEvents: Math.min(10000, Math.max(500, +val('cf-max') || 3000)),
           adsEnabled: document.getElementById('cf-ads').checked,
           hostEnabled: document.getElementById('cf-host').checked,
           pinnedLocations: pinned, hiddenCities: lines('cf-hidc'), hiddenEvents: lines('cf-hide'),

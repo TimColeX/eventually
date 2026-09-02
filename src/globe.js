@@ -414,7 +414,8 @@
       const h = this._spikeHeight(t, c);
       if (h <= 0.001) continue;
       const sponsored = c._spikeKind === 'sponsored';
-      const col = sponsored ? '#CB5A3C' : (c._color || '#CB5A3C');
+      let col = sponsored ? '#CB5A3C' : (c._color || '#CB5A3C');
+      if (c._allNative) col = nativeColor(col, t);   // published on Eventually → pulse
       const p = c._p, base = c._base;
       const len = (sponsored ? 0.32 : 0.22) * (0.55 + (c._pop || 0.3)) * h;
       const topV = [base[0] * (1 + len), base[1] * (1 + len), base[2] * (1 + len)];
@@ -520,6 +521,29 @@
     return ((h >>> 0) % 1000) / 1000;                          // stable 0..1
   };
 
+  // Blend two #rrggbb colours. Used for the native-event pulse below.
+  function mixHex(a, b, t) {
+    if (a[0] !== '#' || b[0] !== '#') return a;
+    const x = parseInt(a.slice(1), 16), y = parseInt(b.slice(1), 16);
+    const r = Math.round(((x >> 16) & 255) * (1 - t) + ((y >> 16) & 255) * t);
+    const g = Math.round(((x >> 8) & 255) * (1 - t) + ((y >> 8) & 255) * t);
+    const bl = Math.round((x & 255) * (1 - t) + (y & 255) * t);
+    return '#' + (0x1000000 + (r << 16) + (g << 8) + bl).toString(16).slice(1);
+  }
+  // NATIVE-EVENT PULSE — spikes whose events were ALL published on Eventually breathe
+  // between their category colour and ink, so they read as "posted here" at a glance.
+  //   * ~1.8s sine, shared clock → every native spike pulses in unison, which reads as
+  //     deliberate rather than as noise.
+  //   * Amplitude stops well short of solid ink; a hard black flash would fight the
+  //     minimal look and is a genuine photosensitivity concern.
+  //   * prefers-reduced-motion → a STATIC blended tone. Still distinguishable, no motion.
+  const NATIVE_INK = '#211A15', NATIVE_PERIOD = 1.8, NATIVE_AMP = 0.55;   // period in SECONDS (draw clock is performance.now()/1000)
+  const reduceMotion = (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) || false;
+  function nativeColor(col, tSec) {
+    if (reduceMotion) return mixHex(col, NATIVE_INK, NATIVE_AMP * 0.5);
+    const phase = (1 - Math.cos((tSec % NATIVE_PERIOD) / NATIVE_PERIOD * Math.PI * 2)) / 2;   // 0→1→0
+    return mixHex(col, NATIVE_INK, phase * NATIVE_AMP);
+  }
   function hexA(hex, a) {
     if (hex[0] !== '#') return hex;
     const n = parseInt(hex.slice(1), 16);

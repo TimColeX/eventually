@@ -86,6 +86,13 @@
     },
     // Publish a native (coordinator) event to the globe, attributed to this user.
     // Writes the events row then its native event_sources row. RLS-gated.
+    // How many native events this user may still publish in the rolling window.
+    // Server-side truth (publishing_quota) — the UI only mirrors it; the real gate
+    // is a BEFORE INSERT trigger, so this can never be the thing that's enforcing.
+    publishingQuota: function () {
+      const sb = client(); if (!sb) return Promise.resolve(null);
+      return sb.rpc('publishing_quota').then(function (r) { return (r && r.data) || null; }, function () { return null; });
+    },
     publishEvent: function (evt) {
       if (!currentUser) return Promise.resolve({ error: { message: 'Not signed in' } });
       const srcId = 'natsrc_' + evt.id;
