@@ -538,7 +538,9 @@
             self._setBuffering(false);
             if (b && b.segments && b.segments.length) {
               if (b.filler) self._playFillerSegs(b.segments, 0, myGen);   // quiet city → already the cached radio filler
-              else self._playSegmentsThen(b.segments, 0, function () { self._continueWithFiller(myGen); });  // events → then city filler (radio)
+              // events → then city filler. afterEvents=true so the filler opens with the
+              // "bridge" line, NOT "it's quiet in <city>" (which would contradict the briefing).
+              else self._playSegmentsThen(b.segments, 0, function () { self._continueWithFiller(myGen, true); });
             } else self._continueWithFiller(myGen);          // no event audio → try city filler, else music
           }).catch(function () { self._setBuffering(false); if (stale()) return; self._continueWithFiller(myGen); });
         };
@@ -745,7 +747,9 @@
   };
   // Fetch the current city's cached filler and play it (radio-style). Cheap: cached after
   // the first ever visit to that city. On failure/none → settle to the music bed.
-  AIHost.prototype._continueWithFiller = function (myGen) {
+  // `afterEvents` = the hosts just finished a real event briefing for this city, so the
+  // filler must open with the neutral "bridge" line rather than the "it's quiet" one.
+  AIHost.prototype._continueWithFiller = function (myGen, afterEvents) {
     const self = this; if (myGen == null) myGen = this._gen;
     if (!this.speaking || myGen !== this._gen) return;
     if (!this.getCityFiller) { this._endFreeIntro(); return; }
@@ -753,7 +757,7 @@
     // to music instead (the replay timer will bring the show back around later).
     if (Date.now() - this._lastFillerAt < this.FILLER_COOLDOWN) { this._endFreeIntro(); return; }
     this._setBuffering(true);
-    Promise.resolve(this.getCityFiller()).then(function (f) {
+    Promise.resolve(this.getCityFiller(!!afterEvents)).then(function (f) {
       self._setBuffering(false);
       if (!self.speaking || myGen !== self._gen) return;
       if (f && f.segments && f.segments.length) self._playFillerSegs(f.segments, 0, myGen);

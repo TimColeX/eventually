@@ -200,6 +200,18 @@ body {
   background: #ece2d4; color: var(--ink); border: 0; font-size: 14px;
 }
 .place-close:hover { background: var(--clay); color: var(--cream); }
+/* Honest empty state when a searched place has nothing on (see openEmptyPlace). */
+.place-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 34px 18px; }
+.place-empty .pe-icon { font-size: 30px; color: var(--line-2); line-height: 1; }
+.place-empty strong { font-size: 15px; color: var(--ink); }
+.place-empty span { font-size: 13px; color: var(--muted); line-height: 1.55; max-width: 34ch; }
+.pe-near {
+  margin-top: 10px; display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer;
+  padding: 10px 16px; border-radius: 10px; background: var(--paper); border: 1px solid var(--line-2);
+  color: var(--clay); font-family: var(--font); font-size: 13px; font-weight: 700;
+}
+.pe-near:hover { border-color: var(--clay); }
+.pe-near em { font-style: normal; font-weight: 400; font-size: 11.5px; color: var(--muted); }
 .place-list { overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
 .place-list::-webkit-scrollbar { width: 8px; }
 .place-list::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 99px; }

@@ -390,12 +390,14 @@
     // CITY RADIO FILLER for the CURRENT city — cached modular segments (facts/history/
     // culture/typical events) played after events run out to keep the station going.
     // Same location model as getBriefing; cached per city so it adds no per-play AI cost.
-    getCityFiller: function () {
+    // `afterEvents` is true when this filler follows a real event briefing — the server
+    // then opens with the "bridge" line instead of "it's a little quiet in <city>".
+    getCityFiller: function (afterEvents) {
       if (!window.EventuallyHostVoice || !window.EventuallyHostVoice.getCityFiller) return Promise.resolve(null);
       const loc = activeBriefingLocation || P.get().location;
       const city = (loc && loc.city) ? loc.city : null;
       if (!city) return Promise.resolve(null);
-      return window.EventuallyHostVoice.getCityFiller({ city: city, lat: loc && loc.lat, lon: loc && loc.lon, lang: P.get().language || 'en' });
+      return window.EventuallyHostVoice.getCityFiller({ city: city, lat: loc && loc.lat, lon: loc && loc.lon, lang: P.get().language || 'en', afterEvents: !!afterEvents });
     },
     // Admin-tunable delivery for the free browser voice (rate/pitch).
     getVoiceSettings: function () { return RT.hostVoice || {}; },
@@ -841,6 +843,30 @@
     place.classList.add('open');
     all.forEach(function (e) { e.clicks++; });
   }
+  // Honest empty state for a searched place with nothing on. Titled with the city the
+  // USER searched (not some distant cluster), so the panel can never contradict the
+  // "no events" message. The nearest events are offered as an explicit, labelled choice
+  // with their real distance — never silently substituted.
+  function openEmptyPlace(o, near) {
+    const city = o.city || 'This area';
+    setActiveBriefingLocation({ city: o.city || null, lat: +o.lat, lon: +o.lon });
+    activeClusterId = null; focusEventId = null;
+    place.querySelector('.place-city').textContent = city;
+    place.querySelector('.place-count').textContent = 'No events today';
+    place.querySelector('.place-tools').innerHTML = '';
+    let h = '<div class="place-empty"><div class="pe-icon">◌</div>' +
+      '<strong>No events in ' + esc(city) + ' today</strong>' +
+      '<span>We don\'t have anything listed here yet. Try another date on the timeline, or explore somewhere else on the globe.</span>';
+    if (near) {
+      h += '<button class="pe-near" data-near="' + esc(near.cluster.id) + '">Explore nearest events →' +
+        '<em>' + esc(near.cluster.city) + ' · ' + Math.round(near.km).toLocaleString() + ' km away</em></button>';
+    }
+    h += '</div>';
+    placeList.innerHTML = h;
+    const btn = placeList.querySelector('.pe-near');
+    if (btn) btn.addEventListener('click', function () { openPlace(btn.getAttribute('data-near')); });
+    place.classList.add('open');
+  }
   function rerenderPlace() {
     if (activeClusterId && place.classList.contains('open')) { buildPlaceTools(clusterById(activeClusterId)); renderPlaceList(); }
   }
@@ -993,10 +1019,19 @@
   /* ---------- search ---------- */
   const searchInput = document.getElementById('search');
   const searchResults = document.getElementById('search-results');
-  function nearestClusterId(lat, lon) {
+  // How close a cluster must be to a SEARCHED place before we open it as "that place".
+  // Beyond this we show an honest empty state instead. (Abuja used to open Agrigento,
+  // Sicily — 3,200 km away — because the old lookup had no distance limit and compared
+  // squared DEGREES, which isn't even a real distance.)
+  const NEAR_OPEN_KM = 200;
+  // Nearest loaded cluster to a point, with its REAL great-circle distance in km.
+  function nearestCluster(lat, lon) {
     let best = null, bd = Infinity;
-    D.getClusters().forEach(function (c) { const dd = (c.lat - lat) * (c.lat - lat) + (c.lon - lon) * (c.lon - lon); if (dd < bd) { bd = dd; best = c; } });
-    return best ? best.id : null;
+    D.getClusters().forEach(function (c) {
+      const km = haversineKm(lat, lon, c.lat, c.lon);
+      if (km < bd) { bd = km; best = c; }
+    });
+    return best ? { cluster: best, km: bd } : null;
   }
   // Fly to a chosen result. When live, first load that area's events (so cities/
   // events that weren't on the loaded globe appear), then open it.
@@ -1008,8 +1043,13 @@
       globe.flyTo(o.lat, o.lon);
       globe.setHighlight(o.lat, o.lon, { color: '#ff3b30', id: o.eventId });
       setTimeout(function () {
-        if (o.eventId && D.getById(o.eventId)) openEvent(o.eventId);
-        else { const cid = nearestClusterId(o.lat, o.lon); if (cid) openPlace(cid); }
+        if (o.eventId && D.getById(o.eventId)) { openEvent(o.eventId); return; }
+        const near = nearestCluster(o.lat, o.lon);
+        // Only treat a cluster as "the place you searched" when it's genuinely close.
+        // Otherwise be honest: name the searched city and say there's nothing on today,
+        // offering the nearest events as a clearly-labelled, opt-in choice.
+        if (near && near.km <= NEAR_OPEN_KM) openPlace(near.cluster.id);
+        else openEmptyPlace(o, near);
       }, 650);
     }
     if (window.EventuallyAPI && window.EventuallyAPI.config.remote && window.EventuallyAPI.fetchEvents) {
@@ -1122,13 +1162,17 @@
     D.getEvents().forEach(function (e) { if (!seen[e.city]) { seen[e.city] = 1; out.push({ city: e.city, lat: e.lat, lon: e.lon }); } });
     return out.sort(function (a, b) { return a.city < b.city ? -1 : 1; });
   }
+  // Nearest event-city to a point, used to LABEL the user's location when the geocoder
+  // is unavailable. Distance-capped (and real km, not squared degrees): without a cap a
+  // user in a region with no inventory would be labelled with a city thousands of km
+  // away. null → the caller falls back to the neutral "Your area".
   function nearestCity(lat, lon) {
     let best = null, bd = Infinity;
     uniqueCities().forEach(function (c) {
-      const d = (c.lat - lat) * (c.lat - lat) + (c.lon - lon) * (c.lon - lon);
-      if (d < bd) { bd = d; best = c; }
+      const km = haversineKm(lat, lon, c.lat, c.lon);
+      if (km < bd) { bd = km; best = c; }
     });
-    return best;
+    return (best && bd <= NEAR_OPEN_KM) ? best : null;
   }
   function renderLocChip() {
     const loc = P.get().location;

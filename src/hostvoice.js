@@ -96,7 +96,9 @@
       return fetch(BASE + '/functions/v1/briefing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': ANON, 'Authorization': 'Bearer ' + ANON },
-        body: JSON.stringify({ filler: true, city: o.city, lat: (o.lat != null ? o.lat : null), lon: (o.lon != null ? o.lon : null), lang: (o.lang || 'en').slice(0, 2) })
+        // afterEvents → the hosts JUST covered real events here, so the server uses the
+        // "bridge" opener instead of the "it's quiet in <city>" one (which would contradict it).
+        body: JSON.stringify({ filler: true, city: o.city, lat: (o.lat != null ? o.lat : null), lon: (o.lon != null ? o.lon : null), lang: (o.lang || 'en').slice(0, 2), after_events: !!o.afterEvents })
       }).then(function (r) { return r.ok ? r.json() : null; })
         .then(function (j) { return (j && j.segments && j.segments.length) ? { segments: j.segments, filler: true, music: j.music || 'between' } : null; })
         .catch(function () { return null; });
