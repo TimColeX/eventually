@@ -55,9 +55,13 @@
    * Ads are only rendered for non-Plus users when the admin has ads enabled
    * (the app gates on RT.adsEnabled && !plus before calling adSlotHTML). */
   const ADSENSE = {
-    enabled: false,                               // ⬅ flip to true ONLY after approval + slot ids below are filled
+    enabled: true,                                // LIVE — approved 2026-09-01, manual units (Auto ads deliberately OFF)
     client: 'ca-pub-9120618442042757',            // publisher id (live)
-    slots: { banner: '', infeed: '', panel: '' }  // ⬅ per-placement ad-unit ids — fill after creating the 3 ad units
+    slots: {                                      // per-placement ad-unit ids from AdSense → Ads → By ad unit
+      banner: '3532231028',                       // bottom bar (horizontal)
+      infeed: '1518160402',                       // inside the results list
+      panel:  '8592986015'                        // event detail side panel
+    }
   };
   // Reserved min-heights (px) — keep in sync with .ad-slot CSS to avoid layout shift.
   const SLOT_H = { banner: 56, infeed: 96, panel: 250 };
