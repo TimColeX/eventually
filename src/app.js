@@ -1705,6 +1705,10 @@
   }
   function renderAd() {
     adbar.innerHTML = M.adSlotHTML('banner');
+    // A real AdSense unit is a FIXED 320x50 box — centre it in the bar. The house
+    // creative is a full-width row (tag + copy + "Remove ads"), so it keeps the
+    // default left-aligned flex layout.
+    adbar.classList.toggle('adbar-unit', !!adbar.querySelector('.adsbygoogle'));
     M.mountAdSense(adbar);
     const plus = adbar.querySelector('.ad-plus');
     if (plus) plus.addEventListener('click', openPlus);

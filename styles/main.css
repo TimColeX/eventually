@@ -777,6 +777,12 @@ body {
 /* ---------- provider-agnostic ad slots (in-feed + detail panel) ---------- */
 /* Reserved containers so real ad fills cause no layout shift. Keep min-heights
    in sync with SLOT_H in monetize.js. */
+/* AdSense banner = a FIXED 320x50 unit (see monetize.js). Centre it in the bar and make
+   sure it can never widen the page on narrow phones: the bar's 16px side padding leaves
+   only 288px on a 320px viewport, so drop the padding below 352px and clip as a backstop. */
+.adbar.adbar-unit { justify-content: center; overflow: hidden; }
+.adbar .adsbygoogle { max-width: 100%; }
+@media (max-width: 351px) { .adbar { padding-left: 0; padding-right: 0; } }
 .ad-slot { position: relative; border-radius: 12px; overflow: hidden; }
 .ad-slot .adsbygoogle { display: block; width: 100%; }
 /* In-feed native card (between event cards in the place list). */

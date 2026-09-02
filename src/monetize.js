@@ -97,6 +97,15 @@
     adSlotHTML: function (kind) {
       const h = SLOT_H[kind] || SLOT_H.banner;
       if (ADSENSE.enabled && ADSENSE.client) {
+        // BANNER = FIXED 320x50 (mobile leaderboard). The bottom bar is a fixed 56px
+        // strip, so a RESPONSIVE unit there commonly returns a 320x100 and spills over
+        // the globe / AI-host bar — bad UX and a policy risk (ads must not be obscured
+        // or clipped). A fixed size can never overflow. The in-feed and panel slots keep
+        // the responsive unit: their containers use min-height and are free to grow.
+        if (kind === 'banner') {
+          return '<ins class="adsbygoogle" style="display:inline-block;width:320px;height:50px" ' +
+            'data-ad-client="' + ADSENSE.client + '" data-ad-slot="' + (ADSENSE.slots.banner || '') + '"></ins>';
+        }
         return '<ins class="adsbygoogle" style="display:block;min-height:' + h + 'px" ' +
           'data-ad-client="' + ADSENSE.client + '" data-ad-slot="' + (ADSENSE.slots[kind] || '') + '" ' +
           'data-ad-format="auto" data-full-width-responsive="true"></ins>';
