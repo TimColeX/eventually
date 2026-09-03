@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Browse events by city | Eventually</title>
+<meta name="description" content="Every city with events on Eventually — browse 50 cities and see what's happening near you.">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://eventually-app.com/browse/">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&display=swap">
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#14100c; color:#ece5da; font:16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  .bg { position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
+  .bg img { position:absolute; top:50%; left:50%; width:min(120vw,1100px); transform:translate(-50%,-50%); filter:blur(20px) saturate(1.05); opacity:.40; }
+  .bg::after { content:""; position:absolute; inset:0; background:radial-gradient(ellipse at center, rgba(20,16,12,.30) 0%, rgba(20,16,12,.72) 58%, rgba(20,16,12,.95) 100%); }
+  .wrap { position:relative; z-index:1; max-width:860px; margin:0 auto; padding:40px 22px 80px; }
+  a { color:#f0a24a; }
+  h1 { font-family:"Sora",system-ui,sans-serif; font-weight:700; font-size:2rem; margin:0 0 6px; letter-spacing:-.02em; }
+  h2 { font-family:"Sora",system-ui,sans-serif; font-weight:600; font-size:1.05rem; margin:28px 0 6px; color:#ffd8a8; }
+  p { color:#d9cfc2; }
+  .muted { color:#9a8f80; font-size:.85em; }
+  .nearby a { display:inline-block; margin:0 12px 8px 0; }
+  hr { border:none; border-top:1px solid #2e2820; margin:30px 0; }
+</style>
+</head>
+<body>
+<div class="bg"><img src="/assets/globe-bg.webp" alt="" aria-hidden="true"></div>
+<div class="wrap">
+  <a href="/">← Eventually</a>
+  <h1>Browse events by city</h1>
+  <p>50 cities with events on Eventually right now. Updated daily.</p>
+  <h2>Australia</h2>
+  <p class="nearby"><a href="/events/adelaide/">Adelaide <span class="muted">(58)</span></a> <a href="/events/brisbane/">Brisbane <span class="muted">(44)</span></a> <a href="/events/melbourne/">Melbourne <span class="muted">(75)</span></a> <a href="/events/sydney/">Sydney <span class="muted">(111)</span></a></p>
+  <h2>Austria</h2>
+  <p class="nearby"><a href="/events/vienna/">Vienna <span class="muted">(87)</span></a></p>
+  <h2>Belgium</h2>
+  <p class="nearby"><a href="/events/antwerp/">Antwerp <span class="muted">(53)</span></a> <a href="/events/brussels/">Brussels <span class="muted">(107)</span></a></p>
+  <h2>Canada</h2>
+  <p class="nearby"><a href="/events/edmonton/">Edmonton <span class="muted">(41)</span></a> <a href="/events/montreal/">Montreal <span class="muted">(83)</span></a> <a href="/events/ottawa/">Ottawa <span class="muted">(56)</span></a> <a href="/events/toronto/">Toronto <span class="muted">(384)</span></a> <a href="/events/vancouver/">Vancouver <span class="muted">(77)</span></a></p>
+  <h2>Czech Republic</h2>
+  <p class="nearby"><a href="/events/prague/">Prague <span class="muted">(229)</span></a></p>
+  <h2>Denmark</h2>
+  <p class="nearby"><a href="/events/copenhagen/">Copenhagen <span class="muted">(330)</span></a></p>
+  <h2>Germany</h2>
+  <p class="nearby"><a href="/events/berlin/">Berlin <span class="muted">(344)</span></a> <a href="/events/cologne/">Cologne <span class="muted">(104)</span></a> <a href="/events/frankfurt-am-main/">Frankfurt am Main <span class="muted">(62)</span></a> <a href="/events/hamburg/">Hamburg <span class="muted">(119)</span></a> <a href="/events/leipzig/">Leipzig <span class="muted">(49)</span></a> <a href="/events/munich/">Munich <span class="muted">(52)</span></a></p>
+  <h2>Great Britain</h2>
+  <p class="nearby"><a href="/events/london-uk/">London <span class="muted">(322)</span></a></p>
+  <h2>Ireland</h2>
+  <p class="nearby"><a href="/events/cork/">Cork <span class="muted">(46)</span></a> <a href="/events/dublin/">Dublin <span class="muted">(441)</span></a> <a href="/events/galway/">Galway <span class="muted">(43)</span></a></p>
+  <h2>Italy</h2>
+  <p class="nearby"><a href="/events/milan/">Milan <span class="muted">(93)</span></a> <a href="/events/padova/">Padova <span class="muted">(36)</span></a></p>
+  <h2>Mexico</h2>
+  <p class="nearby"><a href="/events/mexico-city/">Mexico City <span class="muted">(828)</span></a></p>
+  <h2>Netherlands</h2>
+  <p class="nearby"><a href="/events/amsterdam/">Amsterdam <span class="muted">(232)</span></a> <a href="/events/rotterdam/">Rotterdam <span class="muted">(52)</span></a> <a href="/events/the-hague/">The Hague <span class="muted">(37)</span></a></p>
+  <h2>New Zealand</h2>
+  <p class="nearby"><a href="/events/auckland/">Auckland <span class="muted">(314)</span></a> <a href="/events/hamilton-nz/">Hamilton <span class="muted">(55)</span></a></p>
+  <h2>Norway</h2>
+  <p class="nearby"><a href="/events/oslo/">Oslo <span class="muted">(127)</span></a></p>
+  <h2>Poland</h2>
+  <p class="nearby"><a href="/events/krakow/">Krakow <span class="muted">(164)</span></a> <a href="/events/poznan/">Poznan <span class="muted">(41)</span></a> <a href="/events/warsaw/">Warsaw <span class="muted">(297)</span></a> <a href="/events/wroclaw/">Wroclaw <span class="muted">(56)</span></a></p>
+  <h2>South Africa</h2>
+  <p class="nearby"><a href="/events/cape-town/">Cape Town <span class="muted">(60)</span></a> <a href="/events/johannesburg/">Johannesburg <span class="muted">(54)</span></a></p>
+  <h2>Spain</h2>
+  <p class="nearby"><a href="/events/barcelona/">Barcelona <span class="muted">(114)</span></a> <a href="/events/madrid/">Madrid <span class="muted">(198)</span></a></p>
+  <h2>Sweden</h2>
+  <p class="nearby"><a href="/events/linkoping/">Linköping <span class="muted">(38)</span></a> <a href="/events/stockholm/">Stockholm <span class="muted">(104)</span></a></p>
+  <h2>Switzerland</h2>
+  <p class="nearby"><a href="/events/zurich/">Zurich <span class="muted">(110)</span></a></p>
+  <h2>Turkey</h2>
+  <p class="nearby"><a href="/events/ankara/">Ankara <span class="muted">(95)</span></a> <a href="/events/antalya/">Antalya <span class="muted">(77)</span></a> <a href="/events/bursa/">Bursa <span class="muted">(37)</span></a> <a href="/events/istanbul/">Istanbul <span class="muted">(422)</span></a> <a href="/events/izmir/">İzmir <span class="muted">(77)</span></a> <a href="/events/kocaeli/">Kocaeli <span class="muted">(36)</span></a></p>
+  <hr>
+  <p class="muted">Eventually · <a href="/">Globe</a> · <a href="/about.html">About</a> · <a href="/privacy.html">Privacy</a> · <a href="/terms.html">Terms</a></p>
+</div>
+</body>
+</html>

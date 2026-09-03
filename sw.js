@@ -1,5 +1,5 @@
 /* Eventually — service worker. Offline-first cache of the app shell. */
-const CACHE = 'eventually-v134';
+const CACHE = 'eventually-v135';
 const ASSETS = [
   './', './index.html', './styles/main.css',
   './src/dedup.js', './src/data.js', './src/api.js', './src/auth.js', './src/billing.js', './src/subscriptions.js', './src/signature.js', './src/geo.js', './src/hostvoice.js', './src/landdata.js', './src/profile.js', './src/reminders.js', './src/monetize.js',
@@ -28,6 +28,11 @@ self.addEventListener('fetch', (e) => {
   if (new URL(e.request.url).origin !== self.location.origin) return;
   // Never intercept the admin app (separate site) — always hit the network.
   if (new URL(e.request.url).pathname.indexOf('/admin/') !== -1) return;
+  // Never intercept the generated SEO pages. This cache is cache-FIRST with no
+  // revalidation, so a cached city page would be served forever — showing last week's
+  // events to returning visitors. These are rebuilt daily, so they must stay live.
+  const p = new URL(e.request.url).pathname;
+  if (p.indexOf('/events/') !== -1 || p.indexOf('/browse/') !== -1 || p.indexOf('sitemap.xml') !== -1) return;
   e.respondWith(
     caches.match(e.request).then((hit) =>
       hit || fetch(e.request).then((res) => {
