@@ -628,13 +628,35 @@
         '<button class="ad-btn" id="tts-refresh" type="button" style="margin-top:8px">Refresh</button></div>' +
       '<div class="ad-sec aff-row" style="padding:14px"><h3 class="ad-sub">Test the conversation (uses the selected provider + both voices)</h3>' +
         '<p class="ad-hint">Enter a sample dialogue as "Host 1: …" / "Host 2: …". Generates a real clip with the currently-selected provider.</p>' +
-        '<div class="ad-field"><textarea id="ai-conv" style="min-height:90px">Host 1: What have you found happening around town this weekend?\nHost 2: There are quite a few events — I found a family festival on Saturday.\nHost 1: That sounds fun. What’s on there?\nHost 2: Live music, food vendors and activities for the kids.</textarea></div>' +
+        '<div class="ad-field"><textarea id="ai-conv" style="min-height:90px">' + esc(convTestText()) + '</textarea>' +
+          '<div class="ad-hint" style="margin:2px 0 0">Saved in this browser as you type. Clear the box and refresh to restore the default sample.</div></div>' +
         '<button class="ad-save" id="ai-conv-play" type="button">▶ Test Conversation</button>' +
         '<audio id="ai-conv-audio" controls style="width:100%;display:none;margin-top:8px"></audio>' +
         '<span class="ad-saved" id="ai-conv-msg"></span></div>' +
       '<div style="margin-top:12px"><button class="ad-save" id="ai-save">Save AI Host settings</button><span class="ad-saved" id="ai-msg"></span></div></div>';
   }
   // Call the briefing function with the admin's session (sb.functions.invoke passes the JWT).
+  // The Test Conversation box is a scratchpad, not a setting — but losing your edited script
+  // on every refresh is just annoying, so keep it in this browser. Blank falls back to the
+  // sample, which doubles as the way to get the default back.
+  const CONV_TEST_KEY = 'eventually.admin.convTest';
+  const CONV_TEST_DEFAULT =
+    'Host 1: What have you found happening around town this weekend?\n' +
+    'Host 2: There are quite a few events — I found a family festival on Saturday.\n' +
+    'Host 1: That sounds fun. What’s on there?\n' +
+    'Host 2: Live music, food vendors and activities for the kids.';
+  function convTestText() {
+    try { const v = localStorage.getItem(CONV_TEST_KEY); if (v && v.trim()) return v; } catch (e) { /* private mode */ }
+    return CONV_TEST_DEFAULT;
+  }
+  function bindConvTestPersistence() {
+    const el = document.getElementById('ai-conv');
+    if (!el) return;
+    el.addEventListener('input', function () {
+      try { localStorage.setItem(CONV_TEST_KEY, el.value); } catch (e) { /* storage unavailable — field still works */ }
+    });
+  }
+
   // Voice-synthesis health per provider (45_tts_health). Deliberately reads FAILURES, not
   // just usage: a provider that has stopped working still shows healthy usage numbers from
   // cache hits, which is precisely how two outages went unnoticed.
@@ -832,6 +854,7 @@
     if ($('ai-h1-play')) $('ai-h1-play').onclick = function () { testHost(1); };
     if ($('ai-h2-play')) $('ai-h2-play').onclick = function () { testHost(2); };
     renderTtsHealth();
+    bindConvTestPersistence();
     if ($('tts-refresh')) $('tts-refresh').onclick = renderTtsHealth;
     if ($('ai-conv-play')) $('ai-conv-play').onclick = function () {
       const prov = providerOf(), ids = [hostVid(1), hostVid(2)];
