@@ -163,6 +163,22 @@ async function analyse() {
     if (e.lat != null && e.lon != null) c.venues.add(e.lat.toFixed(2) + ',' + e.lon.toFixed(2));
   }
 
+  // MERGE ROWS WITH A MISSING COUNTRY into the same city's main entry. Sources disagree:
+  // Ticketmaster sets a country, the feed importer doesn't — so Regina arrived as TWO
+  // entries (9 events with country null + 3 with "Canada") and neither cleared the
+  // 10-event bar, even though together it comfortably qualifies. Only genuinely different
+  // NAMED countries should stay separate (London GB really is not London CA).
+  for (const [key, blank] of [...byCity.entries()]) {
+    if (blank.country) continue;                                  // has a country → leave it
+    const target = [...byCity.values()]
+      .filter((o) => o.slug === blank.slug && o.country)
+      .sort((a, b) => b.events.length - a.events.length)[0];      // the biggest named-country twin
+    if (!target) continue;                                        // nothing to merge into
+    target.events.push(...blank.events);
+    blank.venues.forEach((v) => target.venues.add(v));
+    byCity.delete(key);
+  }
+
   const all = [...byCity.values()].map((c) => ({
     ...c, n: c.events.length, venueCount: c.venues.size,
   })).sort((a, b) => b.n - a.n);
