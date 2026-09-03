@@ -38,7 +38,7 @@ jobs:
         # grants read access to approved events. Add a repo secret to override it.
         env:
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-        run: node tools/build-city-pages.js --top=50
+        run: node tools/build-city-pages.js --top=200
 
       - name: Commit if anything changed
         run: |
