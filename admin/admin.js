@@ -631,7 +631,19 @@
   // Call the briefing function with the admin's session (sb.functions.invoke passes the JWT).
   function invokeBriefing(bodyObj) {
     return sb.functions.invoke('briefing', { body: bodyObj }).then(function (r) {
-      if (r.error) return { error: r.error.message || 'error' };
+      if (r.error) {
+        // supabase-js reports a non-2xx as "Edge Function returned a non-2xx status code"
+        // and hides the RESPONSE BODY in error.context. That body carries the provider's own
+        // message (wrong model id, no credit, bad key) — the only thing that actually
+        // diagnoses a TTS refusal — so dig it out instead of showing the generic string.
+        const ctx = r.error.context;
+        if (ctx && typeof ctx.json === 'function') {
+          return ctx.json().then(function (b) {
+            return { error: (b && (b.detail || b.error)) || r.error.message || 'error' };
+          }, function () { return { error: r.error.message || 'error' }; });
+        }
+        return { error: r.error.message || 'error' };
+      }
       return r.data || {};
     }).catch(function (e) { return { error: String(e) }; });
   }
