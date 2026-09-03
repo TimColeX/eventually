@@ -620,6 +620,12 @@
         '<div class="ad-field"><label>Tone (optional)</label><input id="ai-tone" value="' + esc(aiCfg.tone || '') + '" placeholder="e.g. warm, upbeat, local"></div>' +
       '</div>' +
       hostFields(1, aiCfg.host1) + hostFields(2, aiCfg.host2) +
+      // Voice-synthesis health. A provider refusing work used to be invisible: cached audio
+      // kept playing while nothing new could be made. This surfaces the provider's OWN error.
+      '<div class="ad-sec aff-row" style="padding:14px"><h3 class="ad-sub">Voice synthesis — health (last 24h)</h3>' +
+        '<p class="ad-hint">Every synthesis attempt is logged. If a provider starts refusing (no credit, quota, bad key) it shows here with its own message — the app keeps playing cached audio, so this is the only place a failure is visible.</p>' +
+        '<div id="tts-health"><div class="ad-hint">Loading…</div></div>' +
+        '<button class="ad-btn" id="tts-refresh" type="button" style="margin-top:8px">Refresh</button></div>' +
       '<div class="ad-sec aff-row" style="padding:14px"><h3 class="ad-sub">Test the conversation (uses the selected provider + both voices)</h3>' +
         '<p class="ad-hint">Enter a sample dialogue as "Host 1: …" / "Host 2: …". Generates a real clip with the currently-selected provider.</p>' +
         '<div class="ad-field"><textarea id="ai-conv" style="min-height:90px">Host 1: What have you found happening around town this weekend?\nHost 2: There are quite a few events — I found a family festival on Saturday.\nHost 1: That sounds fun. What’s on there?\nHost 2: Live music, food vendors and activities for the kids.</textarea></div>' +
@@ -629,6 +635,40 @@
       '<div style="margin-top:12px"><button class="ad-save" id="ai-save">Save AI Host settings</button><span class="ad-saved" id="ai-msg"></span></div></div>';
   }
   // Call the briefing function with the admin's session (sb.functions.invoke passes the JWT).
+  // Voice-synthesis health per provider (45_tts_health). Deliberately reads FAILURES, not
+  // just usage: a provider that has stopped working still shows healthy usage numbers from
+  // cache hits, which is precisely how two outages went unnoticed.
+  function renderTtsHealth() {
+    const box = document.getElementById('tts-health');
+    if (!box) return;
+    box.innerHTML = '<div class="ad-hint">Loading…</div>';
+    sb.rpc('admin_tts_health', { p_hours: 24 }).then(function (r) {
+      if (r.error) { box.innerHTML = '<div class="ad-hint">Unavailable — run backend/45_tts_health.sql. (' + esc(r.error.message) + ')</div>'; return; }
+      const rows = r.data || [];
+      if (!rows.length) { box.innerHTML = '<div class="ad-hint">No synthesis attempts in the last 24 hours.</div>'; return; }
+      box.innerHTML = '<div class="ad-list">' + rows.map(function (p) {
+        const fails = +p.failures || 0, ok = +p.synths || 0;
+        // Red only when it is CURRENTLY broken: recent failures and nothing succeeding since.
+        const brokenNow = fails > 0 && (!p.last_success || new Date(p.last_failure) > new Date(p.last_success));
+        const dot = brokenNow ? '🔴' : (fails > 0 ? '🟡' : '🟢');
+        const state = brokenNow ? 'Failing' : (fails > 0 ? 'Recovered' : 'Healthy');
+        const total = ok + (+p.cache_hits || 0);
+        const hitPct = total ? Math.round((+p.cache_hits || 0) / total * 100) : 0;
+        return '<div class="ad-list-row"><div style="flex:1">' +
+          '<strong>' + dot + ' ' + esc(p.provider || 'unknown') + ' — ' + state + '</strong>' +
+          '<span class="ad-hint" style="display:block">' +
+            ok + ' synthesized · ' + (+p.cache_hits || 0) + ' cache hits (' + hitPct + '%) · ' +
+            fails + ' failed · ' + (+p.chars || 0).toLocaleString() + ' chars' +
+            (p.last_success ? ' · last OK ' + new Date(p.last_success).toLocaleString() : ' · never succeeded') +
+          '</span>' +
+          (brokenNow && p.last_error
+            ? '<span class="ad-hint" style="display:block;color:#b3402a;margin-top:4px">' + esc(String(p.last_error).slice(0, 300)) + '</span>'
+            : '') +
+        '</div></div>';
+      }).join('') + '</div>';
+    }, function (e) { box.innerHTML = '<div class="ad-hint">Failed: ' + esc(String((e && e.message) || e)) + '</div>'; });
+  }
+
   function invokeBriefing(bodyObj) {
     return sb.functions.invoke('briefing', { body: bodyObj }).then(function (r) {
       if (r.error) {
@@ -791,6 +831,8 @@
     }
     if ($('ai-h1-play')) $('ai-h1-play').onclick = function () { testHost(1); };
     if ($('ai-h2-play')) $('ai-h2-play').onclick = function () { testHost(2); };
+    renderTtsHealth();
+    if ($('tts-refresh')) $('tts-refresh').onclick = renderTtsHealth;
     if ($('ai-conv-play')) $('ai-conv-play').onclick = function () {
       const prov = providerOf(), ids = [hostVid(1), hostVid(2)];
       const btn = $('ai-conv-play'), msg = $('ai-conv-msg'), au = $('ai-conv-audio');
