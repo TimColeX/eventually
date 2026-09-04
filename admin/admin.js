@@ -930,6 +930,9 @@
       '<div class="ad-field" style="margin-top:20px"><label>Sponsors (' + dbSponsors.length + ') — FREE tier only, verbatim; worldwide + city-targeted</label>' +
       '<p class="ad-hint">Paid sponsors play on the <b>free</b> tier only (Plus is ad-free). Scope <b>world</b> plays everywhere; a city name (e.g. <b>toronto</b>) plays only there. One worldwide + one city sponsor per briefing, rotated by weight. Verbatim — not written by Claude, edits apply instantly (no regeneration). For a message on BOTH tiers, use the Announcement above.</p>' +
       '<div class="ad-list" id="db-spon-list">' + sponRows + '</div>' +
+      // Airings — the number a sponsor asks for before renewing. Filled in async so a slow
+      // or not-yet-migrated database never blocks the sponsor editor from rendering.
+      '<div id="db-airings" class="ad-hint" style="margin-top:10px">Loading airing counts…</div>' +
       '<div class="ad-row" style="margin-top:10px">' +
         '<div class="ad-field"><label>Scope</label><input id="db-spon-scope" placeholder="world   or   toronto"></div>' +
         '<div class="ad-field"><label>Weight</label><input id="db-spon-weight" type="number" min="1" value="1"></div></div>' +
@@ -974,6 +977,54 @@
     if (prov === 'easyvoice') return { perK: 0, label: 'EasyVoice', free: true, flat: true, note: 'flat $9.99/mo Pro — cost does not scale with usage' };
     return { perK: 0.30, label: 'ElevenLabs', free: false, note: 'billed per character' };
   }
+  // ── Sponsor / announcement AIRINGS ───────────────────────────────────────────
+  // Every tail play writes a usage row scoped 'tail:<first 12 of sha256(message)>'. We hash
+  // the configured messages the same way and match, so counts survive voice/model changes
+  // and a message keeps its history even if its sponsor row is edited around it.
+  async function tailTag(text) {
+    const buf = new TextEncoder().encode(String(text));
+    const hash = await crypto.subtle.digest('SHA-256', buf);
+    return [...new Uint8Array(hash)].map(function (b) { return b.toString(16).padStart(2, '0'); }).join('').slice(0, 12);
+  }
+  function renderAirings(announcement, sponsors) {
+    const box = document.getElementById('db-airings');
+    if (!box) return;
+    sb.rpc('admin_tail_airings', { p_days: 30 }).then(async function (r) {
+      if (r.error) {
+        box.innerHTML = 'Airing counts unavailable — run <code>backend/46_tail_airings.sql</code>.';
+        return;
+      }
+      const d = r.data || {};
+      const byTag = {};
+      (d.tails || []).forEach(function (t) { byTag[t.tag] = t; });
+      // Everything currently configured, so a message with zero plays still shows (which is
+      // itself the useful signal — it means it isn't airing).
+      const items = [];
+      if (announcement && announcement.trim()) items.push({ kind: 'Announcement', msg: announcement.trim() });
+      (sponsors || []).forEach(function (s) {
+        if (s && s.message) items.push({ kind: 'Sponsor · ' + (s.scope || 'world'), msg: s.message, off: s.enabled === false });
+      });
+      if (!items.length) { box.innerHTML = 'No announcement or sponsors configured.'; return; }
+
+      const rows = [];
+      for (const it of items) {
+        const t = byTag[await tailTag(it.msg)];
+        const plays = t ? +t.plays : 0;
+        const last = t && t.last_played ? new Date(t.last_played).toLocaleString() : null;
+        rows.push('<div class="ad-list-row"><div style="flex:1">' +
+          '<strong>' + (plays ? plays.toLocaleString() : '0') + ' airing' + (plays === 1 ? '' : 's') + '</strong> ' +
+          '<span class="ad-hint">· ' + esc(it.kind) + (it.off ? ' · disabled' : '') + '</span>' +
+          '<span class="ad-hint" style="display:block">' + esc(String(it.msg).slice(0, 80)) + (it.msg.length > 80 ? '…' : '') +
+          (last ? ' · last played ' + esc(last) : (plays ? '' : ' · not yet aired')) + '</span>' +
+        '</div></div>');
+      }
+      box.innerHTML = '<p class="ad-hint" style="margin:0 0 6px"><b>Airings — last 30 days</b> · ' +
+        (+d.briefings || 0).toLocaleString() + ' briefings delivered in the same period. ' +
+        'Each message is synthesized once and reused, so airings cost nothing after the first play.</p>' +
+        '<div class="ad-list">' + rows.join('') + '</div>';
+    }, function () { box.innerHTML = 'Airing counts unavailable.'; });
+  }
+
   function budgetCeilingText(n) {
     const prov = aiCfg.provider || 'fish';
     const chars = Math.round((parseInt(aiCfg.maxSeconds, 10) || 70) * 15);
@@ -1001,6 +1052,7 @@
   function bindDailySection($, body) {
     const budget = $('db-budget'), ceil = $('db-ceiling');
     if (budget && ceil) budget.oninput = function () { ceil.innerHTML = budgetCeilingText(Math.max(0, parseInt(budget.value, 10) || 0)); };
+    renderAirings((dbCfg.announcement || ''), dbSponsors);
     const save = $('db-save');
     if (save) save.onclick = function () {
       // persona/premiumPersona no longer edited here (two-host uses the conversation
