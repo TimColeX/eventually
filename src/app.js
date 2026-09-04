@@ -5,6 +5,16 @@
 
   const D = window.EventuallyData;
   const P = window.EventuallyProfile;
+  // Anyone who selected a language before it was gated (or whose saved code no longer
+  // exists) would otherwise be stranded on a language the picker can't unset. Fall back to
+  // English on load so the Host always has a language it can actually speak well.
+  (function normalizeSavedLanguage() {
+    const I = window.EventuallyI18n; if (!I || !P) return;
+    const saved = (P.get() || {}).language;
+    if (!saved || saved === 'en') return;
+    const meta = I.LANGS.find(function (l) { return l.code === saved; });
+    if (!meta || meta.soon) P.set({ language: 'en' });
+  })();
   const M = window.EventuallyMonetize;
   const A = window.EventuallyAuth;
   const S = window.EventuallySubscriptions;   // provider-agnostic subscription/trial service
@@ -357,9 +367,12 @@
     // ElevenLabs stinger plays instantly while the full briefing synthesizes — no
     // browser-voice greeting. (Free is browser voice throughout; Plus is premium
     // throughout.) Returns null for Free → the free browser-voice show runs instead.
+    // NO LONGER PLUS-ONLY. A cold city takes ~30s to write and voice, and free listeners
+    // spent that time hearing only the music bed — which reads as the Host being broken.
+    // This is one clip per (voice, language), cached forever and shared by everyone, so it
+    // costs a single synthesis ever rather than anything per listener.
     getStinger: function () {
       if (!window.EventuallyHostVoice || !window.EventuallyHostVoice.enabled) return Promise.resolve(null);
-      if (!P.get().plus) return Promise.resolve(null);
       return window.EventuallyHostVoice.getStinger(P.get().language || 'en');
     },
     // FREE: a brief cached ElevenLabs intro (count + upsell first time, short after),
@@ -1300,9 +1313,16 @@
     profileEl.querySelector('.pf-interests').innerHTML = Object.keys(D.CATEGORIES).map(function (c) {
       return '<button class="chip' + (P.hasInterest(c) ? ' on' : '') + '" data-cat="' + c + '">' + c + '</button>';
     }).join('');
+    // Languages flagged `soon` are shown but not selectable: the scripts translate correctly,
+    // but the host voices are cloned from English speakers and carry an accent in other
+    // languages. Better to promise them than to ship them sounding wrong.
     profileEl.querySelector('.pf-langs').innerHTML = I18n.LANGS.map(function (l) {
-      return '<button class="chip' + ((p.language || 'en') === l.code ? ' on' : '') + '" data-lang="' + l.code + '">' + l.label + '</button>';
-    }).join('');
+      const on = (p.language || 'en') === l.code && !l.soon;
+      return '<button class="chip' + (on ? ' on' : '') + (l.soon ? ' is-soon" disabled aria-disabled="true' : '') +
+        '" data-lang="' + l.code + '">' + l.label + (l.soon ? ' <em>soon</em>' : '') + '</button>';
+    }).join('') +
+      (I18n.LANGS.some(function (l) { return l.soon; })
+        ? '<p class="pf-hint">More host languages are on the way.</p>' : '');
     profileEl.querySelector('.pf-notify').classList.toggle('on', p.notify);
     profileEl.querySelector('.pf-notify .tg-state').textContent = p.notify ? 'On' : 'Off';
     profileEl.querySelector('.pf-filter').classList.toggle('on', interestFilterActive);
@@ -1461,9 +1481,28 @@
     if (chip) { P.toggleInterest(chip.dataset.cat); chip.classList.toggle('on'); refreshMarkers(); renderProfile(); syncProfile(); return; }
     const lang = e.target.closest('.chip[data-lang]');
     if (lang) {
+      const meta = I18n.LANGS.find(function (x) { return x.code === lang.dataset.lang; });
+      if (meta && meta.soon) {                     // not released yet — see renderProfile
+        window.EventuallyToast(meta.label + ' is coming soon — we want the voice to sound right first.');
+        return;
+      }
+      const prevLang = P.get().language || 'en';
       P.set({ language: lang.dataset.lang }); renderProfile(); syncProfile();
       const l = I18n.LANGS.find(function (x) { return x.code === lang.dataset.lang; });
-      window.EventuallyToast('Host language: ' + (l ? l.label : lang.dataset.lang) + '. Press ▶ to hear it.');
+      const label = l ? l.label : lang.dataset.lang;
+      // Changing the language used to ONLY save the setting — a Host that was mid-show kept
+      // talking in the old language, and there was no obvious way to hear the new one. If the
+      // Host is live, restart it on the current city so the change is immediate.
+      const live = aiHost && aiHost.isActive && aiHost.isActive();
+      if (live && lang.dataset.lang !== prevLang) {
+        const where = (activeBriefingLocation && activeBriefingLocation.city) || (homeLoc() || {}).city || null;
+        // A language switch always needs a fresh script + synthesis (~30s), so say so rather
+        // than leaving the listener with silence and music wondering if it broke.
+        window.EventuallyToast('Host language: ' + label + '. Preparing the ' + label + ' briefing — this takes a moment…', 6000);
+        if (aiHost.switchLocation) aiHost.switchLocation(where);
+      } else {
+        window.EventuallyToast('Host language: ' + label + '. Press ▶ to hear it.');
+      }
       return;
     }
     const svrow = e.target.closest('.pf-savedrow');

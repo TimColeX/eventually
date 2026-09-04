@@ -278,6 +278,19 @@
   AIHost.prototype._setBuffering = function (on) {
     this._buffering = !!on;
     this.el.classList.toggle('ah-buffering', !!on);
+    // A fresh city (or a language change) needs a new script AND new speech — around 30
+    // seconds during which only the music bed plays. A pulsing button alone reads as
+    // "broken"; say what's happening instead. The real caption overwrites this the moment
+    // audio starts, and we never clobber a caption that's already showing something.
+    const t = this.el.querySelector('.ah-text');
+    if (!t) return;
+    if (on) {
+      if (!this._preBufferCaption) this._preBufferCaption = t.textContent || '';
+      t.textContent = 'Preparing your briefing…';
+    } else if (this._preBufferCaption != null) {
+      if (t.textContent === 'Preparing your briefing…') t.textContent = this._preBufferCaption;
+      this._preBufferCaption = null;
+    }
   };
 
   // Show the focus city in the Host label (" · Toronto").

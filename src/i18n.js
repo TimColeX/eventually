@@ -9,11 +9,11 @@
 
   const LANGS = [
     { code: 'en', label: 'English',  bcp: 'en-US', rtl: false },
-    { code: 'es', label: 'Español',  bcp: 'es-ES', rtl: false },
-    { code: 'fr', label: 'Français', bcp: 'fr-FR', rtl: false },
-    { code: 'de', label: 'Deutsch',  bcp: 'de-DE', rtl: false },
-    { code: 'tr', label: 'Türkçe',   bcp: 'tr-TR', rtl: false },
-    { code: 'pl', label: 'Polski',   bcp: 'pl-PL', rtl: false }
+    { code: 'es', label: 'Español',  bcp: 'es-ES', rtl: false, soon: true },
+    { code: 'fr', label: 'Français', bcp: 'fr-FR', rtl: false, soon: true },
+    { code: 'de', label: 'Deutsch',  bcp: 'de-DE', rtl: false, soon: true },
+    { code: 'tr', label: 'Türkçe',   bcp: 'tr-TR', rtl: false, soon: true },
+    { code: 'pl', label: 'Polski',   bcp: 'pl-PL', rtl: false, soon: true }
   ];
   const LOCALE = { en: 'en-US', es: 'es-ES', fr: 'fr-FR', de: 'de-DE', tr: 'tr-TR', pl: 'pl-PL', ar: 'ar-EG', zh: 'zh-CN' };
   const DEFAULT_NAME = { en: 'there', es: 'amigo', fr: 'cher visiteur', de: 'zusammen', tr: 'arkadaşlar', pl: 'przyjacielu', ar: 'صديقي', zh: '朋友' };

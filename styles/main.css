@@ -30,6 +30,11 @@
 }
 
 * { box-sizing: border-box; }
+/* Stop mobile Safari/Chrome auto-inflating text. Without this the browser silently scales
+   up text in blocks it judges too narrow — which is why the AI-host caption sometimes
+   rendered noticeably larger than its 13px. Pinch-zoom is unaffected; only the automatic
+   inflation is disabled. */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 html, body { height: 100%; margin: 0; }
 body {
   font-family: var(--font);
@@ -1146,3 +1151,8 @@ body.has-ad .toast { bottom: calc(144px + env(safe-area-inset-bottom, 0px)); }
 .signature.sg-entering .sg-off { opacity: 0; pointer-events: none; transition: opacity .28s ease; }
 .signature.sg-entering .sg-inner { transform: scale(1.02); transition: transform 1.6s ease-out; }
 @media (prefers-reduced-motion: reduce) { .signature.sg-entering .sg-inner { transform: none; } }
+
+/* Host-language chips that aren't released yet: visible so people know they're coming,
+   but clearly not selectable (see renderProfile / I18n.LANGS soon flag). */
+.pf-langs .chip.is-soon { opacity: .5; cursor: default; }
+.pf-langs .chip.is-soon em { font-style: normal; font-family: var(--mono); font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; opacity: .8; margin-left: 4px; }
