@@ -89,8 +89,21 @@
     // How many native events this user may still publish in the rolling window.
     // Server-side truth (publishing_quota) — the UI only mirrors it; the real gate
     // is a BEFORE INSERT trigger, so this can never be the thing that's enforcing.
+    // Record that the publishing wall was shown. The limit trigger raises an exception, which
+    // rolls its own transaction back, so a block CANNOT be logged server-side from the trigger —
+    // it has to come from here. The RPC re-checks the quota, so this can't fake demand.
+    logPublishBlock: function () {
+      if (!ENABLED || !currentUser) return Promise.resolve(null);
+      return sb.rpc('log_publishing_block').then(function (r) { return (r && r.data) || null; }, function () { return null; });
+    },
+    // The organiser asks for more capacity, optionally saying why.
+    requestPublishingCapacity: function (message) {
+      if (!ENABLED || !currentUser) return Promise.resolve({ ok: false, reason: 'not_signed_in' });
+      return sb.rpc('request_publishing_capacity', { p_message: message || null })
+        .then(function (r) { return (r && r.data) || { ok: false }; }, function () { return { ok: false }; });
+    },
     publishingQuota: function () {
-      const sb = client(); if (!sb) return Promise.resolve(null);
+      if (!ENABLED || !currentUser) return Promise.resolve(null);
       return sb.rpc('publishing_quota').then(function (r) { return (r && r.data) || null; }, function () { return null; });
     },
     publishEvent: function (evt) {

@@ -109,12 +109,27 @@
           '<div class="ad-field"><label>Contact email (shown at the limit)</label><input id="pb-email" value="' + esc(p.contactEmail || 'info@eventually-app.com') + '"></div></div>' +
         '<p class="ad-hint" style="margin:14px 0 4px"><strong>Posts allowed per plan</strong> — use −1 for unlimited.</p>' +
         '<div class="ad-row">' +
-          num('pb-free', 'free', lim.free != null ? lim.free : 10, -1) +
+          num('pb-free', 'free', lim.free != null ? lim.free : 5, -1) +
           num('pb-partner', 'partner', lim.partner != null ? lim.partner : 25, -1) +
           num('pb-venue', 'venue', lim.venue != null ? lim.venue : 50, -1) +
           num('pb-plus', 'plus', lim.plus != null ? lim.plus : 25, -1) +
         '</div>' +
         '<button class="ad-btn" id="pb-save">Save limits</button> <span id="pb-msg" class="ad-hint"></span></div>' +
+
+        // ROSTER first, lookup second. Searching by email assumes you already know who to
+        // look for; in practice you want to SEE who publishes, how much allowance is left,
+        // and who is at zero — those are the people about to email asking to buy more.
+        // The queue comes FIRST: it's the only part of this tab that needs acting on today.
+        // 'blocked' rows are auto-logged when someone hits the wall, so you also see the
+        // organisers who ran out and said nothing — previously invisible.
+        '<div class="ad-sec"><h2>Requests &amp; blocks <span id="pb-req-count" class="ad-hint"></span></h2>' +
+        '<p class="ad-hint">Anyone who wanted to publish and couldn\'t. <b>Asked</b> means they sent you a message; <b>blocked</b> means they hit the limit and may not have emailed at all.</p>' +
+        '<div id="pb-requests"><div class="ad-center">Loading…</div></div></div>' +
+
+        '<div class="ad-sec"><h2>Publishers</h2>' +
+        '<p class="ad-hint">Everyone who has published an event, most recent first. <b>Remaining</b> is what is left of their allowance in the current window — a publisher at <b>0</b> is blocked until you grant more.</p>' +
+        '<div id="pb-roster"><div class="ad-center">Loading publishers…</div></div>' +
+        '<button class="ad-btn" id="pb-refresh" type="button" style="margin-top:10px">Refresh</button></div>' +
 
         '<div class="ad-sec"><h2>Find a publisher</h2>' +
         '<p class="ad-hint">Look someone up by email to see their usage, change their plan, or grant extra slots after an offline payment.</p>' +
@@ -140,7 +155,100 @@
       };
       document.getElementById('pb-find').onclick = lookupPublisher;
       document.getElementById('pb-q').addEventListener('keydown', function (e) { if (e.key === 'Enter') lookupPublisher(); });
+      renderPublishingRequests();
+      renderPublisherRoster();
+      document.getElementById('pb-refresh').onclick = function () { renderPublishingRequests(); renderPublisherRoster(); };
     });
+  }
+
+  // Roster of everyone who has published. Rows are clickable — selecting one drops the
+  // publisher into the lookup below, so granting capacity is two clicks from seeing that
+  // they've run out rather than a copy-paste of their email.
+  // Queue of people who wanted to publish and couldn't — explicit requests and silent blocks.
+  function renderPublishingRequests() {
+    const box = document.getElementById('pb-requests');
+    const badge = document.getElementById('pb-req-count');
+    if (!box) return;
+    sb.rpc('admin_publishing_requests', { p_status: 'open', p_limit: 100 }).then(function (r) {
+      if (r.error) {
+        box.innerHTML = '<p class="ad-hint">Unavailable — run <code>backend/48_publishing_requests.sql</code>.</p>';
+        return;
+      }
+      const rows = r.data || [];
+      if (badge) badge.textContent = rows.length ? '· ' + rows.length + ' open' : '· none open';
+      if (!rows.length) { box.innerHTML = '<p class="ad-hint">Nothing outstanding — nobody is waiting on more capacity.</p>'; return; }
+      box.innerHTML = '<div class="ad-list">' + rows.map(function (q) {
+        const asked = q.kind === 'request';
+        return '<div class="ad-list-row"><div style="flex:1">' +
+          '<strong>' + esc(q.email || q.user_id) + '</strong> ' +
+          '<span class="ad-hint">· ' + (asked ? 'asked' : 'blocked, no message') + ' · ' + esc(q.plan) +
+            ' · ' + (q.used == null ? '?' : q.used) + '/' + (q.capacity == null ? '?' : q.capacity) + ' used' +
+            ' · ' + esc(String(q.created_at || '').slice(0, 10)) + '</span>' +
+          (q.message ? '<span class="ad-hint" style="display:block;color:var(--ink,inherit);margin-top:4px">“' + esc(q.message) + '”</span>' : '') +
+        '</div><div style="text-align:right;white-space:nowrap">' +
+          '<button class="ad-btn" data-req-manage="' + esc(q.email || q.user_id) + '">Manage</button> ' +
+          '<button class="ad-btn" data-req-close="' + esc(q.id) + '" data-req-status="granted">Granted</button> ' +
+          '<button class="ad-btn ghost" data-req-close="' + esc(q.id) + '" data-req-status="declined">Declined</button>' +
+        '</div></div>';
+      }).join('') + '</div>';
+
+      // "Manage" jumps to the grant panel for that person; the status buttons close the row
+      // once you've actually granted the slots (or decided not to), so the queue stays true.
+      box.querySelectorAll('[data-req-manage]').forEach(function (b) {
+        b.onclick = function () {
+          const q = document.getElementById('pb-q');
+          if (q) { q.value = b.dataset.reqManage; lookupPublisher(); q.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+        };
+      });
+      box.querySelectorAll('[data-req-close]').forEach(function (b) {
+        b.onclick = function () {
+          b.disabled = true;
+          sb.rpc('admin_resolve_publishing_request', { p_id: b.dataset.reqClose, p_status: b.dataset.reqStatus, p_note: null })
+            .then(function () { renderPublishingRequests(); }, function () { b.disabled = false; });
+        };
+      });
+    }, function () { box.innerHTML = '<p class="ad-hint">Failed to load requests.</p>'; });
+  }
+
+  function renderPublisherRoster() {
+    const box = document.getElementById('pb-roster');
+    if (!box) return;
+    box.innerHTML = '<div class="ad-center">Loading publishers…</div>';
+    sb.rpc('admin_publishers', { p_limit: 200 }).then(function (r) {
+      if (r.error) {
+        box.innerHTML = '<p class="ad-hint">Unavailable — run <code>backend/47_publishers_list.sql</code>. (' + esc(r.error.message) + ')</p>';
+        return;
+      }
+      const rows = r.data || [];
+      if (!rows.length) { box.innerHTML = '<p class="ad-hint">Nobody has published an event yet.</p>'; return; }
+      box.innerHTML = '<div class="ad-list">' + rows.map(function (p) {
+        const limit = +p.plan_limit, granted = +p.granted || 0, used = +p.used || 0;
+        const unlimited = limit < 0;
+        const capacity = unlimited ? -1 : limit + granted;
+        const left = unlimited ? -1 : Math.max(0, capacity - used);
+        // A publisher at zero is the actionable state — surface it, don't bury it in a number.
+        const state = unlimited ? '<span class="ad-hint">unlimited</span>'
+          : (left === 0 ? '<b style="color:#b3402a">0 left — blocked</b>'
+                        : '<b>' + left + ' left</b> <span class="ad-hint">of ' + capacity + '</span>');
+        return '<div class="ad-list-row">' +
+          '<div style="flex:1"><strong>' + esc(p.email || p.user_id) + '</strong> ' +
+            '<span class="ad-hint">· ' + esc(p.plan) + (granted ? ' · +' + granted + ' granted' : '') + '</span>' +
+            '<span class="ad-hint" style="display:block">' + used + ' this window · ' + (+p.total_ever || 0) + ' all time' +
+            (+p.awaiting_review ? ' · ' + p.awaiting_review + ' awaiting review' : '') +
+            (+p.off_globe ? ' · ' + p.off_globe + ' off globe' : '') +
+            (p.last_published ? ' · last ' + esc(String(p.last_published).slice(0, 10)) : '') +
+          '</span></div>' +
+          '<div style="text-align:right">' + state +
+            '<div><button class="ad-btn" data-pub="' + esc(p.email || p.user_id) + '" style="margin-top:6px">Manage</button></div>' +
+          '</div></div>';
+      }).join('') + '</div>';
+      box.querySelectorAll('[data-pub]').forEach(function (b) {
+        b.onclick = function () {
+          const q = document.getElementById('pb-q');
+          if (q) { q.value = b.dataset.pub; lookupPublisher(); q.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+        };
+      });
+    }, function (e) { box.innerHTML = '<p class="ad-hint">Failed: ' + esc(String((e && e.message) || e)) + '</p>'; });
   }
 
   function lookupPublisher() {

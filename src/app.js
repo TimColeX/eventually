@@ -583,10 +583,44 @@
     let when = '';
     if (nextSlotISO) {
       const d = new Date(nextSlotISO + 'T00:00:00');
-      if (!isNaN(d)) when = ' Your next slot opens on ' + d.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' }) + '.';
+      if (!isNaN(d)) when = 'Your next slot opens on <b>' + esc(d.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })) + '</b>. ';
     }
-    window.EventuallyToast('You\'ve used all ' + capacity + ' of your posting slots for the year.' + when +
-      ' Need more? Email ' + email, 9000);
+    // Log the block even if they never ask. Otherwise the only organisers you hear about are
+    // the ones who bother to email — the ones who quietly give up are invisible.
+    if (acctEnabled() && A.logPublishBlock) A.logPublishBlock();
+
+    openModal('You\'ve used all your posts',
+      '<div class="pl-wall">' +
+        '<p>You\'ve published <b>' + capacity + ' of ' + capacity + '</b> events for the year. ' + when + '</p>' +
+        '<p>Need more? Tell us a little about what you\'re running and we\'ll come back to you with options.</p>' +
+        '<label class="pl-l">Anything we should know? <span>(optional)</span></label>' +
+        '<textarea class="pl-msg" rows="3" placeholder="e.g. We run a weekly music night at The Artesian and have 20 dates booked."></textarea>' +
+        '<div class="pl-actions"><button class="pl-send" type="button">Request more posts</button>' +
+        '<a class="pl-mail" href="mailto:' + esc(email) + '">or email us</a></div>' +
+        '<p class="pl-ok" hidden></p>' +
+      '</div>',
+      function (body) {
+        const btn = body.querySelector('.pl-send');
+        btn.addEventListener('click', function () {
+          btn.disabled = true; btn.textContent = 'Sending…';
+          const msg = (body.querySelector('.pl-msg') || {}).value || '';
+          Promise.resolve(acctEnabled() && A.requestPublishingCapacity ? A.requestPublishingCapacity(msg) : { ok: false })
+            .then(function (r) {
+              const ok = body.querySelector('.pl-ok');
+              if (r && r.ok) {
+                body.querySelector('.pl-actions').style.display = 'none';
+                body.querySelector('.pl-msg').style.display = 'none';
+                body.querySelector('.pl-l').style.display = 'none';
+                ok.textContent = 'Request sent — we\'ll be in touch by email.';
+                ok.hidden = false;
+              } else {
+                btn.disabled = false; btn.textContent = 'Request more posts';
+                ok.textContent = 'Couldn\'t send that — please email ' + email + ' instead.';
+                ok.hidden = false;
+              }
+            });
+        });
+      });
   }
   const coordinator = new window.EventuallyCoordinator(document.getElementById('coordinator'), {
     // Returns a Promise<boolean>: true = published. When signed in we write the
