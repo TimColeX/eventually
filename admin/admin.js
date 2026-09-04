@@ -373,9 +373,9 @@
     }).catch(function (e) { btn.disabled = false; if (msg) { msg.textContent = 'Failed: ' + String(e); msg.style.color = '#b3402a'; } });
   }
 
-  // ElevenLabs cache performance + spend, by category. Proves the caching is working:
-  // a high hit % means we rarely pay ElevenLabs. Chars ≈ credits for eleven_multilingual_v2.
-  const EL_COST_PER_1K = 0.30;   // ≈ $ per 1,000 characters (adjust to your ElevenLabs plan)
+  // Voice cache performance + spend, by category. Proves the caching is working: a high
+  // hit % means we rarely call the provider at all.
+  // Cost is derived from the ACTIVE provider/model (see activeRate) rather than a fixed rate.
   function renderAudioUsage() {
     const box = document.getElementById('ad-el');
     if (!box) return;
@@ -386,7 +386,14 @@
           esc((r.error && r.error.message) || 'run backend/32_audio_usage.sql') + ').</p>';
         return;
       }
-      const money = function (chars) { const v = (chars / 1000) * EL_COST_PER_1K; return '≈ $' + v.toFixed(v < 1 ? 3 : 2); };
+      // Priced against the ACTIVE provider/model, not a fixed ElevenLabs rate — otherwise this
+      // panel reports spend against a provider that isn't being used.
+      const rate = activeRate();
+      const money = function (chars) {
+        if (rate.free) return rate.flat ? 'flat rate' : '$0.00';
+        const v = (chars / 1000) * rate.perK;
+        return '≈ $' + v.toFixed(v < 1 ? 3 : 2);
+      };
       const kpi = function (v, l) { return '<div class="ad-kpi"><b>' + v + '</b><span>' + l + '</span></div>'; };
       const perUser = d.plus_users ? Math.round(d.chars / d.plus_users) : 0;
       const cats = d.by_category || {};
@@ -399,7 +406,7 @@
         return '<div class="ad-li"><span>' + esc(t.scope || '—') + '</span><span>' + t.hits + ' reuse</span></div>';
       }).join('') || '<div class="ad-li"><span class="ad-hint">—</span></div>';
       box.innerHTML = '<h2>AI Host voice usage · last ' + (d.window_days || 30) + ' days</h2>' +
-        '<p class="ad-hint">Each request either hits the cache (no ElevenLabs call) or synthesizes. A high hit % = the caching is preventing spend. Characters ≈ ElevenLabs credits; edit EL_COST_PER_1K in admin.js for your plan.</p>' +
+        '<p class="ad-hint">Each request either hits the cache (no provider call) or synthesizes. A high hit % means the caching is doing its job. Figures are priced for the <b>currently selected</b> voice — ' + activeRate().label + ' — so switching provider or model changes them.</p>' +
         '<div class="ad-grid">' +
           kpi((d.hit_pct != null ? d.hit_pct : 0) + '%', 'Cache hit rate') +
           kpi((d.misses || 0).toLocaleString(), 'ElevenLabs calls (synths)') +
@@ -550,7 +557,7 @@
    *      per-provider voice ids are already stored generically in host.voiceIds[id];
    *   3. it then appears in the "Voice provider" dropdown automatically, with its own fields. */
   const PROVIDERS = [
-    { id: 'fish', label: 'Fish Audio', note: 'native two-voice · cheapest (~$0.015/briefing)', model: true, speedTemp: true,
+    { id: 'fish', label: 'Fish Audio', note: 'native two-voice · s2.1-pro-free costs $0 · paid models need Fish API credit', model: true, speedTemp: true,
       models: [['s2.1-pro-free', 's2.1-pro-free (free — works now)'], ['s2.1-pro', 's2.1-pro (needs API credit)'], ['s2-pro', 's2-pro (needs API credit)']] },
     { id: 'elevenlabs', label: 'ElevenLabs', note: 'two voices stitched · higher cost', model: false, speedTemp: false },
     { id: 'easyvoice', label: 'EasyVoice', note: 'Kokoro-82M · stitched · $9.99/mo unlimited (free key = 5k chars/day to test)', model: false, speedTemp: false }
@@ -953,6 +960,20 @@
   // Speech ≈ 15 chars/sec, so chars ≈ maxSeconds × 15. Real spend is well below this
   // ceiling (cache hits + empty areas cost nothing) — it's the worst case if EVERY
   // capped generation were a fresh full briefing.
+  // What a character actually costs on the CURRENTLY SELECTED provider AND model. This has
+  // to consider the model, not just the provider: Fish's s2.1-pro-free bills $0, while
+  // s2-pro/s1 bill per character. Reporting the paid rate while running the free tier shows
+  // spend that isn't happening — and invites paying for capacity that is already free.
+  function activeRate() {
+    const prov = aiCfg.provider || 'fish';
+    const model = String(aiCfg.model || '');
+    if (prov === 'fish') {
+      if (/free/i.test(model)) return { perK: 0, label: 'Fish ' + (model || 's2.1-pro-free'), free: true, note: 'free tier — no API credit consumed' };
+      return { perK: 0.015, label: 'Fish ' + (model || 's2.1-pro'), free: false, note: 'billed to Fish API credit, which is separate from any platform subscription' };
+    }
+    if (prov === 'easyvoice') return { perK: 0, label: 'EasyVoice', free: true, flat: true, note: 'flat $9.99/mo Pro — cost does not scale with usage' };
+    return { perK: 0.30, label: 'ElevenLabs', free: false, note: 'billed per character' };
+  }
   function budgetCeilingText(n) {
     const prov = aiCfg.provider || 'fish';
     const chars = Math.round((parseInt(aiCfg.maxSeconds, 10) || 70) * 15);
@@ -965,11 +986,17 @@
       const moChars = n * chars * 30, cap = 10000000, pct = Math.round((moChars / cap) * 100);
       return 'Active voice: <b>EasyVoice</b> (flat <b>$9.99/mo</b> Pro, 10M chars/mo fair-use). At ~' + chars + ' chars/briefing, ' + n + '/day ≈ <b>' + moChars.toLocaleString() + ' chars/month</b> worst-case (~' + pct + '% of the fair-use cap). Real usage is far lower — cache hits + empty areas are free.';
     }
-    const provider = prov === 'elevenlabs' ? 'ElevenLabs' : 'Fish';
-    const price = provider === 'ElevenLabs' ? 0.15 : 0.015;   // $ per 1,000 chars
-    const per = (chars / 1000) * price;                       // $ per new full briefing
+    const rate = activeRate();
+    if (rate.free) {
+      return 'Active voice: <b>' + rate.label + '</b> — <b>$0.00</b> (' + rate.note + '). The cap still ' +
+        'limits how many NEW areas generate per day, which is worth keeping as a guard against runaway ' +
+        'load even when synthesis itself is free.';
+    }
+    const per = (chars / 1000) * rate.perK;                   // $ per new full briefing
     const day = n * per, mo = Math.round(day * 30);
-    return 'Active voice: <b>' + provider + '</b> (~' + chars + ' chars/briefing at ~$' + price.toFixed(3) + '/1k). Worst-case ceiling: <b>$' + day.toFixed(2) + '/day</b> · <b>$' + mo.toLocaleString() + '/month</b>. Real spend is usually far lower (cache hits + empty areas cost nothing).';
+    return 'Active voice: <b>' + rate.label + '</b> (~' + chars + ' chars/briefing at ~$' + rate.perK.toFixed(3) +
+      '/1k, ' + rate.note + '). Worst-case ceiling: <b>$' + day.toFixed(2) + '/day</b> · <b>$' + mo.toLocaleString() +
+      '/month</b>. Real spend is usually far lower (cache hits + empty areas cost nothing).';
   }
   function bindDailySection($, body) {
     const budget = $('db-budget'), ceil = $('db-ceiling');
