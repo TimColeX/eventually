@@ -11,15 +11,19 @@
     { code: 'en', label: 'English',  bcp: 'en-US', rtl: false },
     { code: 'es', label: 'Español',  bcp: 'es-ES', rtl: false },
     { code: 'fr', label: 'Français', bcp: 'fr-FR', rtl: false },
-    { code: 'ar', label: 'العربية',  bcp: 'ar-SA', rtl: true  },
-    { code: 'zh', label: '中文',      bcp: 'zh-CN', rtl: false }
+    { code: 'de', label: 'Deutsch',  bcp: 'de-DE', rtl: false },
+    { code: 'tr', label: 'Türkçe',   bcp: 'tr-TR', rtl: false },
+    { code: 'pl', label: 'Polski',   bcp: 'pl-PL', rtl: false }
   ];
-  const LOCALE = { en: 'en-US', es: 'es-ES', fr: 'fr-FR', ar: 'ar-EG', zh: 'zh-CN' };
-  const DEFAULT_NAME = { en: 'there', es: 'amigo', fr: 'cher visiteur', ar: 'صديقي', zh: '朋友' };
+  const LOCALE = { en: 'en-US', es: 'es-ES', fr: 'fr-FR', de: 'de-DE', tr: 'tr-TR', pl: 'pl-PL', ar: 'ar-EG', zh: 'zh-CN' };
+  const DEFAULT_NAME = { en: 'there', es: 'amigo', fr: 'cher visiteur', de: 'zusammen', tr: 'arkadaşlar', pl: 'przyjacielu', ar: 'صديقي', zh: '朋友' };
   const CAT = {
     en: { 'Music': 'music', 'Tech': 'tech', 'Business': 'business', 'Arts': 'arts', 'Food & Drink': 'food & drink', 'Sports': 'sports', 'Film & Media': 'film & media', 'Community': 'community', 'Nightlife': 'nightlife', 'Comedy': 'comedy' },
     es: { 'Music': 'música', 'Tech': 'tecnología', 'Business': 'negocios', 'Arts': 'arte', 'Food & Drink': 'gastronomía', 'Sports': 'deportes', 'Film & Media': 'cine y medios', 'Community': 'comunidad', 'Nightlife': 'vida nocturna', 'Comedy': 'comedia' },
     fr: { 'Music': 'musique', 'Tech': 'tech', 'Business': 'affaires', 'Arts': 'art', 'Food & Drink': 'gastronomie', 'Sports': 'sport', 'Film & Media': 'cinéma et médias', 'Community': 'communauté', 'Nightlife': 'vie nocturne', 'Comedy': 'comédie' },
+    de: { 'Music': 'Musik', 'Tech': 'Technik', 'Business': 'Business', 'Arts': 'Kunst', 'Food & Drink': 'Essen & Trinken', 'Sports': 'Sport', 'Film & Media': 'Film & Medien', 'Community': 'Community', 'Nightlife': 'Nachtleben', 'Comedy': 'Comedy' },
+    tr: { 'Music': 'müzik', 'Tech': 'teknoloji', 'Business': 'iş dünyası', 'Arts': 'sanat', 'Food & Drink': 'yeme içme', 'Sports': 'spor', 'Film & Media': 'film ve medya', 'Community': 'topluluk', 'Nightlife': 'gece hayatı', 'Comedy': 'komedi' },
+    pl: { 'Music': 'muzyka', 'Tech': 'technologia', 'Business': 'biznes', 'Arts': 'sztuka', 'Food & Drink': 'jedzenie i picie', 'Sports': 'sport', 'Film & Media': 'film i media', 'Community': 'społeczność', 'Nightlife': 'życie nocne', 'Comedy': 'komedia' },
     ar: { 'Music': 'موسيقى', 'Tech': 'تقنية', 'Business': 'أعمال', 'Arts': 'فنون', 'Food & Drink': 'طعام وشراب', 'Sports': 'رياضة', 'Film & Media': 'أفلام وإعلام', 'Community': 'مجتمع', 'Nightlife': 'حياة ليلية', 'Comedy': 'كوميديا' },
     zh: { 'Music': '音乐', 'Tech': '科技', 'Business': '商业', 'Arts': '艺术', 'Food & Drink': '美食', 'Sports': '体育', 'Film & Media': '影视', 'Community': '社区', 'Nightlife': '夜生活', 'Comedy': '喜剧' }
   };
@@ -27,6 +31,9 @@
     en: { morning: 'Good morning', afternoon: 'Good afternoon', evening: 'Good evening' },
     es: { morning: 'Buenos días', afternoon: 'Buenas tardes', evening: 'Buenas noches' },
     fr: { morning: 'Bonjour', afternoon: 'Bon après-midi', evening: 'Bonsoir' },
+    de: { morning: 'Guten Morgen', afternoon: 'Guten Tag', evening: 'Guten Abend' },
+    tr: { morning: 'Günaydın', afternoon: 'İyi günler', evening: 'İyi akşamlar' },
+    pl: { morning: 'Dzień dobry', afternoon: 'Dzień dobry', evening: 'Dobry wieczór' },
     ar: { morning: 'صباح الخير', afternoon: 'مساء الخير', evening: 'مساء الخير' },
     zh: { morning: '早上好', afternoon: '下午好', evening: '晚上好' }
   };
@@ -79,6 +86,51 @@
       trending: d => `Tendance en ce moment : ${d.event} à ${d.city}, avec ${n(d.likes, 'fr')} mentions j'aime.`,
       sponsor: d => d.text || `Cette mise à jour vous est présentée par ${d.sponsor}.`,
       tip: () => `Touchez un point lumineux pour voir tout ce qui s'y passe.`
+    },
+    de: {
+      welcome: d => `Willkommen bei Eventually! Gerade laufen weltweit ${n(d.count, 'de')} Veranstaltungen.`,
+      greeting: d => !d.hasRecs
+        ? `${GREET.de[d.part]}, ${nm(d, 'de')}! Stell deinen Ort und ein paar Interessen ein, dann suche ich passende Events für dich heraus.`
+        : d.exploring
+          ? `${GREET.de[d.part]}! Du schaust dir gerade ${d.city} an. Hier laufen ${d.k} ${c('de', d.cat)}-Events — darunter ${d.event}.`
+          : `${GREET.de[d.part]}, ${nm(d, 'de')}! Passend zu deinen Interessen habe ich ${d.k} ${c('de', d.cat)}-Events im Umkreis von ${d.mi} Meilen gefunden — darunter ${d.event} in ${d.city}.`,
+      ident: d => `Weiter geht's nach ${d.city} — das ist dort gerade los.`,
+      spotlight: d => `Eine Empfehlung: ${d.event} in ${d.city}. ${n(d.going, 'de')} Leute sind dabei.`,
+      countdown: d => `Achtung — ${d.event} in ${d.city} startet in ${d.min} Minuten.`,
+      region: d => `In ${d.region} laufen gerade ${d.n} große ${c('de', d.cat)}-Events.`,
+      trending: d => `Heute im Trend: ${d.event} in ${d.city} — mit ${n(d.likes, 'de')} Likes.`,
+      sponsor: d => d.text || `Diese Sendung wird präsentiert von ${d.sponsor}.`,
+      tip: () => `Tippe auf einen leuchtenden Punkt auf dem Globus und du siehst alles, was dort passiert.`
+    },
+    tr: {
+      welcome: d => `Eventually'ye hoş geldin! Şu anda dünya genelinde ${n(d.count, 'tr')} etkinlik var.`,
+      greeting: d => !d.hasRecs
+        ? `${GREET.tr[d.part]}, ${nm(d, 'tr')}! Konumunu ve birkaç ilgi alanını seç, sana göre etkinlikleri sıralayayım.`
+        : d.exploring
+          ? `${GREET.tr[d.part]}! Şu an ${d.city} şehrine bakıyorsun. Burada ${d.k} ${c('tr', d.cat)} etkinliği var — ${d.event} dahil.`
+          : `${GREET.tr[d.part]}, ${nm(d, 'tr')}! İlgi alanlarına göre ${d.mi} mil içinde ${d.k} ${c('tr', d.cat)} etkinliği buldum — ${d.city} şehrindeki ${d.event} dahil.`,
+      ident: d => `Şimdi ${d.city} şehrine geçiyoruz — orada olup bitenler şöyle.`,
+      spotlight: d => `Şuna bir bak: ${d.city} şehrinde ${d.event}. ${n(d.going, 'tr')} kişi katılıyor.`,
+      countdown: d => `Dikkat — ${d.city} şehrindeki ${d.event} ${d.min} dakika içinde başlıyor.`,
+      region: d => `${d.region} bölgesinde şu anda ${d.n} büyük ${c('tr', d.cat)} etkinliği sürüyor.`,
+      trending: d => `Bu akşam öne çıkan: ${d.city} şehrinde ${d.event} — ${n(d.likes, 'tr')} beğeni ile hızla yükseliyor.`,
+      sponsor: d => d.text || `Bu yayın ${d.sponsor} tarafından sunulmaktadır.`,
+      tip: () => `Küre üzerindeki parlayan noktalara dokun, orada olan her şeyi gör.`
+    },
+    pl: {
+      welcome: d => `Witaj w Eventually! W tej chwili na świecie trwa ${n(d.count, 'pl')} wydarzeń.`,
+      greeting: d => !d.hasRecs
+        ? `${GREET.pl[d.part]}, ${nm(d, 'pl')}! Ustaw swoją lokalizację i kilka zainteresowań, a dobiorę wydarzenia dla Ciebie.`
+        : d.exploring
+          ? `${GREET.pl[d.part]}! Przeglądasz ${d.city}. Jest tu ${d.k} wydarzeń z kategorii ${c('pl', d.cat)} — w tym ${d.event}.`
+          : `${GREET.pl[d.part]}, ${nm(d, 'pl')}! Na podstawie Twoich zainteresowań znalazłem ${d.k} wydarzeń ${c('pl', d.cat)} w promieniu ${d.mi} mil — w tym ${d.event} w ${d.city}.`,
+      ident: d => `Przenosimy się do ${d.city} — oto co się tam dzieje.`,
+      spotlight: d => `Warto zobaczyć: ${d.event} w ${d.city}. Wybiera się tam ${n(d.going, 'pl')} osób.`,
+      countdown: d => `Uwaga — ${d.event} w ${d.city} zaczyna się za ${d.min} minut.`,
+      region: d => `W regionie ${d.region} trwa teraz ${d.n} dużych wydarzeń ${c('pl', d.cat)}.`,
+      trending: d => `Dziś na topie: ${d.event} w ${d.city} — z ${n(d.likes, 'pl')} polubieniami.`,
+      sponsor: d => d.text || `Ta audycja jest prezentowana przez ${d.sponsor}.`,
+      tip: () => `Dotknij dowolnego świecącego punktu na globusie, a zobaczysz wszystko, co się tam dzieje.`
     },
     ar: {
       welcome: d => `مرحبًا بك في Eventually. هناك حاليًا ${n(d.count, 'ar')} فعالية مباشرة حول العالم.`,
