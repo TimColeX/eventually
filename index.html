@@ -26,7 +26,7 @@
 <body>
   <!-- background -->
   <div id="stars"></div>
-  <canvas id="globe" aria-label="Interactive 3D globe of world events"></canvas>
+  <canvas id="globe" data-tour="globe" aria-label="Interactive 3D globe of world events"></canvas>
   <div id="hovertip"></div>
   <div id="globe-loading"><span class="gl-dots"><i></i><i></i><i></i></span> Loading live events…</div>
 
@@ -54,7 +54,7 @@
         <span class="muted"><b id="stat-total">0</b> total</span>
       </div>
       <div class="loc-wrap">
-        <button id="nav-location" class="loc-chip" title="Set your location">⌖ <span class="loc-name">Set location</span></button>
+        <button id="nav-location" data-tour="location" class="loc-chip" title="Set your location">⌖ <span class="loc-name">Set location</span></button>
         <div id="loc-menu" class="loc-menu"></div>
       </div>
       <div class="menu-wrap">
@@ -268,6 +268,7 @@
   <script src="src/timeline.js"></script>
   <script src="src/aihost.js"></script>
   <script src="src/coordinator.js"></script>
+  <script src="src/tour.js"></script>
   <script src="src/app.js"></script>
 </body>
 </html>
