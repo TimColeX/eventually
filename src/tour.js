@@ -41,6 +41,19 @@
 
   const targetEl = (name) => document.querySelector('[data-tour="' + name + '"]');
 
+  // Notch / home-indicator height. env() only resolves in CSS, so read it through a probe
+  // element — a card tucked under an iPhone notch is unreadable and untappable.
+  function safeInset(side) {
+    try {
+      const probe = document.createElement('div');
+      probe.style.cssText = 'position:fixed;visibility:hidden;height:env(safe-area-inset-' + side + ',0px)';
+      document.body.appendChild(probe);
+      const px = parseFloat(getComputedStyle(probe).height) || 0;
+      probe.remove();
+      return px;
+    } catch (e) { return 0; }
+  }
+
   function visible(node) {
     if (!node) return false;
     const r = node.getBoundingClientRect();
@@ -77,32 +90,34 @@
     card.querySelector('.tr-next').textContent = s.last ? 'Start listening' : 'Next';
     card.querySelector('.tr-skip').textContent = s.last ? 'I’ll explore myself' : 'Skip';
 
-    // Position the card, then clamp it inside the viewport. Measured after the text is set so
-    // the height is real — guessing it puts the card half off-screen on small phones.
-    card.style.visibility = 'hidden';
-    card.style.left = '0px'; card.style.top = '0px';
-    requestAnimationFrame(function () {
-      const c = card.getBoundingClientRect();
-      const gap = 14;
-      let left, top;
-      if (s.target === 'globe') {
-        left = innerWidth / 2 - c.width / 2;
-        top = Math.min(innerHeight - c.height - 24, innerHeight * 0.62);
-      } else if (s.place === 'top') {
-        left = r.left + r.width / 2 - c.width / 2;
-        top = r.top - c.height - gap;
-      } else {
-        left = r.left + r.width / 2 - c.width / 2;
-        top = r.bottom + gap;
-      }
-      // Never let the card sit off-screen, and never let it cover the thing it points at.
-      left = Math.max(12, Math.min(left, innerWidth - c.width - 12));
-      if (top < 12) top = r.bottom + gap;
-      if (top + c.height > innerHeight - 12) top = Math.max(12, r.top - c.height - gap);
-      card.style.left = Math.round(left) + 'px';
-      card.style.top = Math.round(top) + 'px';
-      card.style.visibility = '';
-    });
+    // Position the card. Measured SYNCHRONOUSLY — getBoundingClientRect forces layout, so the
+    // height is already real here. Doing this in requestAnimationFrame instead would paint the
+    // card at 0,0 for a frame and then jump it, and rAF is paused entirely in a background or
+    // hidden tab, which would leave the card stranded in the corner (under the notch on a phone).
+    const c = card.getBoundingClientRect();
+    const gap = 14;
+    // Keep clear of notches and home indicators, not just the raw viewport edge.
+    const safeTop = 12 + safeInset('top');
+    const safeBottom = 12 + safeInset('bottom');
+    let left, top;
+    if (s.target === 'globe') {
+      left = innerWidth / 2 - c.width / 2;
+      top = Math.min(innerHeight - c.height - safeBottom, innerHeight * 0.58);
+    } else if (s.place === 'top') {
+      left = r.left + r.width / 2 - c.width / 2;
+      top = r.top - c.height - gap;
+    } else {
+      left = r.left + r.width / 2 - c.width / 2;
+      top = r.bottom + gap;
+    }
+    // Never off-screen, never under a notch, and never covering the thing it points at:
+    // if the preferred side doesn't fit, flip to the other side of the target.
+    left = Math.max(12, Math.min(left, innerWidth - c.width - 12));
+    if (top < safeTop) top = r.bottom + gap;
+    if (top + c.height > innerHeight - safeBottom) top = r.top - c.height - gap;
+    top = Math.max(safeTop, Math.min(top, innerHeight - c.height - safeBottom));
+    card.style.left = Math.round(left) + 'px';
+    card.style.top = Math.round(top) + 'px';
 
     if (s.pauseSpin && global.EventuallyTourHooks && global.EventuallyTourHooks.pauseSpin) {
       global.EventuallyTourHooks.pauseSpin();
