@@ -185,7 +185,7 @@
             ' · ' + (q.used == null ? '?' : q.used) + '/' + (q.capacity == null ? '?' : q.capacity) + ' used' +
             ' · ' + esc(String(q.created_at || '').slice(0, 10)) + '</span>' +
           (q.message ? '<span class="ad-hint" style="display:block;color:var(--ink,inherit);margin-top:4px">“' + esc(q.message) + '”</span>' : '') +
-        '</div><div style="text-align:right;white-space:nowrap">' +
+        '</div><div class="ad-row-actions">' +
           '<button class="ad-btn" data-req-manage="' + esc(q.email || q.user_id) + '">Manage</button> ' +
           '<button class="ad-btn" data-req-close="' + esc(q.id) + '" data-req-status="granted">Granted</button> ' +
           '<button class="ad-btn ghost" data-req-close="' + esc(q.id) + '" data-req-status="declined">Declined</button>' +

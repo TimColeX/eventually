@@ -592,7 +592,7 @@
     openModal('You\'ve used all your posts',
       '<div class="pl-wall">' +
         '<p>You\'ve published <b>' + capacity + ' of ' + capacity + '</b> events for the year. ' + when + '</p>' +
-        '<p>Need more? Tell us a little about what you\'re running and we\'ll come back to you with options.</p>' +
+        '<p class="pl-ask">Need more? Tell us a little about what you\'re running and we\'ll come back to you with options.</p>' +
         '<label class="pl-l">Anything we should know? <span>(optional)</span></label>' +
         '<textarea class="pl-msg" rows="3" placeholder="e.g. We run a weekly music night at The Artesian and have 20 dates booked."></textarea>' +
         '<div class="pl-actions"><button class="pl-send" type="button">Request more posts</button>' +
@@ -608,9 +608,11 @@
             .then(function (r) {
               const ok = body.querySelector('.pl-ok');
               if (r && r.ok) {
-                body.querySelector('.pl-actions').style.display = 'none';
-                body.querySelector('.pl-msg').style.display = 'none';
-                body.querySelector('.pl-l').style.display = 'none';
+                // Hide the whole ask — leaving "tell us what you're running" on screen
+                // next to "Request sent" reads as though it didn't go through.
+                ['.pl-actions', '.pl-msg', '.pl-l', '.pl-ask'].forEach(function (s) {
+                  const el = body.querySelector(s); if (el) el.style.display = 'none';
+                });
                 ok.textContent = 'Request sent — we\'ll be in touch by email.';
                 ok.hidden = false;
               } else {

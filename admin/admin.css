@@ -71,6 +71,20 @@ body{margin:0;background:#efe7da;color:var(--ink);font-family:var(--font);font-s
 .ad-chip{font-family:var(--mono);font-size:11px;background:#f0e6d8;border:1px solid var(--line2);border-radius:6px;padding:3px 7px;color:var(--ember);cursor:pointer}
 .ad-list{font-size:13px}
 .ad-list .ad-li{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line)}
+/* Generic two-column list row — detail on the left, actions or a stat on the right.
+   Shared by the publishing roster, requests queue, credit ledger, TTS health and airings. */
+.ad-list-row{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:11px 0;border-bottom:1px solid var(--line)}
+.ad-list-row:last-child{border-bottom:0}
+.ad-list-row>div{min-width:0}
+/* Long emails and pasted messages must wrap, not stretch the row off-screen. */
+.ad-list-row strong,.ad-list-row .ad-hint{overflow-wrap:anywhere}
+/* .ad-btn is full-width by default (it's a form button); inside a row it sizes to its label. */
+.ad-list-row .ad-btn{width:auto;padding:7px 11px;font-size:12.5px}
+.ad-row-actions{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+@media (max-width:640px){
+  .ad-list-row{flex-direction:column;gap:8px}
+  .ad-row-actions{justify-content:flex-start}
+}
 .ad-deny{max-width:440px;margin:70px auto;text-align:center;background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:32px}
 .ad-deny h2{color:var(--ember)}
 .ad-muted{color:var(--faint);font-size:12px}
