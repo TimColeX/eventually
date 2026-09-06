@@ -416,13 +416,47 @@
       html += '<div class="ad-sec" id="ad-dq"><h2>Data quality</h2><p class="ad-hint">Checking event coordinates…</p></div>';
       html += '<div class="ad-sec" id="ad-bu"><h2>Daily briefing usage</h2><p class="ad-hint">Counting Claude calls…</p></div>';
       html += '<div class="ad-sec" id="ad-el"><h2>AI Host voice usage</h2><p class="ad-hint">Measuring cache performance…</p></div>';
+      html += '<div class="ad-sec" id="ad-contact"><h2>Sales enquiries <span id="ad-contact-n" class="ad-hint"></span></h2>' +
+        '<p class="ad-hint">Everything sent through <b>Contact Sales</b>. These are emailed to info@eventually-app.com as well — this list is the backstop, so a lead is never lost if the email fails.</p>' +
+        '<div id="ad-contact-list"><div class="ad-center">Loading…</div></div></div>';
       body.innerHTML = html;
       renderSyncHealth();
       renderSourceBreakdown();
       renderDataQuality();
       renderBriefingUsage();
       renderAudioUsage();
+      renderContactEnquiries();
     });
+  }
+
+  // Contact Sales inbox. Rows stay until you mark them done, so the list is a to-do
+  // rather than a log; `emailed:false` flags the ones the email provider didn't take.
+  function renderContactEnquiries() {
+    const box = document.getElementById('ad-contact-list'), n = document.getElementById('ad-contact-n');
+    if (!box) return;
+    sb.rpc('admin_contact_enquiries', { p_all: false, p_limit: 100 }).then(function (r) {
+      if (r.error) { box.innerHTML = '<p class="ad-hint">Unavailable — run <code>backend/49_contact.sql</code>.</p>'; return; }
+      const rows = r.data || [];
+      if (n) n.textContent = rows.length ? '· ' + rows.length + ' new' : '· all clear';
+      if (!rows.length) { box.innerHTML = '<p class="ad-hint">No new enquiries.</p>'; return; }
+      box.innerHTML = '<div class="ad-list">' + rows.map(function (q) {
+        return '<div class="ad-list-row"><div style="flex:1">' +
+          '<strong>' + esc(q.name) + '</strong> <a href="mailto:' + esc(q.email) + '">' + esc(q.email) + '</a>' +
+          '<span class="ad-hint" style="display:block">' + esc(String(q.created_at || '').slice(0, 10)) +
+            (q.emailed ? '' : ' · ⚠️ not emailed (' + esc(q.email_error || 'unknown') + ')') + '</span>' +
+          (q.message ? '<span class="ad-hint" style="display:block;color:var(--ink);margin-top:4px">“' + esc(q.message) + '”</span>' : '') +
+        '</div><div class="ad-row-actions">' +
+          '<button class="ad-btn" data-contact-done="' + esc(q.id) + '">Done</button>' +
+        '</div></div>';
+      }).join('') + '</div>';
+      box.querySelectorAll('[data-contact-done]').forEach(function (b) {
+        b.onclick = function () {
+          b.disabled = true;
+          sb.rpc('admin_handle_contact_enquiry', { p_id: b.dataset.contactDone, p_done: true })
+            .then(function () { renderContactEnquiries(); }, function () { b.disabled = false; });
+        };
+      });
+    }, function () { box.innerHTML = '<p class="ad-hint">Failed to load enquiries.</p>'; });
   }
 
   // Event-data pipeline health — one card per provider (status dot, last successful sync,

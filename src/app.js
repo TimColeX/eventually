@@ -965,8 +965,8 @@
   const eventScroll = eventEl.querySelector('.evd-scroll');
   let activeEventId = null;
 
-  // Outbound ticket redirect. Eventually is a discovery platform, not a ticket
-  // seller: "Get Tickets" always goes through the centralized `go` redirect service
+  // Outbound ticket redirect. Today every ticketed event is fulfilled by its own
+  // provider: "Get Tickets" always goes through the centralized `go` redirect service
   // (which resolves the affiliate link server-side + logs the click). The frontend
   // never holds an affiliate URL — it only ever links to /go?e={eventId}.
   function goBase() {
@@ -1021,8 +1021,8 @@
         /ticketmaster|seatgeek|eventbrite|ticketweb|axs|stubhub|dice/i.test(String(ev.source || '') + ' ' + (ev.sources || []).map(function (s) { return s.source || ''; }).join(' '));
       var cta = ticketed ? 'Get Tickets ↗' : 'View event ↗';
       var note = ticketed
-        ? "You'll be taken to " + esc(ev.sourceLabel || 'the official provider') + " to book. Eventually doesn't sell tickets."
-        : "You'll be taken to " + esc(ev.sourceLabel || 'the source') + " for details. Eventually doesn't sell tickets.";
+        ? "You'll be taken to " + esc(ev.sourceLabel || 'the official provider') + " to book."
+        : "You'll be taken to " + esc(ev.sourceLabel || 'the source') + " for details.";
       avail = '<div class="evd-section">' +
         '<a class="evd-tickets" data-tickets="' + esc(ev.id) + '" href="' + esc(ticketUrl(ev)) + '" target="_blank" rel="noopener nofollow">' + cta + '</a>' +
         '<p class="evd-note">' + note + '</p></div>';
@@ -1977,7 +1977,7 @@
       '<details><summary>How do the dates &amp; timeline work?</summary><p>The bar along the bottom is a day scrubber. Drag it, or use the ‹ › day arrows, to move between days — the globe and results update to show what\'s on for that day. Tap <b>Today</b> to jump back to now.</p></details>' +
       '<details><summary>How do I save events &amp; use the calendar?</summary><p>Tap the ☆ on any event to save it. Open <b>⋯ menu → Saved Events</b> to see them on a month calendar: days with saved events are dotted (busy days show a count), and tapping a day lists what you saved. A <b>“For you”</b> section suggests more to save based on your interests.</p></details>' +
       '<details><summary>What do “Starts in” countdowns &amp; reminders mean?</summary><p>Upcoming events show a live <b>“Starts in”</b> countdown so you know exactly how long until they begin. Turn on <b>Event notifications</b> in your Profile to be reminded about events you\'ve saved and new ones near you.</p></details>' +
-      '<details><summary>What happens when I tap the event button? Is Eventually free?</summary><p>Eventually is <b>free</b> — browsing, saving, and the AI Host cost nothing. Each event links to its official source: <b>Get Tickets</b> for ticketed events (e.g. Ticketmaster) to buy there, or <b>View event</b> for free/community listings (like a university or library) to see details and register. Eventually is a discovery platform and never sells tickets itself.</p></details>' +
+      '<details><summary>What happens when I tap the event button? Is Eventually free?</summary><p>Eventually is <b>free</b> — browsing, saving, and the AI Host cost nothing. Each event links to its official source: <b>Get Tickets</b> for ticketed events (e.g. Ticketmaster) to buy there, or <b>View event</b> for free/community listings (like a university or library) to see details and register. Either way, Eventually takes you to the official source for that event.</p></details>' +
       '<details><summary>What is the eventually Host?</summary><p>Your live AI concierge — it narrates what\'s happening worldwide and tailors picks to your location and interests. Press play to hear it, with a music bed behind it.</p></details>' +
       '<details><summary>How do I list my event?</summary><p>Open the ⋯ menu → Publish an Event, drop a pin on the map, and publish straight to the globe.</p></details>' +
       '<details><summary>What is Eventually Plus?</summary><p>Your personal AI event concierge: longer personalized briefings, ad-free listening &amp; browsing, travel-aware city briefings, saved-event reminders and early access to new features.</p></details>' +
@@ -2043,6 +2043,7 @@
   }
   // Re-render the Plus modal in place (e.g. after joining the waitlist).
   function refreshPlusModal() { if (modal.classList.contains('open') && modal.querySelector('.plus-modal')) openPlus(); }
+  const SALES_EMAIL = 'info@eventually-app.com';
   function openContact() {
     openModal('Contact Sales',
       '<p class="modal-lead">Partner with Eventually — sponsorships, featured placements and ticketing.</p>' +
@@ -2050,13 +2051,50 @@
         '<label>Name<input name="name" required></label>' +
         '<label>Work email<input name="email" type="email" required></label>' +
         '<label>How can we help?<textarea name="msg" rows="3"></textarea></label>' +
+        // Honeypot: hidden from people, irresistible to bots. Never shown, never focusable.
+        '<input name="company" tabindex="-1" autocomplete="off" aria-hidden="true" style="display:none">' +
         '<button type="submit">Send enquiry</button>' +
-        '<p class="modal-fine">Demo only — this form doesn\'t send anywhere.</p>' +
+        '<p class="modal-fine">Goes straight to ' + SALES_EMAIL + ' — we usually reply within two working days.</p>' +
       '</form>',
       function (body) {
-        body.querySelector('.contact-form').addEventListener('submit', function (e) {
-          e.preventDefault(); closeModal(); window.EventuallyToast('Thanks — our team will be in touch (demo).');
+        const form = body.querySelector('.contact-form');
+        const btn = form.querySelector('button[type=submit]');
+        const fine = form.querySelector('.modal-fine');
+        form.addEventListener('submit', function (e) {
+          e.preventDefault();
+          const cfg = window.EVENTUALLY_CONFIG || {};
+          const base = (cfg.supabaseUrl || '').replace(/\/+$/, '');
+          const payload = {
+            name: form.name.value.trim(), email: form.email.value.trim(),
+            message: form.msg.value.trim(), company: form.company.value
+          };
+          btn.disabled = true; btn.textContent = 'Sending…';
+          // No endpoint configured → hand them their mail client rather than
+          // pretending to send. Losing a sales lead silently is the one outcome
+          // this form must never have.
+          if (!base) { mailtoFallback(payload); return; }
+          fetch(base + '/functions/v1/contact', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', apikey: cfg.supabaseAnonKey || '' },
+            body: JSON.stringify(payload)
+          }).then(function (r) { return r.ok ? r.json() : { ok: false }; }, function () { return { ok: false }; })
+            .then(function (r) {
+              if (r && r.ok) {
+                closeModal();
+                window.EventuallyToast('Thanks — your enquiry is with our team. We\'ll be in touch by email.');
+                return;
+              }
+              btn.disabled = false; btn.textContent = 'Send enquiry';
+              fine.innerHTML = 'That didn\'t send. Please email <a href="mailto:' + SALES_EMAIL + '">' + SALES_EMAIL + '</a> directly.';
+            });
         });
+        function mailtoFallback(p) {
+          const body2 = 'Name: ' + p.name + '\nWork email: ' + p.email + '\n\n' + p.message;
+          location.href = 'mailto:' + SALES_EMAIL + '?subject=' + encodeURIComponent('Contact Sales — ' + p.name) +
+            '&body=' + encodeURIComponent(body2);
+          btn.disabled = false; btn.textContent = 'Send enquiry';
+          fine.textContent = 'Opening your email app — if nothing happens, write to ' + SALES_EMAIL + '.';
+        }
       });
   }
 
