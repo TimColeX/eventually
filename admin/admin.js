@@ -648,7 +648,10 @@
         '<p class="ad-hint">Each request either hits the cache (no provider call) or synthesizes. A high hit % means the caching is doing its job. Figures are priced for the <b>currently selected</b> voice — ' + activeRate().label + ' — so switching provider or model changes them.</p>' +
         '<div class="ad-grid">' +
           kpi((d.hit_pct != null ? d.hit_pct : 0) + '%', 'Cache hit rate') +
-          kpi((d.misses || 0).toLocaleString(), 'ElevenLabs calls (synths)') +
+          // Was hardcoded "ElevenLabs calls" — a leftover from before the provider
+          // switch, so it labelled Fish synths as ElevenLabs and looked like a
+          // runaway bill at a vendor no longer in use.
+          kpi((d.misses || 0).toLocaleString(), activeRate().label + ' calls (synths)') +
           kpi((d.hits || 0).toLocaleString(), 'Cache hits (free)') +
           kpi((d.chars || 0).toLocaleString(), 'Chars synthesized') +
           kpi(money(d.chars || 0), 'Est. spend') +
