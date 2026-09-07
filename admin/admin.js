@@ -1685,7 +1685,8 @@
         '<p class="ad-hint">Switches the temporary event chat on for one event. Events published through Eventually get it automatically; anything else needs turning on here. The chat opens an hour before the start and closes an hour after the end — <b>nothing in the app reads this yet</b>, so switching it on is safe.</p>' +
         '<div class="ad-row"><div class="ad-field" style="flex:1"><label>Find an event</label>' +
           '<input id="lc-q" placeholder="Title or city — e.g. Regina"></div>' +
-          '<div class="ad-field"><label>&nbsp;</label><button class="ad-btn" id="lc-find" type="button">Search</button></div></div>' +
+          // flex:none, or .ad-row .ad-field{flex:1} gives the button half the row.
+          '<div class="ad-field" style="flex:none"><label>&nbsp;</label><button class="ad-btn" id="lc-find" type="button">Search</button></div></div>' +
         '<div id="lc-results"></div>' +
         '<div style="margin-top:18px"><div class="ad-field"><label>Switched on</label></div>' +
         '<div id="lc-on"><div class="ad-center">Loading…</div></div></div></div>' +
