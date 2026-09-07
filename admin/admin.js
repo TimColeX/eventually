@@ -411,6 +411,9 @@
         return '<div class="ad-li"><span>' + esc(c.city) + '</span><span>' + c.n + '</span></div>';
       }).join('') + '</div>';
       html += '</div>';
+      html += '<div class="ad-sec" id="ad-use"><h2>Engagement <span class="ad-hint">· last 30 days</span></h2>' +
+        '<p class="ad-hint">Everyone, not just signed-in accounts. Anonymous — a per-browser id, no cookies, no third party. This is what visitors <b>do</b>; the counters above are only what account holders <b>are</b>.</p>' +
+        '<div id="ad-use-body"><div class="ad-center">Loading…</div></div></div>';
       html += '<div class="ad-sec" id="ad-health"><h2>Event data sources — health</h2><p class="ad-hint">Loading provider status…</p></div>';
       html += '<div class="ad-sec" id="ad-cron"><h2>Scheduled runs <span id="ad-cron-n" class="ad-hint"></span></h2>' +
         '<p class="ad-hint">The <b>reply</b> column is what actually matters. The scheduler reports "succeeded" as soon as it has <i>sent</i> the request — it never sees the answer — so a broken job can look healthy for months. This shows what came back.</p>' +
@@ -423,6 +426,7 @@
         '<p class="ad-hint">Everything sent through <b>Contact Sales</b>. These are emailed to info@eventually-app.com as well — this list is the backstop, so a lead is never lost if the email fails.</p>' +
         '<div id="ad-contact-list"><div class="ad-center">Loading…</div></div></div>';
       body.innerHTML = html;
+      renderUsage();
       renderSyncHealth();
       renderCronHealth();
       renderSourceBreakdown();
@@ -431,6 +435,56 @@
       renderAudioUsage();
       renderContactEnquiries();
     });
+  }
+
+  /* What visitors actually do. The KPI row at the top of this tab counts accounts;
+     this counts people, most of whom never sign in. The number that matters is the
+     play rate — the share of visitors who start the AI host. */
+  function renderUsage() {
+    const box = document.getElementById('ad-use-body');
+    if (!box) return;
+    sb.rpc('admin_usage_summary', { p_days: 30 }).then(function (r) {
+      const d = r.data;
+      if (r.error || !d) {
+        box.innerHTML = '<p class="ad-hint">Unavailable — run <code>backend/52_usage_events.sql</code>.</p>';
+        return;
+      }
+      if (!d.visitors) {
+        box.innerHTML = '<p class="ad-hint">No visits recorded yet. This fills up once the tracking build is live and someone opens the app.</p>';
+        return;
+      }
+      const ev = d.by_event || {};
+      const kpi = function (v, l) { return '<div class="ad-kpi"><b>' + v + '</b><span>' + l + '</span></div>'; };
+      let h = '<div class="ad-grid">' +
+        kpi(d.visitors, 'Visitors') +
+        kpi(d.played, 'Started the host') +
+        kpi(d.play_rate + '%', 'Play rate') +
+        kpi(ev.event_open || 0, 'Events opened') +
+        kpi(ev.city_search || 0, 'City searches') +
+        kpi(ev.publish_open || 0, 'Publish opened') +
+        kpi(ev.tour_done || 0, 'Tours finished') +
+      '</div>';
+
+      const cities = d.top_cities || [];
+      if (cities.length) {
+        const max = Math.max.apply(null, cities.map(function (c) { return +c.n; }).concat([1]));
+        h += '<div class="ad-bars" style="margin-top:16px">' + cities.map(function (c) {
+          return '<div class="ad-bar"><span>' + esc(c.city) + '</span>' +
+            '<i style="width:' + (c.n / max * 100) + '%"></i><span>' + c.n + '</span></div>';
+        }).join('') + '</div>';
+      }
+
+      const daily = d.daily || [];
+      if (daily.length > 1) {
+        const max = Math.max.apply(null, daily.map(function (x) { return +x.visitors; }).concat([1]));
+        h += '<p class="ad-hint" style="margin-top:16px">Visitors per day</p><div class="ad-bars">' +
+          daily.slice(-14).map(function (x) {
+            return '<div class="ad-bar"><span>' + esc(x.day) + '</span>' +
+              '<i style="width:' + (x.visitors / max * 100) + '%"></i><span>' + x.visitors + '</span></div>';
+          }).join('') + '</div>';
+      }
+      box.innerHTML = h;
+    }, function () { box.innerHTML = '<p class="ad-hint">Failed to load engagement.</p>'; });
   }
 
   /* Scheduled-run truth panel. This exists because of a real outage: an old cron job
