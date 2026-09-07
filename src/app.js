@@ -990,8 +990,25 @@
      redirect already sets, so no new cookie and no third party.
      It never awaits and never throws: analytics must not be able to delay a tap
      or break the app, and a blocked request should cost nothing. */
+  /* Per-device opt-out, set once by visiting ?notrack=1 (and cleared with ?notrack=0).
+     At this stage the owner's own testing is easily the largest source of traffic,
+     so without this the panel mostly measures whoever is checking the panel. */
+  try {
+    const nt = new URLSearchParams(location.search).get('notrack');
+    if (nt === '1') { localStorage.setItem('eventually.notrack', '1'); }
+    else if (nt === '0') { localStorage.removeItem('eventually.notrack'); }
+    if (nt !== null) {
+      setTimeout(function () {
+        window.EventuallyToast(nt === '1'
+          ? 'This device is now excluded from usage stats.'
+          : 'This device is counted in usage stats again.', 5000);
+      }, 1200);
+    }
+  } catch (e) {}
+
   function track(event, city) {
     try {
+      if (localStorage.getItem('eventually.notrack') === '1') return;
       const cfg = window.EVENTUALLY_CONFIG || {};
       const base = (cfg.supabaseUrl || '').replace(/\/+$/, '');
       if (!base || !cfg.supabaseAnonKey) return;

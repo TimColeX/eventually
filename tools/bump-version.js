@@ -68,19 +68,16 @@ fs.writeFileSync(HTML, html.replace(
 // 3. version.json — the beacon an installed app polls to spot a deploy.
 fs.writeFileSync(VER, JSON.stringify({ build: next }, null, 2) + '\n');
 
-// 4. Mirror, so the copy that actually gets uploaded says the same thing.
-let mirrored = 0;
-if (fs.existsSync(MIRROR)) {
-  for (const rel of ['sw.js', 'index.html', 'version.json']) {
-    fs.copyFileSync(path.join(ROOT, rel), path.join(MIRROR, rel));
-    mirrored++;
-  }
-}
+// Mirroring to Eventually-site/ used to happen here, because the site was
+// published by uploading that folder through GitHub's web UI. The repo is now
+// under git and pushed from this folder directly, so the mirror is dead weight —
+// and copying into it would only create a second, stale truth.
+const mirrored = 0;
 
 console.log('Eventually ' + current + ' -> ' + next);
 console.log('  sw.js            CACHE = eventually-' + next);
 console.log('  index.html       EVENTUALLY_BUILD = ' + next);
 console.log('  version.json     build = ' + next);
-console.log(mirrored ? '  mirrored ' + mirrored + ' files into Eventually-site/' : '  (no Eventually-site/ mirror found)');
-console.log('\nNow mirror any other changed files, then push. Installed apps pick this up');
-console.log('on their next foreground check — no reinstall needed.');
+console.log('');
+console.log('Now publish it:   .\\publish.ps1 "what changed"');
+console.log('Installed apps pick it up on their next foreground check — no reinstall.');
