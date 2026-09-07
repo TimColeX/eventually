@@ -1562,6 +1562,88 @@
   }
 
   /* ---------------- Globe & Display config ---------------- */
+  /* Live chat — the per-event switch (Phase 0 of the "From the Ground" spec).
+     Deliberately just the toggle: no messages, no realtime, nothing in the app
+     reads chat_enabled yet. It exists so one real event can be switched on and
+     seeded before the rest of the feature is built. */
+  const CHAT_STATE = {
+    live:      ['🟢', 'open now'],
+    scheduled: ['🕓', 'opens later'],
+    ended:     ['⚪', 'closed'],
+    off:       ['—', 'off']
+  };
+  function chatWhen(row) {
+    if (row.state === 'live') {
+      // An estimated close must never be shown as a precise time — 75% of events
+      // carry no end_time, so the figure would be invented.
+      return row.estimated_end ? 'closes after the event'
+        : 'closes ' + new Date(row.closes_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+    if (row.state === 'scheduled') return 'opens ' + new Date(row.opens_at).toLocaleString();
+    return new Date(row.start_time).toLocaleDateString();
+  }
+
+  function renderChatEvents() {
+    const box = document.getElementById('lc-on');
+    if (!box) return;
+    sb.rpc('admin_chat_events').then(function (r) {
+      if (r.error) { box.innerHTML = '<p class="ad-hint">Unavailable — run <code>backend/54_live_chat_toggle.sql</code>.</p>'; return; }
+      const rows = r.data || [];
+      if (!rows.length) { box.innerHTML = '<p class="ad-hint">No events have chat switched on.</p>'; return; }
+      box.innerHTML = '<div class="ad-list">' + rows.map(function (e) {
+        const s = CHAT_STATE[e.state] || CHAT_STATE.off;
+        return '<div class="ad-list-row"><div style="flex:1">' +
+          '<strong>' + s[0] + ' ' + esc(e.title || '(untitled)') + '</strong>' +
+          '<span class="ad-hint" style="display:block">' + esc(e.city || '—') +
+            (e.is_native ? ' · published on Eventually' : '') + ' · ' + esc(s[1]) + ' · ' + esc(chatWhen(e)) + '</span>' +
+        '</div><div class="ad-row-actions">' +
+          '<button class="ad-btn ghost" data-chat-off="' + esc(e.event_id) + '">Switch off</button>' +
+        '</div></div>';
+      }).join('') + '</div>';
+      box.querySelectorAll('[data-chat-off]').forEach(function (b) {
+        b.onclick = function () { setChat(b.dataset.chatOff, false, b); };
+      });
+    }, function () { box.innerHTML = '<p class="ad-hint">Failed to load.</p>'; });
+  }
+
+  function setChat(id, on, btn) {
+    if (btn) btn.disabled = true;
+    sb.rpc('admin_set_chat', { p_event_id: id, p_on: on }).then(function () {
+      renderChatEvents();
+      if (document.getElementById('lc-q').value.trim()) findChatEvent();
+    }, function () { if (btn) btn.disabled = false; });
+  }
+
+  function findChatEvent() {
+    const box = document.getElementById('lc-results');
+    const q = document.getElementById('lc-q').value.trim();
+    if (q.length < 2) { box.innerHTML = '<p class="ad-hint">Type at least two characters.</p>'; return; }
+    box.innerHTML = '<div class="ad-center">Searching…</div>';
+    sb.rpc('admin_find_event', { p_q: q, p_limit: 15 }).then(function (r) {
+      if (r.error) { box.innerHTML = '<p class="ad-hint">Search failed.</p>'; return; }
+      const rows = r.data || [];
+      if (!rows.length) { box.innerHTML = '<p class="ad-hint">No upcoming events match “' + esc(q) + '”.</p>'; return; }
+      box.innerHTML = '<div class="ad-list">' + rows.map(function (e) {
+        return '<div class="ad-list-row"><div style="flex:1">' +
+          '<strong>' + esc(e.title || '(untitled)') + '</strong>' +
+          '<span class="ad-hint" style="display:block">' + esc(e.city || '—') + ' · ' +
+            esc(new Date(e.start_time).toLocaleString()) +
+            (e.is_native ? ' · published on Eventually' : '') + '</span>' +
+        '</div><div class="ad-row-actions">' +
+          (e.chat_enabled
+            ? '<button class="ad-btn ghost" data-chat-off="' + esc(e.event_id) + '">Switch off</button>'
+            : '<button class="ad-btn" data-chat-on="' + esc(e.event_id) + '">Switch on</button>') +
+        '</div></div>';
+      }).join('') + '</div>';
+      box.querySelectorAll('[data-chat-on]').forEach(function (b) {
+        b.onclick = function () { setChat(b.dataset.chatOn, true, b); };
+      });
+      box.querySelectorAll('[data-chat-off]').forEach(function (b) {
+        b.onclick = function () { setChat(b.dataset.chatOff, false, b); };
+      });
+    }, function () { box.innerHTML = '<p class="ad-hint">Search failed.</p>'; });
+  }
+
   function renderGlobe(body) {
     body.innerHTML = '<div class="ad-center">Loading config…</div>';
     sb.from('app_config').select('config').eq('id', 1).maybeSingle().then(function (r) {
@@ -1598,6 +1680,15 @@
           '<button class="ad-save" id="feed-sync" type="button">⟳ Sync feeds now</button>' +
           '<span class="ad-saved" id="feed-msg"></span>' +
         '</div></div>' +
+
+        '<div class="ad-sec"><h2>Live chat <span class="ad-hint">· experiment</span></h2>' +
+        '<p class="ad-hint">Switches the temporary event chat on for one event. Events published through Eventually get it automatically; anything else needs turning on here. The chat opens an hour before the start and closes an hour after the end — <b>nothing in the app reads this yet</b>, so switching it on is safe.</p>' +
+        '<div class="ad-row"><div class="ad-field" style="flex:1"><label>Find an event</label>' +
+          '<input id="lc-q" placeholder="Title or city — e.g. Regina"></div>' +
+          '<div class="ad-field"><label>&nbsp;</label><button class="ad-btn" id="lc-find" type="button">Search</button></div></div>' +
+        '<div id="lc-results"></div>' +
+        '<div style="margin-top:18px"><div class="ad-field"><label>Switched on</label></div>' +
+        '<div id="lc-on"><div class="ad-center">Loading…</div></div></div></div>' +
 
         '<div><button class="ad-save" id="cf-save">Save all</button><span class="ad-saved" id="cf-msg"></span></div>';
 
@@ -1666,6 +1757,10 @@
           msg.textContent = 'Done · ' + (d.status || 'ok') + ' · feeds ' + (d.feedsOk || 0) + '✓/' + (d.feedsFailed || 0) + '✗ · fetched ' + (d.fetched || 0) + ' · upserted ' + (d.upEvents || 0); msg.style.color = '#3a7d44';
         }).catch(function (e) { btn.disabled = false; msg.textContent = 'Failed: ' + String(e); msg.style.color = '#b3402a'; });
       };
+
+      renderChatEvents();
+      document.getElementById('lc-find').onclick = findChatEvent;
+      document.getElementById('lc-q').addEventListener('keydown', function (e) { if (e.key === 'Enter') findChatEvent(); });
 
       document.getElementById('cf-save').onclick = function () {
         const pinned = [];
