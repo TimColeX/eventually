@@ -135,7 +135,7 @@
         '<p class="ad-hint">Look someone up by email to see their usage, change their plan, or grant extra slots after an offline payment.</p>' +
         '<div class="ad-row"><div class="ad-field" style="flex:1"><label>Email or user id</label>' +
           '<input id="pb-q" placeholder="name@example.com"></div>' +
-          '<div class="ad-field"><label>&nbsp;</label><button class="ad-btn" id="pb-find">Look up</button></div></div>' +
+          '<div class="ad-field" style="flex:none"><label>&nbsp;</label><button class="ad-btn" id="pb-find">Look up</button></div></div>' +
         '<div id="pb-result"></div></div>';
 
       document.getElementById('pb-save').onclick = function () {
