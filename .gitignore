@@ -1,0 +1,36 @@
+# This repository IS the published website — github.com/TimColeX/eventually is
+# public and serves eventually-app.com. So the rule is simple: if it shouldn't be
+# readable by a stranger, or a browser never asks for it, it doesn't belong here.
+
+# The old upload staging copy. Git replaces it — you now push from this folder
+# directly, so keeping a second copy in sync is exactly the step that used to
+# drop files silently.
+Eventually-site/
+
+# Server-side work. The SQL and Edge Functions contain no secrets, but they are
+# the shape of the backend and there is no reason to publish them. They're
+# deployed with the Supabase CLI, never served to a browser.
+backend/
+supabase/
+
+# Internal planning and handover notes — working documents, not site content.
+BACKEND-PLAN.md
+DEPLOY-CHECKLIST.md
+PITCH.md
+architecture.md
+backlog.md
+decisions.md
+progress.md
+session-handoff.md
+setup.md
+README.md
+
+# Local tooling and scratch
+.claude/
+node_modules/
+eventually-brand-identity-concepts/
+orbit-screenshot.png
+
+# OS noise
+Thumbs.db
+.DS_Store

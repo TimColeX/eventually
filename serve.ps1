@@ -2,7 +2,7 @@
 # Run:  powershell -ExecutionPolicy Bypass -File .\serve.ps1
 # Then open http://localhost:8080/  (needed for PWA install / service worker).
 
-param([int]$Port = 8080)
+param([int]$Port = $(if ($env:PORT) { [int]$env:PORT } else { 8080 }))
 
 $root = $PSScriptRoot
 $mime = @{
