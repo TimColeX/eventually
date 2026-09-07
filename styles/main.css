@@ -910,6 +910,8 @@ body.has-ad .toast { bottom: calc(144px + env(safe-area-inset-bottom, 0px)); }
 .help-cat-d { color: var(--muted); }
 .help-legal { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); text-align: center; font-size: 12.5px; color: var(--muted); }
 .help-legal a { color: var(--muted); text-decoration: underline; }
+/* Build stamp — deliberately quiet, but readable enough to check on a phone. */
+.help-build { margin-top: 8px; text-align: center; font-family: var(--mono); font-size: 11px; color: var(--hint); }
 .contact-form { display: flex; flex-direction: column; gap: 12px; }
 .contact-form label { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--muted); }
 .contact-form input, .contact-form textarea { padding: 11px 13px; border-radius: 11px; background: var(--paper); border: 1px solid var(--line-2); color: var(--ink); font-family: var(--font); font-size: 14px; outline: none; resize: vertical; }

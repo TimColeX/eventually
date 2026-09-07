@@ -1984,6 +1984,9 @@
       // Re-entry point for the first-run tour — the one place people look when they're stuck.
       '<button class="help-tour" type="button">↻ Show me around again</button>' +
       '<div class="help-legal"><a href="about.html" target="_blank" rel="noopener">About</a> · <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a> · <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a></div>' +
+      // Visible build stamp — the only way to confirm which version a Home Screen
+      // install is actually running without plugging the phone into a laptop.
+      '<div class="help-build">Version ' + esc(window.EVENTUALLY_BUILD || 'dev') + '</div>' +
       '</div>', function (body) {
         const b = body.querySelector('.help-tour');
         if (b) b.addEventListener('click', function () {
@@ -2569,8 +2572,134 @@
   };
   setTimeout(launchSignature, 2200);   // safety net (deduped by the module's once-per-session guard)
 
-  /* ---------- PWA service worker ---------- */
+  /* ---------- PWA service worker + update flow ----------
+     The bug this solves: a Home Screen PWA is usually RESUMED, not cold-started.
+     Nothing navigates, so the browser never re-checks sw.js, so a device could
+     sit on a months-old build indefinitely while the same URL in Safari or
+     Chrome showed the current one. Registering and walking away is enough for a
+     tab; it is not enough for an installed app.
+
+     So: check for a new worker whenever the app comes back to the foreground,
+     and when one is ready, swap to it and reload — but only at a moment where a
+     reload costs the user nothing. */
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
-    navigator.serviceWorker.register('sw.js').catch(function () {});
+    (function () {
+      const BUILD = window.EVENTUALLY_BUILD || 'dev';
+      let reloading = false;
+      let pendingWorker = null;
+
+      // A reload loop would be worse than a stale build — the app would be
+      // unusable rather than merely old. If we've reloaded twice for updates in
+      // the last two minutes, something is wrong (a half-deployed build, a
+      // worker that can't activate); stop reloading and let the user drive.
+      function loopGuard() {
+        let hist = [];
+        try { hist = JSON.parse(sessionStorage.getItem('eventually.swReloads') || '[]'); } catch (e) {}
+        const now = Date.now();
+        hist = hist.filter(function (t) { return now - t < 120000; });
+        if (hist.length >= 2) return false;
+        hist.push(now);
+        try { sessionStorage.setItem('eventually.swReloads', JSON.stringify(hist)); } catch (e) {}
+        return true;
+      }
+
+      // Reloading mid-briefing would cut the host off in the middle of a
+      // sentence, and reloading under a modal would throw away whatever the user
+      // was typing. Neither is worth doing silently for a version bump.
+      function safeToReload() {
+        try {
+          if (aiHost && aiHost.isActive && aiHost.isActive()) return false;
+          if (modal && modal.classList.contains('open')) return false;
+        } catch (e) {}
+        return true;
+      }
+
+      function applyUpdate(worker) {
+        if (!worker || reloading) return;
+        if (!loopGuard()) { offerManual(); return; }
+        reloading = true;
+        worker.postMessage({ type: 'SKIP_WAITING' });
+        // If the worker never takes control (older iOS has been flaky here),
+        // don't leave the user stranded on the old build with no way forward.
+        setTimeout(function () { if (reloading) location.reload(); }, 6000);
+      }
+
+      function offerManual() {
+        window.EventuallyToast('A new version is ready — reopen Eventually to update.', 6000);
+      }
+
+      // Ready, but the moment isn't right. Wait for the host to stop / the modal
+      // to close rather than interrupting, then swap.
+      let waitTimer = null;
+      function swapWhenIdle(worker) {
+        pendingWorker = worker;
+        if (waitTimer) return;
+        waitTimer = setInterval(function () {
+          if (!pendingWorker) { clearInterval(waitTimer); waitTimer = null; return; }
+          if (safeToReload()) {
+            clearInterval(waitTimer); waitTimer = null;
+            applyUpdate(pendingWorker); pendingWorker = null;
+          }
+        }, 3000);
+      }
+
+      function onReady(worker) {
+        // No controller means this is the FIRST install on this device. The page
+        // is already running the code this worker just cached, so reloading would
+        // be a pointless flash.
+        if (!navigator.serviceWorker.controller) return;
+        if (safeToReload()) applyUpdate(worker); else swapWhenIdle(worker);
+      }
+
+      navigator.serviceWorker.addEventListener('controllerchange', function () {
+        if (!reloading) return;      // another tab updated; don't yank this one
+        location.reload();
+      });
+
+      // updateViaCache:'none' makes the browser bypass its HTTP cache when it
+      // re-checks sw.js. GitHub Pages sends Cache-Control: max-age=600 on it, so
+      // without this every update check in the ten minutes after a deploy could
+      // be answered from cache and conclude, wrongly, that nothing changed.
+      navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function (reg) {
+        if (reg.waiting) onReady(reg.waiting);
+        reg.addEventListener('updatefound', function () {
+          const w = reg.installing;
+          if (!w) return;
+          w.addEventListener('statechange', function () {
+            if (w.state === 'installed') onReady(w);
+          });
+        });
+
+        let lastCheck = 0;
+        function check() {
+          if (Date.now() - lastCheck < 45000) return;   // don't hammer on every focus flicker
+          lastCheck = Date.now();
+          reg.update().catch(function () {});
+        }
+        check();
+        // The resume path — this is the one that fixes the Home Screen icon.
+        document.addEventListener('visibilitychange', function () { if (!document.hidden) check(); });
+        window.addEventListener('focus', check);
+        window.addEventListener('pageshow', function (e) { if (e.persisted) check(); });
+
+        /* Belt and braces. If the worker route stalls for any reason, the app can
+           still tell it is out of date on its own: version.json is never cached,
+           so a mismatch against this build's stamp is proof a newer deploy is
+           live. We only surface it if the worker hasn't already handled things. */
+        function beacon() {
+          if (reloading || BUILD === 'dev') return;
+          fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (v) {
+              if (!v || !v.build || v.build === BUILD) return;
+              reg.update().catch(function () {});
+              setTimeout(function () { if (!reloading) offerManual(); }, 10000);
+            })
+            .catch(function () {});
+        }
+        setTimeout(beacon, 4000);
+        document.addEventListener('visibilitychange', function () { if (!document.hidden) setTimeout(beacon, 1500); });
+      }).catch(function () {});
+    })();
   }
 })();
