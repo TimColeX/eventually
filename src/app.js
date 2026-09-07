@@ -982,6 +982,40 @@
       return s;
     } catch (e) { return null; }
   }
+  /* Fire-and-forget usage ping.
+     The admin's counts only include signed-in people, so the visitors who arrive
+     from a city page, use the thing, and leave without an account are invisible —
+     which means the AI host has no evidence for or against it. This closes that
+     gap without adding Google Analytics: it reuses the anonymous id the affiliate
+     redirect already sets, so no new cookie and no third party.
+     It never awaits and never throws: analytics must not be able to delay a tap
+     or break the app, and a blocked request should cost nothing. */
+  function track(event, city) {
+    try {
+      const cfg = window.EVENTUALLY_CONFIG || {};
+      const base = (cfg.supabaseUrl || '').replace(/\/+$/, '');
+      if (!base || !cfg.supabaseAnonKey) return;
+      fetch(base + '/rest/v1/rpc/log_usage_event', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: cfg.supabaseAnonKey,
+          Authorization: 'Bearer ' + cfg.supabaseAnonKey
+        },
+        body: JSON.stringify({ p_event: event, p_sid: anonSessionId(), p_city: city || null }),
+        keepalive: true          // survives the page being closed mid-request
+      }).catch(function () {});
+    } catch (e) {}
+  }
+  // One 'open' per browser session — the denominator every other number is a share of.
+  try {
+    if (!sessionStorage.getItem('eventually.opened')) {
+      sessionStorage.setItem('eventually.opened', '1');
+      const _p = P.get();
+      track('open', (_p.location && _p.location.city) || null);
+    }
+  } catch (e) { track('open', null); }
+
   function ticketUrl(ev) {
     const base = goBase();
     if (!base) return ev.ticketUrl || '#';                         // no backend (pure demo) → direct link
@@ -997,6 +1031,7 @@
   function openEvent(id) {
     const ev = D.getById(id); if (!ev) return;
     activeEventId = id; ev.clicks++;
+    track('event_open', ev.city || null);
     const type = D.typeForDate(ev, selectedDate);
     const dateLabel = ev.date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
     const timeLabel = ev.date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
@@ -1153,6 +1188,7 @@
     searchResults.querySelectorAll('button').forEach(function (b) {
       b.addEventListener('click', function () {
         P.addSearch(searchInput.value);
+        if (b.dataset.city) track('city_search', b.dataset.city);
         goToSearchResult({ lat: +b.dataset.lat, lon: +b.dataset.lon, eventId: b.dataset.ev, city: b.dataset.city, explore: b.dataset.explore === '1' });
       });
     });
@@ -1920,7 +1956,7 @@
     else if (act === 'saved') openSaved();
     else if (act === 'plus') openPlus();
     else if (act === 'profile') openProfile();
-    else if (act === 'create') requireLogin(function () { coordinator.open(); });
+    else if (act === 'create') { track('publish_open'); requireLogin(function () { coordinator.open(); }); }
     else if (act === 'myevents') requireLogin(function () { openMyEvents(); });
     else if (act === 'types') openTypes();
     else if (act === 'help') openHelp();
@@ -1994,7 +2030,7 @@
           // Slight delay so the modal is fully gone before the tour measures its targets.
           setTimeout(function () {
             if (window.EventuallyTour) window.EventuallyTour.start({
-              onFinish: function () { if (aiHost && aiHost.toggle) aiHost.toggle(); }
+              onFinish: function () { track('tour_done'); if (aiHost && aiHost.toggle) aiHost.toggle(); }
             });
           }, 260);
         });
@@ -2562,7 +2598,7 @@
   function startTourIfNew() {
     if (!window.EventuallyTour) return;
     window.EventuallyTour.maybeStart({
-      onFinish: function () { if (aiHost && aiHost.toggle) aiHost.toggle(); }
+      onFinish: function () { track('tour_done'); if (aiHost && aiHost.toggle) aiHost.toggle(); }
     });
   }
   // Let the tour hold the globe still while it points at it — a target that drifts away
@@ -2571,6 +2607,16 @@
     pauseSpin: function () { try { if (globe) globe.spin = 0; } catch (e) {} }
   };
   setTimeout(launchSignature, 2200);   // safety net (deduped by the module's once-per-session guard)
+
+  /* Did anyone actually press Play? The AI host is the most expensive thing in
+     the product and this is the only number that justifies it. Delegated rather
+     than bound inside aihost.js, so the host module stays unaware of analytics. */
+  document.addEventListener('click', function (e) {
+    if (e.target && e.target.closest && e.target.closest('.ah-play')) {
+      const pr = P.get();
+      track('host_play', (pr.location && pr.location.city) || null);
+    }
+  }, true);
 
   /* ---------- PWA service worker + update flow ----------
      The bug this solves: a Home Screen PWA is usually RESUMED, not cold-started.
