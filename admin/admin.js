@@ -412,6 +412,9 @@
       }).join('') + '</div>';
       html += '</div>';
       html += '<div class="ad-sec" id="ad-health"><h2>Event data sources — health</h2><p class="ad-hint">Loading provider status…</p></div>';
+      html += '<div class="ad-sec" id="ad-cron"><h2>Scheduled runs <span id="ad-cron-n" class="ad-hint"></span></h2>' +
+        '<p class="ad-hint">The <b>reply</b> column is what actually matters. The scheduler reports "succeeded" as soon as it has <i>sent</i> the request — it never sees the answer — so a broken job can look healthy for months. This shows what came back.</p>' +
+        '<div id="ad-cron-list"><div class="ad-center">Loading…</div></div></div>';
       html += '<div class="ad-sec" id="ad-src"><h2>Event sources</h2><p class="ad-hint">Counting per source…</p></div>';
       html += '<div class="ad-sec" id="ad-dq"><h2>Data quality</h2><p class="ad-hint">Checking event coordinates…</p></div>';
       html += '<div class="ad-sec" id="ad-bu"><h2>Daily briefing usage</h2><p class="ad-hint">Counting Claude calls…</p></div>';
@@ -421,12 +424,52 @@
         '<div id="ad-contact-list"><div class="ad-center">Loading…</div></div></div>';
       body.innerHTML = html;
       renderSyncHealth();
+      renderCronHealth();
       renderSourceBreakdown();
       renderDataQuality();
       renderBriefingUsage();
       renderAudioUsage();
       renderContactEnquiries();
     });
+  }
+
+  /* Scheduled-run truth panel. This exists because of a real outage: an old cron job
+     called the ingest endpoint with no auth header and got 401 every morning for
+     months, while pg_cron cheerfully logged "succeeded" — because it only reports
+     whether it managed to SEND the request. Ingestion was dead behind a green
+     dashboard. This reads the HTTP reply pg_net recorded, which is the only thing
+     that says whether the work actually happened. */
+  function renderCronHealth() {
+    const box = document.getElementById('ad-cron-list'), badge = document.getElementById('ad-cron-n');
+    if (!box) return;
+    sb.rpc('admin_cron_health', { p_hours: 72 }).then(function (r) {
+      if (r.error) {
+        box.innerHTML = '<p class="ad-hint">Unavailable — run <code>backend/51_cron_ingest_token.sql</code>.</p>';
+        return;
+      }
+      const rows = r.data || [];
+      if (!rows.length) {
+        box.innerHTML = '<p class="ad-hint">No scheduled runs in the last 72 hours. Jobs fire at 05:00 and 05:15 UTC.</p>';
+        return;
+      }
+      const bad = rows.filter(function (q) { return q.http_status && +q.http_status >= 300; }).length;
+      if (badge) badge.textContent = bad ? '· ' + bad + ' failed' : '· all healthy';
+      box.innerHTML = '<div class="ad-list">' + rows.map(function (q) {
+        const code = q.http_status == null ? null : +q.http_status;
+        // pg_net drops response bodies after a few hours, so an older run legitimately
+        // has no reply on record. That is unknown, not failure — don't cry wolf.
+        const dot = code == null ? '⚪' : (code < 300 ? '🟢' : '🔴');
+        const verdict = code == null ? 'reply no longer on record'
+          : (code < 300 ? 'HTTP ' + code + ' — ran' : 'HTTP ' + code + ' — DID NOT RUN');
+        return '<div class="ad-list-row"><div style="flex:1">' +
+          '<strong>' + dot + ' ' + esc(String(q.jobname || '').replace('eventually-ingest-', '')) + '</strong> ' +
+          '<span class="ad-hint">· ' + esc(new Date(q.queued).toLocaleString()) + '</span>' +
+          '<span class="ad-hint" style="display:block">scheduler said <b>' + esc(q.cron_status || '?') + '</b> · ' + verdict + '</span>' +
+          (code != null && code >= 300 && q.response
+            ? '<span class="ad-hint" style="display:block;color:#b3402a">' + esc(String(q.response).slice(0, 140)) + '</span>' : '') +
+        '</div></div>';
+      }).join('') + '</div>';
+    }, function () { box.innerHTML = '<p class="ad-hint">Failed to load scheduled runs.</p>'; });
   }
 
   // Contact Sales inbox. Rows stay until you mark them done, so the list is a to-do
