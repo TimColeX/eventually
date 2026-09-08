@@ -96,13 +96,24 @@
             '<label>Event name<input class="f-name" placeholder="Midnight Rooftop Sessions"></label>' +
             '<div class="co-row co-row-2">' +
               '<label>Category<select class="f-cat">' + cats + '</select></label>' +
-              '<label>Venue <span class="co-opt">(optional)</span><input class="f-venue" placeholder="The Roundhouse"></label>' +
+              // Was collected and silently discarded for months — there was no
+              // column for it. Now stored, and required, because "Abuja" is not
+              // somewhere a person can turn up to.
+              '<label>Venue<input class="f-venue" placeholder="The Roundhouse"></label>' +
             '</div>' +
+            '<label>Address <span class="co-opt">(filled in from the map — edit if needed)</span>' +
+              '<input class="f-address" placeholder="1 Aguiyi Ironsi St, Maitama, Abuja"></label>' +
             '<label>Date<input type="date" class="f-date"></label>' +
             '<div class="co-row co-row-2">' +
               '<label>Start<input type="time" class="f-time" value="19:00"></label>' +
               '<label>End <span class="co-opt">(optional)</span><input type="time" class="f-endtime"></label>' +
             '</div>' +
+            // The times above are wall-clock AT THE VENUE. Without this the
+            // browser silently applied the organiser's own zone, so a 7 p.m.
+            // Abuja event published from Canada was stored as 2 a.m. Abuja.
+            '<label class="co-tz-l">Time zone of the venue' +
+              '<select class="f-tz"></select></label>' +
+            '<p class="co-tz-note" aria-live="polite"></p>' +
             '<label>Description<textarea class="f-desc" rows="3" placeholder="Tell people what to expect…"></textarea></label>' +
             // How people get in. Previously one optional URL box, which left the
             // commonest native case — a free talk with no ticketing at all —
@@ -169,6 +180,26 @@
     });
     this._syncRegMode();
 
+    // Time zone: default to the organiser's own until a place says otherwise.
+    const TZ = global.EventuallyTZ;
+    if (TZ) {
+      this.timezone = this.timezone || TZ.local;
+      this._tzSure = true;                 // publishing at home is the common case
+      this._fillTzOptions(null);
+      const tzSel = this.el.querySelector('.f-tz');
+      tzSel.addEventListener('change', function () {
+        self.timezone = tzSel.value;
+        self._tzTouched = true;            // never overwrite a deliberate choice
+        self._syncTzNote();
+      });
+      // The confirmation line has to track the date and time boxes too, or it
+      // reassures the organiser about a time they've since changed.
+      ['.f-date', '.f-time'].forEach(function (s) {
+        const el = self.el.querySelector(s);
+        if (el) el.addEventListener('change', function () { self._syncTzNote(); });
+      });
+    }
+
     // Default the date to today; allow today .. +60 days (the forward window).
     const dateEl = this.el.querySelector('.f-date');
     const t = global.EventuallyData.TODAY;
@@ -192,7 +223,9 @@
       // name the dropped pin (best-effort reverse geocode)
       const at = { lat: self.pin.lat, lon: self.pin.lon };
       if (Geo) Geo.reverse(at.lat, at.lon).then(function (res) {
-        if (res && self.pin.lat === at.lat && self.pin.lon === at.lon) { self.city = res.city; self._drawMap(); }
+        if (res && self.pin.lat === at.lat && self.pin.lon === at.lon) {
+          self.city = res.city; self._adoptPlace(res); self._drawMap();
+        }
       }).catch(function () {});
     });
 
@@ -205,6 +238,7 @@
     function pick(res) {
       self.pin.lat = res.lat; self.pin.lon = res.lon; self.city = res.city;
       self.locationChosen = true;           // picking a searched address counts
+      self._adoptPlace(res);
       var m1 = self.el.querySelector('.co-loc'); if (m1) m1.classList.remove('co-need-loc');
       addr.value = res.city || (res.label || '').split(',')[0];
       hideSuggest(); self._drawMap();
@@ -342,10 +376,27 @@
     const dateStr = q('.f-date').value;
     if (!dateStr) { this._toast('Pick a date.'); return; }
     const timeStr = (q('.f-time').value || '19:00');
-    const date = new Date(dateStr + 'T' + timeStr + ':00');
+    const TZ = global.EventuallyTZ;
+    const zone = this.timezone || (TZ && TZ.local) || 'UTC';
+    // `new Date('2026-09-07T19:00')` reads the string in the BROWSER's zone. That
+    // is the bug: it turned 7 p.m. in Abuja into 2 a.m. in Abuja whenever the
+    // organiser wasn't sitting in Abuja. The wall clock belongs to the VENUE.
+    const dp = dateStr.split('-'), tp = timeStr.split(':');
+    const date = TZ ? TZ.fromWallClock(+dp[0], +dp[1], +dp[2], +tp[0], +tp[1], zone)
+                    : new Date(dateStr + 'T' + timeStr + ':00');
     const endStr = q('.f-endtime').value;
-    const endsAt = endStr ? new Date(dateStr + 'T' + endStr + ':00') : null;
+    let endsAt = null;
+    if (endStr) {
+      const ep = endStr.split(':');
+      endsAt = TZ ? TZ.fromWallClock(+dp[0], +dp[1], +dp[2], +ep[0], +ep[1], zone)
+                  : new Date(dateStr + 'T' + endStr + ':00');
+      // An end time before the start means it runs past midnight into the next day.
+      if (endsAt <= date) endsAt = new Date(endsAt.getTime() + 86400000);
+    }
     const venue = q('.f-venue').value.trim();
+    const address = q('.f-address').value.trim();
+    // A pin gives a dot on a globe; a venue gives somewhere to turn up to.
+    if (!venue) { this._toast('Add the venue — people need somewhere to go, not just a city.'); q('.f-venue').focus(); return; }
     const today = global.EventuallyData.TODAY;
     const dayOffset = Math.round((date - today) / 86400000);
     if (dayOffset < 0) { this._toast('Pick a date from today onward.'); return; }
@@ -369,6 +420,7 @@
 
     const evt = {
       id: id, name: name, city: this.city || 'Dropped pin', venue: venue || null, endsAt: endsAt,
+      address: address || null, timezone: zone,
       lat: this.pin.lat, lon: this.pin.lon,
       date: date, dayOffset: dayOffset, category: cat,
       categoryColor: global.EventuallyData.CATEGORIES[cat],
@@ -398,6 +450,71 @@
     });
   };
 
+  /* A place was picked (searched, or a dropped pin that reverse-geocoded).
+     Adopt what it tells us: the venue's time zone, and the address — so the
+     organiser doesn't retype what the map already knows. Anything they have
+     already typed themselves is left alone. */
+  Coordinator.prototype._adoptPlace = function (res) {
+    if (!res) return;
+    const TZ = global.EventuallyTZ;
+    const addrEl = this.el.querySelector('.f-address');
+    const venueEl = this.el.querySelector('.f-venue');
+    if (addrEl && !addrEl.value.trim() && res.label) addrEl.value = res.label;
+    if (venueEl && !venueEl.value.trim() && res.venue) venueEl.value = res.venue;
+
+    if (!TZ) return;
+    const g = TZ.guess(res.countryCode);
+    // Only move the zone if the organiser hasn't overridden it by hand — their
+    // choice must not be undone by a later tweak to the pin.
+    if (!this._tzTouched) { this.timezone = g.zone; this._tzSure = g.sure; this._fillTzOptions(g); }
+    this._syncTzNote();
+  };
+
+  // Populate the zone picker: the likely candidates first, then everything.
+  Coordinator.prototype._fillTzOptions = function (g) {
+    const sel = this.el.querySelector('.f-tz');
+    const TZ = global.EventuallyTZ;
+    if (!sel || !TZ) return;
+    const chosen = this.timezone || TZ.local;
+    const near = [];
+    if (g && g.options) g.options.forEach(function (z) { near.push(z); });
+    if (near.indexOf(chosen) === -1) near.unshift(chosen);
+    if (near.indexOf(TZ.local) === -1) near.push(TZ.local);
+
+    const all = TZ.allZones().filter(function (z) { return near.indexOf(z) === -1; });
+    const opt = function (z) {
+      return '<option value="' + z + '"' + (z === chosen ? ' selected' : '') + '>' + TZ.label(z) + '</option>';
+    };
+    sel.innerHTML =
+      '<optgroup label="Likely">' + near.map(opt).join('') + '</optgroup>' +
+      '<optgroup label="All time zones">' + all.map(opt).join('') + '</optgroup>';
+  };
+
+  /* Say back, in plain words, exactly what will be stored. This line is the real
+     safeguard: a wrong zone is invisible until someone states the consequence. */
+  Coordinator.prototype._syncTzNote = function () {
+    const note = this.el.querySelector('.co-tz-note');
+    const TZ = global.EventuallyTZ;
+    if (!note || !TZ) return;
+    const q = function (s) { return this.el.querySelector(s); }.bind(this);
+    const dateStr = q('.f-date').value, timeStr = q('.f-time').value || '19:00';
+    if (!dateStr) { note.textContent = ''; return; }
+    const p = dateStr.split('-'), t = timeStr.split(':');
+    const zone = this.timezone || TZ.local;
+    const when = TZ.fromWallClock(+p[0], +p[1], +p[2], +t[0], +t[1], zone);
+    const at = TZ.format(when, zone, { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+
+    let msg = 'Starts <b>' + at + ' ' + (TZ.abbr(when, zone) || TZ.label(zone)) + '</b>.';
+    // Only mention the reader's own clock when it actually differs — otherwise
+    // it is noise on the overwhelmingly common "publishing at home" case.
+    if (!TZ.sameAsLocal(when, zone)) {
+      msg += ' That is ' + TZ.format(when, TZ.local, { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) + ' your time.';
+    }
+    if (!this._tzSure && !this._tzTouched) msg += ' <b class="co-tz-check">Please check this is right.</b>';
+    note.innerHTML = msg;
+    note.classList.toggle('warn', !this._tzSure && !this._tzTouched);
+  };
+
   // Show only the follow-up field the chosen entry method needs.
   Coordinator.prototype._syncRegMode = function () {
     const q = function (s) { return this.el.querySelector(s); }.bind(this);
@@ -414,6 +531,13 @@
     q('.f-name').value = ''; q('.f-desc').value = ''; q('.f-url').value = '';
     q('.f-reg-link').checked = true; q('.f-capacity').value = '';
     this._syncRegMode();
+    if (q('.f-address')) q('.f-address').value = '';
+    // A fresh form is the organiser's own zone again, and untouched.
+    const TZR = global.EventuallyTZ;
+    if (TZR) {
+      this.timezone = TZR.local; this._tzTouched = false; this._tzSure = true;
+      this._fillTzOptions(null); this._syncTzNote();
+    }
     if (q('.f-venue')) q('.f-venue').value = '';
     if (q('.f-time')) q('.f-time').value = '19:00';
     if (q('.f-endtime')) q('.f-endtime').value = '';
@@ -434,12 +558,31 @@
     this.locationChosen = true;              // an existing event already has a location
     q('.f-name').value = ev.title || '';
     q('.f-cat').value = ev.category || q('.f-cat').value;
+    // Restore the zone BEFORE the clock, because the clock is read back in it.
+    const TZ = global.EventuallyTZ;
+    this.timezone = (TZ && TZ.valid(ev.timezone) && ev.timezone) || (TZ && TZ.local) || 'UTC';
+    this._tzTouched = !!ev.timezone;         // a stored zone is a decision already made
+    this._tzSure = true;
+    if (TZ) this._fillTzOptions(null);
+
     if (ev.start_time) {
       const d = new Date(ev.start_time);
-      q('.f-date').value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-      if (q('.f-time')) q('.f-time').value = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+      // Show the wall clock AT THE VENUE. Reading getHours() here would display
+      // the organiser's own zone and then re-save that as the venue's — the
+      // original bug, running backwards through the edit form.
+      const w = TZ ? TZ.toWallClock(d, this.timezone)
+                   : { y: d.getFullYear(), mo: d.getMonth() + 1, d: d.getDate(), h: d.getHours(), mi: d.getMinutes() };
+      q('.f-date').value = w.y + '-' + String(w.mo).padStart(2, '0') + '-' + String(w.d).padStart(2, '0');
+      if (q('.f-time')) q('.f-time').value = String(w.h).padStart(2, '0') + ':' + String(w.mi).padStart(2, '0');
+    }
+    if (ev.end_time && q('.f-endtime')) {
+      const e2 = new Date(ev.end_time);
+      const we = TZ ? TZ.toWallClock(e2, this.timezone)
+                    : { h: e2.getHours(), mi: e2.getMinutes() };
+      q('.f-endtime').value = String(we.h).padStart(2, '0') + ':' + String(we.mi).padStart(2, '0');
     }
     if (q('.f-venue')) q('.f-venue').value = ev.venue || '';
+    if (q('.f-address')) q('.f-address').value = ev.address || '';
     q('.f-desc').value = ev.description || '';
     q('.f-url').value = ev.url || '';
     // Restore the entry method: registrations on, else a link, else nothing.
@@ -449,11 +592,17 @@
     else q('.f-reg-none').checked = true;
     this._syncRegMode();
     this.pin = { lat: +ev.lat, lon: +ev.lon }; this.city = ev.city || null;
+    this._syncTzNote();
     q('.co-publish').textContent = 'Update event';
     const h = this.el.querySelector('.co-form-h'); if (h) h.textContent = 'Editing: ' + (ev.title || 'event');
     const cancel = this.el.querySelector('.co-cancel-edit'); if (cancel) cancel.style.display = '';
     this._drawMap();
-    this.el.querySelector('.co-shell').scrollTop = 0;
+    // `.co-shell` never existed — this line threw on every single edit. It sits
+    // last, so the form was already populated and the damage was an uncaught
+    // TypeError rather than a broken form, which is why it survived unnoticed.
+    // The actual scroll container is .co-body.
+    const shell = this.el.querySelector('.co-body');
+    if (shell) shell.scrollTop = 0;
   };
 
   Coordinator.prototype._drawMap = function () {

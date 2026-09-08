@@ -112,7 +112,11 @@
       const row = {
         event_id: evt.id, title: evt.name, description: evt.description || null,
         category: evt.category, start_time: evt.date.toISOString(),
+        end_time: evt.endsAt ? evt.endsAt.toISOString() : null,
         city: evt.city || null, country: evt.country || null, lat: evt.lat, lon: evt.lon,
+        // The zone the wall-clock was entered in. Without it the reader's own
+        // clock gets applied to somebody else's city.
+        timezone: evt.timezone || null, venue: evt.venue || null, address: evt.address || null,
         // When billing is live, featuring is granted server-side only (free quota
         // RPC or paid webhook) — never trust the client to self-feature.
         display_source: 'native', is_native: true, published: true,
@@ -143,7 +147,10 @@
       if (!currentUser) return Promise.resolve({ error: { message: 'Not signed in' } });
       return sb.from('events').update({
         title: evt.name, description: evt.description || null, category: evt.category,
-        start_time: evt.date.toISOString(), city: evt.city || null, lat: evt.lat, lon: evt.lon,
+        start_time: evt.date.toISOString(),
+        end_time: evt.endsAt ? evt.endsAt.toISOString() : null,
+        city: evt.city || null, lat: evt.lat, lon: evt.lon,
+        timezone: evt.timezone || null, venue: evt.venue || null, address: evt.address || null,
         collect_registrations: !!evt.collectRegistrations, capacity: evt.capacity || null
       }).eq('event_id', evt.id).eq('created_by', currentUser.id).then(logErr('updateEvent')).then(function (r) {
         if (r && r.error) return r;

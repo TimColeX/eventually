@@ -981,6 +981,11 @@ body.has-ad .toast { bottom: calc(144px + env(safe-area-inset-bottom, 0px)); }
   font-family: var(--font); font-weight: 700; font-size: 15px; letter-spacing: -0.01em; transition: background .15s; }
 .evd-tickets:hover { background: #b94e32; }
 .evd-note { margin: 11px 0 0; font-size: 12px; color: var(--hint); line-height: 1.5; }
+/* Zone tag beside an event's time — shown only when it differs from the reader's. */
+.evd-tz { display: inline-block; margin-left: 5px; padding: 1px 6px; border-radius: 5px;
+  background: var(--line-2); color: var(--muted); font-size: 10.5px; font-weight: 700;
+  letter-spacing: .03em; vertical-align: 1px; cursor: help; }
+.evd-addr { margin: 4px 0 0; font-size: 12px; color: var(--hint); line-height: 1.5; }
 
 /* ---------- Eventually-managed registration (event drawer) ---------- */
 .reg-loading { font-size: 12px; color: var(--hint); padding: 4px 0; }
@@ -1283,6 +1288,18 @@ body.has-ad .toast { bottom: calc(144px + env(safe-area-inset-bottom, 0px)); }
 .co-perk { margin: 0 0 8px; padding: 9px 12px; border-radius: 10px; background: #FBF3EC;
   border: 1px solid var(--line-2); font-size: 12px; line-height: 1.5; color: var(--muted); }
 .co-perk b { color: var(--ember); }
+
+/* ---------- publish form: venue time zone ---------- */
+.co-body .f-tz { width: 100%; }
+/* The confirmation line is the safeguard against a wrong zone slipping through,
+   so it has to look like a statement, not a hint. */
+.co-tz-note { margin: -4px 0 11px; padding: 8px 10px; border-radius: 9px;
+  background: #FBF3EC; border: 1px solid var(--line-2);
+  font-size: 11.5px; line-height: 1.5; color: var(--muted); }
+.co-tz-note:empty { display: none; }
+.co-tz-note b { color: var(--ink); }
+.co-tz-note.warn { background: #FDF1E7; border-color: #E9C9AE; }
+.co-tz-note .co-tz-check { color: var(--ember); }
 
 /* ---------- publish form: how people get in ---------- */
 .co-reg { margin: 0; padding: 12px; border: 1px solid var(--line-2); border-radius: 12px; background: #FDFBF8; }

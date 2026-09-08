@@ -805,8 +805,12 @@
 
   function eventCardHTML(ev) {
     const type = D.typeForDate(ev, selectedDate);
-    const dateLabel = ev.date.toLocaleDateString(undefined,
-      { weekday: 'short', month: 'short', day: 'numeric' });
+    // The card's date is the date AT THE VENUE — an 11 p.m. Lagos gig must not
+    // slide onto the next day just because the reader is further east.
+    const TZc = window.EventuallyTZ;
+    const dateLabel = (TZc && ev.timezone)
+      ? TZc.format(ev.date, ev.timezone, { weekday: 'short', month: 'short', day: 'numeric' })
+      : ev.date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
     const badge = type === 'live'
       ? '<span class="badge live">● Live today</span>'
       : '<span class="badge soon">Upcoming</span>';
@@ -1050,8 +1054,17 @@
     activeEventId = id; ev.clicks++;
     track('event_open', ev.city || null);
     const type = D.typeForDate(ev, selectedDate);
-    const dateLabel = ev.date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
-    const timeLabel = ev.date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    // Times are shown in the VENUE's zone, not the reader's. A gig in Lagos
+    // starts at 7 p.m. in Lagos whoever is looking at it from wherever.
+    const TZ = window.EventuallyTZ;
+    const zone = ev.timezone || null;
+    const inZone = function (d, o) { return (TZ && zone) ? TZ.format(d, zone, o) : d.toLocaleString(undefined, o); };
+    const dateLabel = inZone(ev.date, { weekday: 'long', month: 'long', day: 'numeric' });
+    const timeLabel = inZone(ev.date, { hour: 'numeric', minute: '2-digit' });
+    // Name the zone only when it differs from the reader's, so a local event
+    // isn't cluttered with a label that tells them nothing.
+    const tzTag = (TZ && zone && !TZ.sameAsLocal(ev.date, zone))
+      ? ' <span class="evd-tz" title="' + esc(TZ.label(zone)) + '">' + esc(TZ.abbr(ev.date, zone) || TZ.label(zone)) + '</span>' : '';
     const badge = type === 'live' ? '<span class="badge live">● Live today</span>'
       : (type === 'past' ? '<span class="badge past">Past</span>' : '<span class="badge soon">Upcoming</span>');
     const featured = ev.sponsored ? '<span class="badge featured">★ Featured</span>' : '';
@@ -1100,9 +1113,10 @@
       '<div class="evd-body">' +
         '<div class="evd-badges">' + featured + badge + '</div>' +
         '<h2 class="evd-title">' + esc(ev.name) + '</h2>' +
-        '<p class="evd-meta">' + esc(dateLabel) + ' · ' + timeLabel +
-          (ev.endsAt ? '–' + new Date(ev.endsAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : '') +
+        '<p class="evd-meta">' + esc(dateLabel) + ' · ' + esc(timeLabel) +
+          (ev.endsAt ? '–' + esc(inZone(new Date(ev.endsAt), { hour: 'numeric', minute: '2-digit' })) : '') + tzTag +
           '  —  ' + (ev.venue ? esc(ev.venue) + ', ' : '') + esc(ev.city) + '</p>' +
+        (ev.address ? '<p class="evd-addr">📍 ' + esc(ev.address) + '</p>' : '') +
         (type === 'upcoming' ? '<div class="evd-cd"><span class="cd-label">Starts in</span><span class="ev-cd" data-start="' + ev.date.getTime() + '">⏳ ' + esc(fmtCountdown(ev.date.getTime() - Date.now())) + '</span></div>' : '') +
         transparency +
         '<p class="evd-desc">' + esc(ev.description) + '</p>' +

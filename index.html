@@ -229,7 +229,7 @@
   <script>
     /* Build stamp. Must match sw.js CACHE and version.json — `node tools/bump-version.js`
        keeps all three in step. This is how a running app knows a newer one exists. */
-    window.EVENTUALLY_BUILD = 'v158';
+    window.EVENTUALLY_BUILD = 'v159';
     window.EVENTUALLY_CONFIG = {
       supabaseUrl: 'https://gpsetmqivzchlvyrcgld.supabase.co',
       supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdwc2V0bXFpdnpjaGx2eXJjZ2xkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1MDM2NzcsImV4cCI6MjA5ODA3OTY3N30.a0BB-FQDh5NKFvgxeSgJ3YmeN_HYOWGLOJza29wW8KI',
@@ -251,6 +251,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <!-- scripts: classic (file:// friendly), dependency order -->
+  <script src="src/tz.js"></script>
   <script src="src/dedup.js"></script>
   <script src="src/data.js"></script>
   <script src="src/api.js"></script>

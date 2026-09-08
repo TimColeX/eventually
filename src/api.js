@@ -72,6 +72,10 @@
       sources: sources, sourceCount: a.source_count || sources.length || 1,
       is_native: !!a.is_native, topScore: 1,
       collectRegistrations: !!a.collect_registrations,
+      // The venue's own zone. NULL for listings we couldn't place, in which case
+      // the UI falls back to the reader's clock as it always did.
+      timezone: a.timezone || null, venue: a.venue || null, address: a.address || null,
+      endsAt: a.end_time ? new Date(a.end_time) : null,
       cheapestId: a.cheapest_source_id || null, displaySource: ds
     };
   }

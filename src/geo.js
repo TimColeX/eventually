@@ -24,7 +24,13 @@
       line1: line1,
       region: a.state || a.region || a.county || null,
       postcode: a.postcode || null,
-      country: a.country || null
+      country: a.country || null,
+      // ISO 3166-1 alpha-2. The timezone guess keys off this, so it has to
+      // survive the trip out of Nominatim rather than being dropped like the
+      // venue field was.
+      countryCode: (a.country_code || '').toLowerCase() || null,
+      // A venue name when the pin is on an actual place rather than a street.
+      venue: a.amenity || a.building || a.tourism || a.leisure || a.shop || null
     };
   }
 
@@ -40,9 +46,10 @@
     reverse: function (lat, lon) {
       return nom('https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&lat=' + lat + '&lon=' + lon)
         .then(function (j) {
-          return j && j.address
-            ? { lat: lat, lon: lon, city: shortPlace(j.address) || (j.display_name || '').split(',')[0], label: j.display_name || '' }
-            : null;
+          if (!j || !j.address) return null;
+          const r = toResult(j);
+          r.lat = lat; r.lon = lon;      // keep the exact point that was tapped
+          return r;
         });
     }
   };
