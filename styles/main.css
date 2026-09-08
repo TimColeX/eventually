@@ -1261,3 +1261,8 @@ body.has-ad .toast { bottom: calc(144px + env(safe-area-inset-bottom, 0px)); }
 .an-updates .live-updates { margin: 0; }
 /* Shown to whoever is about to post — the two facts easiest to assume wrongly. */
 .lu-rules { margin: 7px 0 0; font-size: 11px; color: var(--faint); line-height: 1.45; }
+/* The live-updates benefit, shown in the publish form. Quiet, but present at the
+   moment someone is deciding whether to list here rather than only elsewhere. */
+.co-perk { margin: 0 0 8px; padding: 9px 12px; border-radius: 10px; background: #FBF3EC;
+  border: 1px solid var(--line-2); font-size: 12px; line-height: 1.5; color: var(--muted); }
+.co-perk b { color: var(--ember); }

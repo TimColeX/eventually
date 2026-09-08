@@ -126,6 +126,10 @@
         '<p class="ad-hint">Anyone who wanted to publish and couldn\'t. <b>Asked</b> means they sent you a message; <b>blocked</b> means they hit the limit and may not have emailed at all.</p>' +
         '<div id="pb-requests"><div class="ad-center">Loading…</div></div></div>' +
 
+        '<div class="ad-sec"><h2>Published on Eventually <span id="pe-count" class="ad-hint"></span></h2>' +
+        '<p class="ad-hint">Every event published through Eventually, newest first — the number that matters when the pitch to organisers is “list with us”. <b>Remove from globe</b> is reversible; <b>Delete</b> is not.</p>' +
+        '<div id="pe-sum"></div><div id="pe-list"><div class="ad-center">Loading…</div></div></div>' +
+
         '<div class="ad-sec"><h2>Publishers</h2>' +
         '<p class="ad-hint">Everyone who has published an event, most recent first. <b>Remaining</b> is what is left of their allowance in the current window — a publisher at <b>0</b> is blocked until you grant more.</p>' +
         '<div id="pb-roster"><div class="ad-center">Loading publishers…</div></div>' +
@@ -156,8 +160,9 @@
       document.getElementById('pb-find').onclick = lookupPublisher;
       document.getElementById('pb-q').addEventListener('keydown', function (e) { if (e.key === 'Enter') lookupPublisher(); });
       renderPublishingRequests();
+      renderNativeEvents();
       renderPublisherRoster();
-      document.getElementById('pb-refresh').onclick = function () { renderPublishingRequests(); renderPublisherRoster(); };
+      document.getElementById('pb-refresh').onclick = function () { renderPublishingRequests(); renderNativeEvents(); renderPublisherRoster(); };
     });
   }
 
@@ -208,6 +213,80 @@
         };
       });
     }, function () { box.innerHTML = '<p class="ad-hint">Failed to load requests.</p>'; });
+  }
+
+  /* Everything published through Eventually. Serves two jobs: the supply number
+     to watch while pitching organisers, and the only place an APPROVED event can
+     be reached — before this, approving one removed it from the review queue and
+     left no admin control over it at all. */
+  function renderNativeEvents() {
+    const box = document.getElementById('pe-list');
+    const sum = document.getElementById('pe-sum');
+    const badge = document.getElementById('pe-count');
+    if (!box) return;
+
+    sb.rpc('admin_native_summary').then(function (r) {
+      if (r.error || !r.data || !sum) return;
+      const d = r.data;
+      const kpi = function (v, l) { return '<div class="ad-kpi"><b>' + v + '</b><span>' + l + '</span></div>'; };
+      sum.innerHTML = '<div class="ad-grid" style="margin-bottom:14px">' +
+        kpi(d.total || 0, 'Published') + kpi(d.upcoming || 0, 'Upcoming') +
+        kpi(d.publishers || 0, 'Publishers') + kpi(d.last_30d || 0, 'New · 30d') +
+        kpi(d.pending || 0, 'Awaiting review') + kpi(d.off_globe || 0, 'Off globe') +
+        '</div>';
+    }, function () {});
+
+    sb.rpc('admin_native_events', { p_limit: 200 }).then(function (r) {
+      if (r.error) {
+        box.innerHTML = '<p class="ad-hint">Unavailable — run <code>backend/56_admin_native_events.sql</code>.</p>';
+        return;
+      }
+      const rows = r.data || [];
+      if (badge) badge.textContent = rows.length ? '· ' + rows.length : '';
+      if (!rows.length) {
+        box.innerHTML = '<p class="ad-hint">Nothing published through Eventually yet. Every listing so far came from Ticketmaster or a venue feed.</p>';
+        return;
+      }
+      box.innerHTML = '<div class="ad-list">' + rows.map(function (e) {
+        const flags = [];
+        if (e.moderation === 'pending') flags.push('⏳ awaiting review');
+        else if (e.moderation === 'rejected') flags.push('✕ rejected');
+        if (e.published === false) flags.push('off globe');
+        if (e.chat_enabled) flags.push('live updates on');
+        return '<div class="ad-list-row"><div style="flex:1">' +
+          '<strong>' + (e.upcoming ? '' : '· ') + esc(e.title || '(untitled)') + '</strong>' +
+          '<span class="ad-hint" style="display:block">' +
+            esc(e.city || '—') + ' · ' + esc(new Date(e.start_time).toLocaleDateString()) +
+            ' · by ' + esc(e.publisher || 'unknown') +
+            (flags.length ? ' · ' + esc(flags.join(' · ')) : '') + '</span>' +
+          '<span class="ad-hint" style="display:block">★ ' + (+e.saves || 0) +
+            ' · ♥ ' + (+e.likes || 0) + ' · ✓ ' + (+e.attends || 0) +
+            ' · ' + (+e.clicks || 0) + ' ticket clicks</span>' +
+        '</div><div class="ad-row-actions">' +
+          '<button class="ad-btn ghost" data-pe-pub="' + esc(e.event_id) + '" data-on="' + (e.published === false ? '1' : '0') + '">' +
+            (e.published === false ? 'Put back' : 'Remove from globe') + '</button>' +
+          '<button class="ad-btn ghost" data-pe-del="' + esc(e.event_id) + '" data-title="' + esc(e.title || '') + '">Delete</button>' +
+        '</div></div>';
+      }).join('') + '</div>';
+
+      box.querySelectorAll('[data-pe-pub]').forEach(function (b) {
+        b.onclick = function () {
+          b.disabled = true;
+          sb.rpc('admin_set_published', { p_event_id: b.dataset.pePub, p_on: b.dataset.on === '1' })
+            .then(renderNativeEvents, function () { b.disabled = false; });
+        };
+      });
+      box.querySelectorAll('[data-pe-del]').forEach(function (b) {
+        b.onclick = function () {
+          // Permanent, and it takes the saves and attendees with it. Name the
+          // event in the prompt so a mis-click on a dense list can't slip through.
+          if (!confirm('Permanently delete "' + b.dataset.title + '"?\n\nThis cannot be undone. Saves, likes and attendees go with it.\n\nTo take it off the globe without deleting, use “Remove from globe”.')) return;
+          b.disabled = true;
+          sb.rpc('admin_delete_event', { p_event_id: b.dataset.peDel })
+            .then(renderNativeEvents, function () { b.disabled = false; });
+        };
+      });
+    }, function () { box.innerHTML = '<p class="ad-hint">Failed to load.</p>'; });
   }
 
   function renderPublisherRoster() {
