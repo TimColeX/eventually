@@ -1143,15 +1143,20 @@
       if (!st || !st.open) { box.innerHTML = '<p class="evd-note">Registration isn\'t open for this event.</p>'; return; }
       const taken = st.taken || 0;
       const left = st.places_left;
-      const count = taken === 0 ? 'Be the first to register'
-        : taken + (taken === 1 ? ' person has registered' : ' people have registered');
+      // "Be the first to register" is an INVITATION, so it may only appear where
+      // registering is actually possible. Rendering it above "Registration has
+      // closed" put two true statements together and made nonsense of both.
+      const tally = taken + (taken === 1 ? ' person has registered' : ' people have registered');
+      const count = taken === 0 ? 'Be the first to register' : tally;
       const places = (left == null) ? '' :
         (left === 0 ? '<span class="reg-full">Full</span>'
                     : '<span class="reg-left">' + left + ' place' + (left === 1 ? '' : 's') + ' left</span>');
 
       if (st.closed) {
-        box.innerHTML = '<div class="reg-count">' + count + '</div>' +
-          '<p class="evd-note">Registration has closed.</p>';
+        box.innerHTML = (taken > 0 ? '<div class="reg-count">' + tally + '</div>' : '') +
+          '<p class="evd-note">' + (st.ended
+            ? 'This event has finished, so registration is closed.'
+            : 'Registration isn\'t open for this event at the moment.') + '</p>';
         return;
       }
       if (st.registered) {
