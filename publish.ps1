@@ -5,9 +5,14 @@
 # Replaces the old drag-and-drop upload, which silently dropped files twice.
 # A push here either lands completely or fails and says why.
 #
-# The pull comes first on purpose: the daily SEO Action commits the generated
-# city pages straight to the repo, so its work has to come down before yours
-# goes up — otherwise you'd eventually overwrite fresh pages with stale ones.
+# Your work is SAVED FIRST, then the pull happens. It used to be the other way
+# round, which meant `git pull --rebase` hit your uncommitted edits and refused
+# with "cannot pull with rebase: You have unstaged changes" — i.e. it failed
+# every time there was actually something to publish.
+#
+# The pull still has to happen before the push: the daily SEO Action commits the
+# generated city pages straight to the repo, so its work has to come down before
+# yours goes up, or you'd overwrite fresh pages with stale ones.
 
 param([string]$Message = "Update site")
 
@@ -15,16 +20,7 @@ $ErrorActionPreference = "Stop"
 Set-Location -Path $PSScriptRoot
 
 Write-Host ""
-Write-Host "1/4  Fetching anything new from GitHub..." -ForegroundColor Cyan
-git pull --rebase
-if ($LASTEXITCODE -ne 0) {
-  Write-Host ""
-  Write-Host "Pull failed - nothing has been sent. Send the message above to Claude." -ForegroundColor Red
-  exit 1
-}
-
-Write-Host ""
-Write-Host "2/4  Checking what changed..." -ForegroundColor Cyan
+Write-Host "1/4  Checking what changed..." -ForegroundColor Cyan
 git add -A
 $changes = git status --porcelain
 if (-not $changes) {
@@ -34,9 +30,18 @@ if (-not $changes) {
 git status --short
 
 Write-Host ""
-Write-Host "3/4  Saving..." -ForegroundColor Cyan
+Write-Host "2/4  Saving..." -ForegroundColor Cyan
 git commit -m $Message
 if ($LASTEXITCODE -ne 0) { Write-Host "Commit failed." -ForegroundColor Red; exit 1 }
+
+Write-Host ""
+Write-Host "3/4  Fetching anything new from GitHub..." -ForegroundColor Cyan
+git pull --rebase
+if ($LASTEXITCODE -ne 0) {
+  Write-Host ""
+  Write-Host "Pull failed - your work is SAVED but not sent. Send the message above to Claude." -ForegroundColor Red
+  exit 1
+}
 
 Write-Host ""
 Write-Host "4/4  Publishing..." -ForegroundColor Cyan
