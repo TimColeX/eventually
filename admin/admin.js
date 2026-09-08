@@ -1562,7 +1562,8 @@
   }
 
   /* ---------------- Globe & Display config ---------------- */
-  /* Live chat — the per-event switch (Phase 0 of the "From the Ground" spec).
+  /* Live updates — the per-event switch. Named to match the app: the feature is
+     one-way, so calling it "chat" would promise replying that does not exist.
      Deliberately just the toggle: no messages, no realtime, nothing in the app
      reads chat_enabled yet. It exists so one real event can be switched on and
      seeded before the rest of the feature is built. */
@@ -1681,8 +1682,8 @@
           '<span class="ad-saved" id="feed-msg"></span>' +
         '</div></div>' +
 
-        '<div class="ad-sec"><h2>Live chat <span class="ad-hint">· experiment</span></h2>' +
-        '<p class="ad-hint">Switches the temporary event chat on for one event. Events published through Eventually get it automatically; anything else needs turning on here. The chat opens an hour before the start and closes an hour after the end — <b>nothing in the app reads this yet</b>, so switching it on is safe.</p>' +
+        '<div class="ad-sec"><h2>Live updates <span class="ad-hint">· experiment</span></h2>' +
+        '<p class="ad-hint">Lets the organiser post live updates on an event page while it is running — doors, parking, running late. Events published through Eventually get it automatically; anything else needs turning on here. It opens an hour before the start and closes an hour after the end, and the updates are deleted with it.</p>' +
         '<div class="ad-row"><div class="ad-field" style="flex:1"><label>Find an event</label>' +
           '<input id="lc-q" placeholder="Title or city — e.g. Regina"></div>' +
           // flex:none, or .ad-row .ad-field{flex:1} gives the button half the row.

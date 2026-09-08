@@ -1259,3 +1259,5 @@ body.has-ad .toast { bottom: calc(144px + env(safe-area-inset-bottom, 0px)); }
 /* Live updates inside a My Events row — same feed, publisher's side of it. */
 .an-updates { margin-top: 10px; }
 .an-updates .live-updates { margin: 0; }
+/* Shown to whoever is about to post — the two facts easiest to assume wrongly. */
+.lu-rules { margin: 7px 0 0; font-size: 11px; color: var(--faint); line-height: 1.45; }

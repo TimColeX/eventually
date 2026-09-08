@@ -87,10 +87,14 @@
       }).join('') + '</ul>';
     }
 
+    /* Say what posting does BEFORE they post, not in the terms. Someone about to
+       publish to strangers should know it is public and that it won't survive the
+       night — both are easy to assume the other way round. */
     const composer = f.can_post
       ? '<form class="lu-post"><input class="lu-input" maxlength="280" ' +
         'placeholder="Post an update to everyone here…"><button type="submit">Post</button>' +
-        '<span class="lu-msg"></span></form>'
+        '<span class="lu-msg"></span></form>' +
+        '<p class="lu-rules">Posted publicly to anyone viewing this event. Deleted when it ends.</p>'
       : '';
 
     box.innerHTML =
