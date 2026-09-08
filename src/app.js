@@ -1060,9 +1060,18 @@
         '<small>Listings grouped automatically — every original source is preserved.</small></div>' : '';
     let avail;
     if (ev.is_native) {
-      avail = '<div class="evd-section"><div class="evd-sec-h">Hosted on Eventually</div>' +
-        '<button class="native-cta" data-register="' + ev.id + '">Register on this platform</button>' +
-        '<p class="evd-note">Hosted natively on Eventually — no external ticketing needed.</p></div>';
+      /* Native events used to show a "Register on this platform" button that did
+         nothing, above a line claiming no external ticketing was needed. Eventually
+         doesn't take registrations, so the button was a dead end and the claim was
+         untrue — the worst combination to put in front of an organiser.
+         What we actually have is the optional booking link they supplied. */
+      avail = '<div class="evd-section"><div class="evd-sec-h">Published on Eventually</div>' +
+        (ev.ticketUrl
+          ? '<a class="native-cta" href="' + esc(ev.ticketUrl) + '" target="_blank" rel="noopener">' +
+              'Book with the organiser ↗</a>' +
+            '<p class="evd-note">Booking is handled by the organiser — Eventually doesn\'t sell or hold tickets for this event.</p>'
+          : '<p class="evd-note">The organiser hasn\'t added a booking link. Tap <b>✓</b> above to say you\'re going, and check their own channels for details.</p>') +
+        '</div>';
     } else if (ev.ticketUrl) {
       // Single, clean CTA → the official provider via the /go redirect (affiliate
       // resolved server-side). No prices, no "buy through Eventually". The LABEL adapts:
@@ -1114,7 +1123,6 @@
 
   eventEl.addEventListener('click', function (e) {
     if (e.target.closest('.evd-x') || e.target.closest('.evd-back')) { closeEvent(); return; }
-    if (e.target.closest('[data-register]')) { window.EventuallyToast('Registration (demo) — native Eventually event.'); return; }
     const tix = e.target.closest('[data-tickets]');
     if (tix) {
       // The anchor navigates to /go (server resolves affiliate + logs the click);

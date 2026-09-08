@@ -973,7 +973,7 @@ body.has-ad .toast { bottom: calc(144px + env(safe-area-inset-bottom, 0px)); }
 .avail-tag { font-family: var(--mono); font-size: 9px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--cream); background: var(--clay); padding: 2px 7px; border-radius: 5px; }
 .avail-price { font-weight: 800; font-size: 14.5px; color: var(--ink); }
 .avail-go { color: var(--clay); font-weight: 700; }
-.native-cta { width: 100%; padding: 14px; border-radius: 12px; cursor: pointer; background: var(--clay); color: var(--cream); border: 0; font-family: var(--font); font-weight: 700; font-size: 15px; }
+.native-cta { display: block; width: 100%; box-sizing: border-box; padding: 14px; border-radius: 12px; cursor: pointer; background: var(--clay); color: var(--cream); border: 0; font-family: var(--font); font-weight: 700; font-size: 15px; text-align: center; text-decoration: none; }
 .native-cta:hover { background: #b94e32; }
 /* Outbound "Get Tickets" CTA → the official provider via the /go redirect. */
 .evd-tickets { display: block; width: 100%; box-sizing: border-box; text-align: center; text-decoration: none;
