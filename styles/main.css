@@ -1225,3 +1225,34 @@ body.has-ad .toast { bottom: calc(144px + env(safe-area-inset-bottom, 0px)); }
 .pl-send:disabled { opacity: .6; cursor: default; }
 .pl-mail { font-size: 12.5px; color: var(--muted); }
 .pl-ok { margin-top: 12px !important; color: var(--clay) !important; font-weight: 600; }
+
+/* ---------- live updates from the organiser (event drawer) ----------
+   One-way feed, open only while the event runs. Deliberately quieter than the
+   Get Tickets button above it: during a live event this is the more useful
+   thing on the panel, but it should not compete with the primary action. */
+.live-updates { margin: 16px 0 0; padding: 13px 14px; border: 1px solid var(--line-2);
+  border-radius: 12px; background: #FBF3EC; }
+.lu-head { display: flex; align-items: center; gap: 7px; margin-bottom: 9px; }
+.lu-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--hint); flex: none; }
+.lu-dot.on { background: var(--clay); animation: lupulse 1.8s ease-in-out infinite; }
+@keyframes lupulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .lu-dot.on { animation: none; } }
+.lu-title { font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ember); font-weight: 700; }
+.lu-when { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--faint); }
+.lu-none { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.5; }
+.lu-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.lu-list li { display: flex; flex-direction: column; gap: 2px; padding-bottom: 9px;
+  border-bottom: 1px solid var(--line); }
+.lu-list li:last-child { border-bottom: 0; padding-bottom: 0; }
+.lu-body { font-size: 13.5px; color: var(--ink); line-height: 1.45; overflow-wrap: anywhere; }
+.lu-list .lu-when { margin-left: 0; }
+.lu-post { display: flex; gap: 6px; margin-top: 11px; flex-wrap: wrap; }
+.lu-input { flex: 1; min-width: 0; padding: 8px 11px; border-radius: 999px;
+  border: 1px solid var(--line-2); background: var(--paper); color: var(--ink);
+  font-family: var(--font); font-size: 13px; outline: none; }
+.lu-input:focus { border-color: var(--clay); }
+.lu-post button { flex: none; padding: 8px 15px; border: 0; border-radius: 999px;
+  background: var(--clay); color: var(--cream); font-family: var(--font);
+  font-weight: 700; font-size: 13px; cursor: pointer; }
+.lu-msg { flex-basis: 100%; font-size: 11.5px; color: var(--ember); }

@@ -1100,12 +1100,17 @@
           '<button class="ev-like' + (ev.userLiked ? ' on' : '') + '" data-act="like">♥ <span class="n">' + ev.likes.toLocaleString() + '</span></button>' +
           '<button class="ev-attend' + (ev.userAttending ? ' on' : '') + '" data-act="attend">✓ <span class="n">' + ev.attending.toLocaleString() + '</span></button>' +
           '<button class="ev-save' + (P.isSaved(ev.id) ? ' on' : '') + '" data-act="save">' + (P.isSaved(ev.id) ? '★' : '☆') + '</button>' +
-        '</div>' + avail + adSlot('panel') +
+        '</div>' +
+        '<div class="live-updates" hidden></div>' +
+        avail + adSlot('panel') +
       '</div>';
+    // Live updates from the organiser. Hidden unless the server says the window
+    // is open, so a closed or disabled event shows nothing at all.
+    if (window.EventuallyUpdates) window.EventuallyUpdates.mount(eventScroll.querySelector('.live-updates'), ev.id);
     M.mountAdSense(eventScroll);
     eventEl.classList.add('open');
   }
-  function closeEvent() { eventEl.classList.remove('open'); activeEventId = null; }
+  function closeEvent() { eventEl.classList.remove('open'); activeEventId = null; if (window.EventuallyUpdates) window.EventuallyUpdates.unmount(); }
 
   eventEl.addEventListener('click', function (e) {
     if (e.target.closest('.evd-x') || e.target.closest('.evd-back')) { closeEvent(); return; }
