@@ -20,8 +20,10 @@
   const KEY = cfg.supabaseAnonKey || '';
   const ENABLED = !!(BASE && KEY);
 
-  let channel = null;      // realtime subscription for the event on screen
-  let currentId = null;
+  /* One entry per mounted feed. My Events can show several at once — an
+     organiser with two events running tonight — so state is keyed to the box
+     rather than held as a single "current" feed. */
+  const mounted = new Map();   // box element -> { eventId, channel }
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"]/g, function (m) {
@@ -66,7 +68,7 @@
     return 'closes ' + new Date(f.closes_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   }
 
-  function render(box, f) {
+  function render(box, f, eventId) {
     const list = f.updates || [];
     const live = f.state === 'live';
 
@@ -107,9 +109,9 @@
         const body = input.value.trim();
         if (!body) return;
         input.disabled = true;
-        rpc('post_event_update', { p_event_id: currentId, p_body: body }).then(function (r) {
+        rpc('post_event_update', { p_event_id: eventId, p_body: body }).then(function (r) {
           input.disabled = false;
-          if (r && r.ok) { input.value = ''; msg.textContent = ''; load(box, currentId); return; }
+          if (r && r.ok) { input.value = ''; msg.textContent = ''; load(box, eventId); return; }
           const why = (r && r.reason) || 'error';
           msg.textContent = why === 'too_fast' ? 'Give it a few seconds.'
             : why === 'not_allowed' ? 'You can\'t post to this event.'
@@ -123,7 +125,7 @@
     return rpc('event_update_feed', { p_event_id: eventId }).then(function (f) {
       if (!f || !f.open) { box.innerHTML = ''; box.hidden = true; return false; }
       box.hidden = false;
-      render(box, f);
+      render(box, f, eventId);
       return true;
     });
   }
@@ -132,41 +134,48 @@
      refreshing. Falls back silently to the loaded snapshot if the socket can't
      be established — the feed is still correct, just not live. */
   function subscribe(box, eventId) {
-    unsubscribe();
     try {
       const A = global.EventuallyAuth;
-      if (!A || !A.client) return;
-      channel = A.client
-        .channel('updates:' + eventId)
+      if (!A || !A.client) return null;
+      return A.client
+        .channel('updates:' + eventId + ':' + Math.random().toString(36).slice(2, 8))
         .on('postgres_changes',
             { event: 'INSERT', schema: 'public', table: 'event_updates', filter: 'event_id=eq.' + eventId },
             function () { load(box, eventId); })
         .subscribe();
-    } catch (e) { channel = null; }
+    } catch (e) { return null; }
   }
 
-  function unsubscribe() {
+  function drop(box) {
+    const m = mounted.get(box);
+    if (!m) return;
     try {
       const A = global.EventuallyAuth;
-      if (channel && A && A.client) A.client.removeChannel(channel);
+      if (m.channel && A && A.client) A.client.removeChannel(m.channel);
     } catch (e) {}
-    channel = null;
+    mounted.delete(box);
   }
 
   const api = {
     enabled: ENABLED,
     /* Mount the feed into `box` for one event. Resolves true if the feed is
-       open — the caller uses that to decide whether the section is shown. */
+       open — the caller uses that to decide whether the section is shown.
+       Mounting the same box again replaces what was there, so re-rendering a
+       list never leaves an orphaned socket behind. */
     mount: function (box, eventId) {
       if (!ENABLED || !box || !eventId) { if (box) box.hidden = true; return Promise.resolve(false); }
-      currentId = eventId;
+      drop(box);
       box.hidden = true;                       // stay hidden until we know it's open
       return load(box, eventId).then(function (open) {
-        if (open) subscribe(box, eventId);
+        if (open) mounted.set(box, { eventId: eventId, channel: subscribe(box, eventId) });
         return open;
       }).catch(function () { box.hidden = true; return false; });
     },
-    unmount: function () { unsubscribe(); currentId = null; }
+    /* Close one feed, or every feed if no box is given. */
+    unmount: function (box) {
+      if (box) { drop(box); return; }
+      Array.from(mounted.keys()).forEach(drop);
+    }
   };
 
   global.EventuallyUpdates = api;

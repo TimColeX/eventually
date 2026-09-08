@@ -1256,3 +1256,6 @@ body.has-ad .toast { bottom: calc(144px + env(safe-area-inset-bottom, 0px)); }
   background: var(--clay); color: var(--cream); font-family: var(--font);
   font-weight: 700; font-size: 13px; cursor: pointer; }
 .lu-msg { flex-basis: 100%; font-size: 11.5px; color: var(--ember); }
+/* Live updates inside a My Events row — same feed, publisher's side of it. */
+.an-updates { margin-top: 10px; }
+.an-updates .live-updates { margin: 0; }

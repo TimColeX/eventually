@@ -408,9 +408,20 @@
             // otherwise publish → delete → publish would loop around the yearly limit.
             '<button class="an-act' + (pub ? ' an-danger' : '') + '" data-me-act="toggle" data-id="' + esc(e.event_id) + '">' +
               (pub ? 'Remove from globe' : 'Put back on globe') + '</button>' +
-          '</div></div>';
+          '</div>' +
+          // Live updates. Stays hidden unless this event's window is open, so a
+          // publisher with ten listings sees a composer only on the one running
+          // tonight — rather than ten empty boxes.
+          '<div class="an-updates"><div class="live-updates" data-uid="' + esc(e.event_id) + '" hidden></div></div>' +
+        '</div>';
       });
       body.innerHTML = html + '</div>';
+
+      if (global.EventuallyUpdates) {
+        body.querySelectorAll('.an-updates .live-updates').forEach(function (box) {
+          global.EventuallyUpdates.mount(box, box.dataset.uid);
+        });
+      }
     }
     function kpi(label, val, col) { return '<div class="kpi"><strong style="color:' + col + '">' + (val || 0).toLocaleString() + '</strong><span>' + label + '</span></div>'; }
 
