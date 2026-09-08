@@ -13,10 +13,6 @@ Eventually-site/
 backend/
 supabase/
 
-# Internal planning notes now live in backend/notes/ (private repo), so only the
-# README stays here as a candidate for the public repo.
-README.md
-
 # Local tooling and scratch
 .claude/
 node_modules/
