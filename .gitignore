@@ -13,16 +13,8 @@ Eventually-site/
 backend/
 supabase/
 
-# Internal planning and handover notes — working documents, not site content.
-BACKEND-PLAN.md
-DEPLOY-CHECKLIST.md
-PITCH.md
-architecture.md
-backlog.md
-decisions.md
-progress.md
-session-handoff.md
-setup.md
+# Internal planning notes now live in backend/notes/ (private repo), so only the
+# README stays here as a candidate for the public repo.
 README.md
 
 # Local tooling and scratch
