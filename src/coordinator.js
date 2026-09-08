@@ -104,7 +104,22 @@
               '<label>End <span class="co-opt">(optional)</span><input type="time" class="f-endtime"></label>' +
             '</div>' +
             '<label>Description<textarea class="f-desc" rows="3" placeholder="Tell people what to expect…"></textarea></label>' +
-            '<label>Ticket / source link <span class="co-opt">(optional)</span><input class="f-url" placeholder="https://yourtickets.com/show"></label>' +
+            // How people get in. Previously one optional URL box, which left the
+            // commonest native case — a free talk with no ticketing at all —
+            // with no way for anyone to say they were coming. Now it's a choice,
+            // and "Eventually handles it" is a real door list, not a dead button.
+            '<fieldset class="co-reg">' +
+              '<legend>How do people get in?</legend>' +
+              '<label class="co-reg-opt"><input type="radio" name="co-reg" class="f-reg-link" value="link" checked>' +
+                '<span><b>They book somewhere else</b><small>A ticket page, Eventbrite, your own site — we send people there.</small></span></label>' +
+              '<label class="co-reg-url">Booking link<input class="f-url" placeholder="https://yourtickets.com/show"></label>' +
+              '<label class="co-reg-opt"><input type="radio" name="co-reg" class="f-reg-eventually" value="eventually">' +
+                '<span><b>Eventually collects registrations</b><small>People register here with one tap. You get their name and email as a list you can download.</small></span></label>' +
+              '<label class="co-reg-cap" hidden>Limit places <span class="co-opt">(optional)</span>' +
+                '<input type="number" class="f-capacity" min="1" step="1" placeholder="e.g. 80"></label>' +
+              '<label class="co-reg-opt"><input type="radio" name="co-reg" class="f-reg-none" value="none">' +
+                '<span><b>Nothing needed — just turn up</b><small>Free and open. People can still save it and say they\'re going.</small></span></label>' +
+            '</fieldset>' +
           '</div>' +
           '<div class="co-col co-col-side">' +
             '<div class="co-loc">' +
@@ -146,6 +161,13 @@
     }
     catSel.addEventListener('change', syncCatColor);
     syncCatColor();
+
+    // Only ever show the field belonging to the chosen entry method — the URL box
+    // under "book elsewhere", the places limit under "Eventually collects".
+    Array.prototype.forEach.call(this.el.querySelectorAll('input[name="co-reg"]'), function (r) {
+      r.addEventListener('change', function () { self._syncRegMode(); });
+    });
+    this._syncRegMode();
 
     // Default the date to today; allow today .. +60 days (the forward window).
     const dateEl = this.el.querySelector('.f-date');
@@ -242,7 +264,68 @@
         if (!on && !confirm('Remove "' + (ev ? ev.title : 'this event') + '" from the globe?\n\nYou can put it back at any time. This does not return the posting slot it used.')) return;
         if (self.onSetPublished) Promise.resolve(self.onSetPublished(id, on)).then(function () { self._renderAnalyticsInto(body); });
       }
+      else if (act === 'reg') { self._toggleRegList(container, id, b); }
+      else if (act === 'reg-csv') { self._exportRegistrations(id, ev && ev.title); }
     });
+  };
+
+  // Show / hide the door list for one event. Fetched on demand: this is the
+  // organiser's attendees' names and email addresses, so it is not loaded into
+  // the page until they actually ask to see it.
+  Coordinator.prototype._toggleRegList = function (container, id, btn) {
+    const self = this;
+    const box = container.querySelector('.an-reg[data-regfor="' + (global.CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
+    if (!box) return;
+    if (!box.hidden) { box.hidden = true; return; }
+    box.hidden = false;
+    box.innerHTML = '<div class="an-reg-load">Loading registrations…</div>';
+    const A = global.EventuallyAuth;
+    if (!A || !A.eventRegistrations) { box.innerHTML = '<div class="an-reg-load">Unavailable.</div>'; return; }
+    A.eventRegistrations(id).then(function (rows) {
+      self._regRows = self._regRows || {};
+      self._regRows[id] = rows || [];
+      if (!rows || !rows.length) {
+        box.innerHTML = '<div class="an-reg-load">Nobody has registered yet. ' +
+          'Share the event link — people register in one tap.</div>';
+        return;
+      }
+      const esc = function (s) { return String(s == null ? '' : s).replace(/[&<>]/g, function (m) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[m]; }); };
+      let h = '<div class="an-reg-h"><b>' + rows.length + ' registered</b>' +
+        '<button class="an-act" data-me-act="reg-csv" data-id="' + esc(id) + '">Download CSV</button></div>' +
+        '<table class="an-reg-t"><thead><tr><th>Name</th><th>Email</th><th>Registered</th></tr></thead><tbody>';
+      rows.forEach(function (r) {
+        const when = r.registered_at ? new Date(r.registered_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+        h += '<tr><td>' + esc(r.name) + '</td><td>' + esc(r.email) + '</td><td>' + esc(when) + '</td></tr>';
+      });
+      box.innerHTML = h + '</tbody></table>' +
+        '<p class="an-reg-note">These people gave you their name and email by registering. ' +
+        'Use them for this event only.</p>';
+    });
+  };
+
+  // CSV of the door list, generated in the browser from what is already on screen.
+  Coordinator.prototype._exportRegistrations = function (id, title) {
+    const rows = (this._regRows && this._regRows[id]) || [];
+    if (!rows.length) { this._toast('Nothing to export yet.'); return; }
+    // Excel treats a leading =, +, - or @ as a formula. Prefix those with a
+    // quote so a name like "=cmd" stays text in whatever the organiser opens it in.
+    const cell = function (v) {
+      let s = String(v == null ? '' : v);
+      if (/^[=+\-@]/.test(s)) s = "'" + s;
+      return '"' + s.replace(/"/g, '""') + '"';
+    };
+    const lines = ['Name,Email,Registered'];
+    rows.forEach(function (r) {
+      lines.push([cell(r.name), cell(r.email),
+        cell(r.registered_at ? new Date(r.registered_at).toISOString() : '')].join(','));
+    });
+    const safe = String(title || 'event').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase();
+    const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'registrations-' + (safe || 'event') + '.csv';
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 0);
   };
 
   Coordinator.prototype._publish = function () {
@@ -267,7 +350,19 @@
     const dayOffset = Math.round((date - today) / 86400000);
     if (dayOffset < 0) { this._toast('Pick a date from today onward.'); return; }
     if (dayOffset > 60) { this._toast('Events can be up to 60 days ahead.'); return; }
-    const url = q('.f-url').value.trim();
+    const regMode = (q('.f-reg-eventually').checked && 'eventually')
+                 || (q('.f-reg-none').checked && 'none') || 'link';
+    const url = regMode === 'link' ? q('.f-url').value.trim() : '';
+    // Only enforced on the branch that depends on it. "Just turn up" is a valid
+    // answer, and demanding a URL there is what made the old field useless.
+    if (regMode === 'link' && !url) {
+      this._toast('Add the booking link, or pick another option below it.'); return;
+    }
+    if (regMode === 'link' && !/^https?:\/\//i.test(url)) {
+      this._toast('The booking link needs to start with http:// or https://'); return;
+    }
+    const capRaw = parseInt(q('.f-capacity').value, 10);
+    const capacity = regMode === 'eventually' && capRaw > 0 ? capRaw : null;
     const editing = !!this.editId;
     const id = this.editId || ('nat_' + (global.crypto && crypto.randomUUID ? crypto.randomUUID()
       : (Date.now() + '_' + Math.random().toString(36).slice(2))));
@@ -281,7 +376,9 @@
       banner: [global.EventuallyData.CATEGORIES[cat] || '#CB5A3C', '#211A15'],   // auto from category
       description: q('.f-desc').value.trim() || (name + ' — published via the Eventually Coordinator portal.'),
       ticketUrl: url || null,
-      sponsored: !!q('.f-feature').checked,    // paid "Feature" placement
+      collectRegistrations: regMode === 'eventually',
+      capacity: capacity,
+      sponsored: !!q('.f-feature').checked,    // a REQUEST — granted by an admin
       likes: 0, attending: 0, clicks: 0, userLiked: false, userAttending: false,
       _mine: true
     };
@@ -301,11 +398,22 @@
     });
   };
 
+  // Show only the follow-up field the chosen entry method needs.
+  Coordinator.prototype._syncRegMode = function () {
+    const q = function (s) { return this.el.querySelector(s); }.bind(this);
+    const link = q('.f-reg-link'), ev = q('.f-reg-eventually');
+    if (!link) return;
+    q('.co-reg-url').hidden = !link.checked;
+    q('.co-reg-cap').hidden = !ev.checked;
+  };
+
   // Reset the form to "create" mode.
   Coordinator.prototype._resetForm = function () {
     const q = function (s) { return this.el.querySelector(s); }.bind(this);
     this.editId = null; this.city = null;
     q('.f-name').value = ''; q('.f-desc').value = ''; q('.f-url').value = '';
+    q('.f-reg-link').checked = true; q('.f-capacity').value = '';
+    this._syncRegMode();
     if (q('.f-venue')) q('.f-venue').value = '';
     if (q('.f-time')) q('.f-time').value = '19:00';
     if (q('.f-endtime')) q('.f-endtime').value = '';
@@ -334,6 +442,12 @@
     if (q('.f-venue')) q('.f-venue').value = ev.venue || '';
     q('.f-desc').value = ev.description || '';
     q('.f-url').value = ev.url || '';
+    // Restore the entry method: registrations on, else a link, else nothing.
+    q('.f-capacity').value = ev.capacity || '';
+    if (ev.collect_registrations) q('.f-reg-eventually').checked = true;
+    else if (ev.url) q('.f-reg-link').checked = true;
+    else q('.f-reg-none').checked = true;
+    this._syncRegMode();
     this.pin = { lat: +ev.lat, lon: +ev.lon }; this.city = ev.city || null;
     q('.co-publish').textContent = 'Update event';
     const h = this.el.querySelector('.co-form-h'); if (h) h.textContent = 'Editing: ' + (ev.title || 'event');
@@ -392,6 +506,9 @@
       const sum = function (k) { return rows.reduce(function (a, e) { return a + (+e[k] || 0); }, 0); };
       let html = '<div class="an-kpis">' +
         kpi('Saves', sum('saves'), '#CB5A3C') + kpi('Likes', sum('likes'), '#8A3B1E') + kpi('Attending', sum('attends'), '#B5722F') +
+        // Only shown once it means something — an always-visible zero on every
+        // account would just be a reminder of a feature most events don't use.
+        (sum('registered') ? kpi('Registered', sum('registered'), '#2E6B4F') : '') +
         '</div><div class="an-list">';
       rows.forEach(function (e) {
         const pub = e.published !== false;
@@ -411,7 +528,13 @@
             // otherwise publish → delete → publish would loop around the yearly limit.
             '<button class="an-act' + (pub ? ' an-danger' : '') + '" data-me-act="toggle" data-id="' + esc(e.event_id) + '">' +
               (pub ? 'Remove from globe' : 'Put back on globe') + '</button>' +
+            // The door list, only for events actually collecting registrations.
+            (e.collect_registrations
+              ? '<button class="an-act" data-me-act="reg" data-id="' + esc(e.event_id) + '">' +
+                  'Registrations (' + (+e.registered || 0) + ')</button>'
+              : '') +
           '</div>' +
+          (e.collect_registrations ? '<div class="an-reg" data-regfor="' + esc(e.event_id) + '" hidden></div>' : '') +
           // Live updates. Stays hidden unless this event's window is open, so a
           // publisher with ten listings sees a composer only on the one running
           // tonight — rather than ten empty boxes.

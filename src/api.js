@@ -71,6 +71,7 @@
       userLiked: false, userAttending: false,
       sources: sources, sourceCount: a.source_count || sources.length || 1,
       is_native: !!a.is_native, topScore: 1,
+      collectRegistrations: !!a.collect_registrations,
       cheapestId: a.cheapest_source_id || null, displaySource: ds
     };
   }

@@ -1060,17 +1060,18 @@
         '<small>Listings grouped automatically — every original source is preserved.</small></div>' : '';
     let avail;
     if (ev.is_native) {
-      /* Native events used to show a "Register on this platform" button that did
-         nothing, above a line claiming no external ticketing was needed. Eventually
-         doesn't take registrations, so the button was a dead end and the claim was
-         untrue — the worst combination to put in front of an organiser.
-         What we actually have is the optional booking link they supplied. */
+      /* Three ways in, chosen by the organiser at publish time.
+         The registration block is filled in asynchronously (see mountRegistration)
+         because it needs a live count and the viewer's own state — rendering it
+         from the cached event object would show a stale "places left". */
       avail = '<div class="evd-section"><div class="evd-sec-h">Published on Eventually</div>' +
-        (ev.ticketUrl
-          ? '<a class="native-cta" href="' + esc(ev.ticketUrl) + '" target="_blank" rel="noopener">' +
-              'Book with the organiser ↗</a>' +
-            '<p class="evd-note">Booking is handled by the organiser — Eventually doesn\'t sell or hold tickets for this event.</p>'
-          : '<p class="evd-note">The organiser hasn\'t added a booking link. Tap <b>✓</b> above to say you\'re going, and check their own channels for details.</p>') +
+        (ev.collectRegistrations
+          ? '<div class="reg-box" data-reg="' + esc(ev.id) + '"><div class="reg-loading">Checking places…</div></div>'
+          : ev.ticketUrl
+            ? '<a class="native-cta" href="' + esc(ev.ticketUrl) + '" target="_blank" rel="noopener">' +
+                'Book with the organiser ↗</a>' +
+              '<p class="evd-note">Booking is handled by the organiser — Eventually doesn\'t sell or hold tickets for this event.</p>'
+            : '<p class="evd-note">No booking needed — just turn up. Tap <b>✓</b> above to say you\'re going.</p>') +
         '</div>';
     } else if (ev.ticketUrl) {
       // Single, clean CTA → the official provider via the /go redirect (affiliate
@@ -1116,10 +1117,89 @@
     // Live updates from the organiser. Hidden unless the server says the window
     // is open, so a closed or disabled event shows nothing at all.
     if (window.EventuallyUpdates) window.EventuallyUpdates.mount(eventScroll.querySelector('.live-updates'), ev.id);
+    mountRegistration(eventScroll.querySelector('.reg-box'));
     M.mountAdSense(eventScroll);
     eventEl.classList.add('open');
   }
   function closeEvent() { eventEl.classList.remove('open'); activeEventId = null; if (window.EventuallyUpdates) window.EventuallyUpdates.unmount(); }
+
+  /* ---- Eventually-managed registration -----------------------------------
+     For events where the organiser chose "Eventually collects registrations".
+     The count comes from the server on every open, because "3 places left" is
+     only useful if it's true at the moment someone reads it.
+
+     Registering hands the organiser a name and an email address. That is the
+     one place in the app where personal data moves between users, so it is
+     stated on the button itself — not buried in the privacy policy that nobody
+     opens. An account is required, which is also what makes the promise
+     keepable: we can only pass on a name and email we already hold. */
+  function mountRegistration(box) {
+    if (!box) return;
+    const A = window.EventuallyAuth;
+    const id = box.getAttribute('data-reg');
+    if (!A || !A.enabled) { box.innerHTML = '<p class="evd-note">Registration is unavailable right now.</p>'; return; }
+
+    function paint(st) {
+      if (!st || !st.open) { box.innerHTML = '<p class="evd-note">Registration isn\'t open for this event.</p>'; return; }
+      const taken = st.taken || 0;
+      const left = st.places_left;
+      const count = taken === 0 ? 'Be the first to register'
+        : taken + (taken === 1 ? ' person has registered' : ' people have registered');
+      const places = (left == null) ? '' :
+        (left === 0 ? '<span class="reg-full">Full</span>'
+                    : '<span class="reg-left">' + left + ' place' + (left === 1 ? '' : 's') + ' left</span>');
+
+      if (st.closed) {
+        box.innerHTML = '<div class="reg-count">' + count + '</div>' +
+          '<p class="evd-note">Registration has closed.</p>';
+        return;
+      }
+      if (st.registered) {
+        box.innerHTML = '<div class="reg-count">' + count + '</div>' +
+          '<div class="reg-done">✓ You\'re registered</div>' +
+          '<p class="evd-note">The organiser has your name and email for the door list. ' +
+            '<button class="reg-cancel" type="button">Cancel my registration</button></p>';
+        return;
+      }
+      const full = left === 0;
+      box.innerHTML = '<div class="reg-count">' + count + (places ? ' · ' + places : '') + '</div>' +
+        '<button class="reg-cta" type="button"' + (full ? ' disabled' : '') + '>' +
+          (full ? 'Fully booked' : 'Register') + '</button>' +
+        (full ? '<p class="evd-note">Every place has been taken.</p>'
+              : '<p class="evd-note">Free to register. Your <b>name and email</b> are shared with the ' +
+                'organiser so they can check you in — nobody else sees them. You can cancel any time.</p>');
+    }
+
+    function load() { A.registrationState(id).then(paint); }
+    load();
+
+    box.addEventListener('click', function (e) {
+      if (e.target.closest('.reg-cta')) {
+        const btn = e.target.closest('.reg-cta');
+        // Signing in mid-flow re-opens nothing by itself, so replay the register.
+        requireLogin(function () {
+          btn.disabled = true; btn.textContent = 'Registering…';
+          A.register(id).then(function (r) {
+            if (r && r.ok) { track('register', null); load(); return; }
+            const why = r && r.reason;
+            // 'full' and 'closed' are real states, not errors — re-read and show
+            // the truth rather than a retry prompt for something that won't work.
+            if (why === 'full' || why === 'closed' || why === 'not_open') { load(); return; }
+            btn.disabled = false; btn.textContent = 'Register';
+            const msg = document.createElement('p');
+            msg.className = 'evd-note reg-err';
+            msg.textContent = "Couldn't register just now — please try again.";
+            const old = box.querySelector('.reg-err'); if (old) old.remove();
+            box.appendChild(msg);
+          });
+        }, 'Sign in to register — the organiser needs a name and email for the door list.');
+        return;
+      }
+      if (e.target.closest('.reg-cancel')) {
+        A.cancelRegistration(id).then(load);
+      }
+    });
+  }
 
   eventEl.addEventListener('click', function (e) {
     if (e.target.closest('.evd-x') || e.target.closest('.evd-back')) { closeEvent(); return; }
@@ -2044,6 +2124,11 @@
         '<p>It opens about an hour before the start and <b>closes when the event ends</b>. The updates aren\'t saved — they disappear with the event, so there\'s nothing to scroll back through afterwards.</p>' +
         '<p>Only the organiser can post; there\'s no replying, and you don\'t need an account to read. Updates are written by organisers rather than by us, so please double-check anything important with the venue.</p>' +
         '<p>Publishing your own event on Eventually? You get this for free — post updates from <b>My Events</b> while your event is running.</p></details>' +
+      '<details><summary>How does registering for an event work?</summary>' +
+        '<p>Most events send you to the organiser\'s own booking page. Some organisers instead ask us to take registrations for them — on those you\'ll see a <b>Register</b> button on the event, and one tap is all it takes.</p>' +
+        '<p>You need an account, because the organiser has to know who is coming: <b>your name and the email on your account are given to them</b> so they can plan and check you in at the door. Nobody else sees them — everyone else just sees how many people are registered. We\'ll email you a confirmation.</p>' +
+        '<p>Registering is <b>free and it isn\'t a ticket</b> — Eventually doesn\'t take payment for these events. Changed your mind? Open the event and cancel; that frees your place for someone else.</p>' +
+        '<p>Organising something? Choose <b>“Eventually collects registrations”</b> when you publish. You can set a limit on places, and you\'ll find your list — with a CSV download — under <b>My Events</b>.</p></details>' +
       '<details><summary>How do the dates &amp; timeline work?</summary><p>The bar along the bottom is a day scrubber. Drag it, or use the ‹ › day arrows, to move between days — the globe and results update to show what\'s on for that day. Tap <b>Today</b> to jump back to now.</p></details>' +
       '<details><summary>How do I save events &amp; use the calendar?</summary><p>Tap the ☆ on any event to save it. Open <b>⋯ menu → Saved Events</b> to see them on a month calendar: days with saved events are dotted (busy days show a count), and tapping a day lists what you saved. A <b>“For you”</b> section suggests more to save based on your interests.</p></details>' +
       '<details><summary>What do “Starts in” countdowns &amp; reminders mean?</summary><p>Upcoming events show a live <b>“Starts in”</b> countdown so you know exactly how long until they begin. Turn on <b>Event notifications</b> in your Profile to be reminded about events you\'ve saved and new ones near you.</p></details>' +

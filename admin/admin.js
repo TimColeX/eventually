@@ -130,6 +130,12 @@
         '<p class="ad-hint">Every event published through Eventually, newest first — the number that matters when the pitch to organisers is “list with us”. <b>Remove from globe</b> is reversible; <b>Delete</b> is not.</p>' +
         '<div id="pe-sum"></div><div id="pe-list"><div class="ad-center">Loading…</div></div></div>' +
 
+        '<div class="ad-sec"><h2>Registrations <span id="rg-count" class="ad-hint"></span></h2>' +
+        '<p class="ad-hint">Events where the organiser asked Eventually to collect registrations. ' +
+          'Open one to see who registered. <b>These are real names and email addresses</b> — people gave them to attend a specific event, ' +
+          'so use them for that event and nothing else.</p>' +
+        '<div id="rg-list"><div class="ad-center">Loading…</div></div></div>' +
+
         '<div class="ad-sec"><h2>Publishers</h2>' +
         '<p class="ad-hint">Everyone who has published an event, most recent first. <b>Remaining</b> is what is left of their allowance in the current window — a publisher at <b>0</b> is blocked until you grant more.</p>' +
         '<div id="pb-roster"><div class="ad-center">Loading publishers…</div></div>' +
@@ -161,8 +167,11 @@
       document.getElementById('pb-q').addEventListener('keydown', function (e) { if (e.key === 'Enter') lookupPublisher(); });
       renderPublishingRequests();
       renderNativeEvents();
+      renderRegistrations();
       renderPublisherRoster();
-      document.getElementById('pb-refresh').onclick = function () { renderPublishingRequests(); renderNativeEvents(); renderPublisherRoster(); };
+      document.getElementById('pb-refresh').onclick = function () {
+        renderPublishingRequests(); renderNativeEvents(); renderRegistrations(); renderPublisherRoster();
+      };
     });
   }
 
@@ -298,6 +307,93 @@
         };
       });
     }, function () { box.innerHTML = '<p class="ad-hint">Failed to load.</p>'; });
+  }
+
+  /* Events collecting registrations, and who registered.
+     The names are NOT loaded with the list — only when someone opens a specific
+     event. Personal data shouldn't sit in the page because a panel happened to
+     render; it should arrive because somebody asked a question about one event. */
+  function renderRegistrations() {
+    const box = document.getElementById('rg-list');
+    const badge = document.getElementById('rg-count');
+    if (!box) return;
+    const cache = {};
+
+    sb.rpc('admin_registration_events').then(function (r) {
+      if (r.error) {
+        box.innerHTML = '<p class="ad-hint">Unavailable — run <code>backend/60_registrations.sql</code>.</p>';
+        return;
+      }
+      const rows = r.data || [];
+      const total = rows.reduce(function (a, e) { return a + (+e.registered || 0); }, 0);
+      if (badge) badge.textContent = rows.length ? '· ' + rows.length + ' events · ' + total + ' registered' : '';
+      if (!rows.length) {
+        box.innerHTML = '<p class="ad-hint">No organiser has switched registration on yet. ' +
+          'It is offered at publish time, under “How do people get in?”.</p>';
+        return;
+      }
+      box.innerHTML = '<div class="ad-list">' + rows.map(function (e) {
+        const cap = e.capacity ? ' of ' + e.capacity : '';
+        const flags = [];
+        if (e.moderation === 'pending') flags.push('⏳ awaiting review');
+        if (e.published === false) flags.push('off globe');
+        return '<div class="ad-list-row"><div style="flex:1">' +
+          '<strong>' + esc(e.title || '(untitled)') + '</strong>' +
+          '<span class="ad-hint" style="display:block">' +
+            esc(e.city || '—') + ' · ' + esc(new Date(e.start_time).toLocaleDateString()) +
+            ' · by ' + esc(e.publisher || 'unknown') +
+            (flags.length ? ' · ' + esc(flags.join(' · ')) : '') + '</span>' +
+          '<span class="ad-hint" style="display:block"><b>' + (+e.registered || 0) + cap + ' registered</b></span>' +
+          '<div class="ad-reg" data-regbox="' + esc(e.event_id) + '" hidden></div>' +
+        '</div><div class="ad-row-actions">' +
+          '<button class="ad-btn ghost" data-rg-open="' + esc(e.event_id) + '">View list</button>' +
+        '</div></div>';
+      }).join('') + '</div>';
+
+      box.querySelectorAll('[data-rg-open]').forEach(function (b) {
+        b.onclick = function () {
+          const id = b.dataset.rgOpen;
+          const panel = box.querySelector('[data-regbox="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
+          if (!panel) return;
+          if (!panel.hidden) { panel.hidden = true; b.textContent = 'View list'; return; }
+          panel.hidden = false; b.textContent = 'Hide list';
+          panel.innerHTML = '<div class="ad-hint">Loading…</div>';
+          sb.rpc('event_registrations', { p_event_id: id }).then(function (rr) {
+            if (rr.error) { panel.innerHTML = '<div class="ad-hint">Failed to load.</div>'; return; }
+            const list = rr.data || [];
+            cache[id] = list;
+            if (!list.length) { panel.innerHTML = '<div class="ad-hint">Nobody has registered yet.</div>'; return; }
+            panel.innerHTML = '<table class="ad-reg-t"><thead><tr><th>Name</th><th>Email</th><th>Registered</th></tr></thead><tbody>' +
+              list.map(function (p) {
+                return '<tr><td>' + esc(p.name) + '</td><td>' + esc(p.email) + '</td><td>' +
+                  esc(String(p.registered_at || '').slice(0, 10)) + '</td></tr>';
+              }).join('') + '</tbody></table>' +
+              '<button class="ad-btn ghost" data-rg-csv="1" style="margin-top:8px">Download CSV</button>';
+            const dl = panel.querySelector('[data-rg-csv]');
+            if (dl) dl.onclick = function () { exportRegCsv(cache[id] || [], id); };
+          }, function () { panel.innerHTML = '<div class="ad-hint">Failed to load.</div>'; });
+        };
+      });
+    }, function () { box.innerHTML = '<p class="ad-hint">Failed to load.</p>'; });
+  }
+
+  // Same formula-injection guard as the organiser's export: a name beginning
+  // =, +, - or @ is a live formula the moment the CSV opens in Excel.
+  function exportRegCsv(rows, id) {
+    if (!rows.length) return;
+    const cell = function (v) {
+      let s = String(v == null ? '' : v);
+      if (/^[=+\-@]/.test(s)) s = "'" + s;
+      return '"' + s.replace(/"/g, '""') + '"';
+    };
+    const lines = ['Name,Email,Registered'];
+    rows.forEach(function (r) { lines.push([cell(r.name), cell(r.email), cell(r.registered_at || '')].join(',')); });
+    const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'registrations-' + String(id).replace(/[^a-z0-9]+/gi, '-').toLowerCase() + '.csv';
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 0);
   }
 
   function renderPublisherRoster() {
@@ -553,6 +649,7 @@
         kpi(ev.city_search || 0, 'City searches') +
         kpi(ev.publish_open || 0, 'Publish opened') +
         kpi(ev.tour_done || 0, 'Tours finished') +
+        kpi(ev.register || 0, 'Registrations') +
       '</div>';
 
       const cities = d.top_cities || [];

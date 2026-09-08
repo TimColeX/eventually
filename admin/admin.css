@@ -85,6 +85,12 @@ body{margin:0;background:#efe7da;color:var(--ink);font-family:var(--font);font-s
   .ad-list-row{flex-direction:column;gap:8px}
   .ad-row-actions{justify-content:flex-start}
 }
+/* Registration door lists — expanded inside a row, so it must stay inside the column. */
+.ad-reg{margin-top:9px;padding:10px;border:1px solid var(--line);border-radius:10px;overflow-x:auto}
+.ad-reg[hidden]{display:none}
+.ad-reg-t{width:100%;border-collapse:collapse;font-size:12px}
+.ad-reg-t th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--faint);padding:0 10px 5px 0;border-bottom:1px solid var(--line);white-space:nowrap}
+.ad-reg-t td{padding:5px 10px 5px 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
 .ad-deny{max-width:440px;margin:70px auto;text-align:center;background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:32px}
 .ad-deny h2{color:var(--ember)}
 .ad-muted{color:var(--faint);font-size:12px}

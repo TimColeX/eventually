@@ -982,6 +982,23 @@ body.has-ad .toast { bottom: calc(144px + env(safe-area-inset-bottom, 0px)); }
 .evd-tickets:hover { background: #b94e32; }
 .evd-note { margin: 11px 0 0; font-size: 12px; color: var(--hint); line-height: 1.5; }
 
+/* ---------- Eventually-managed registration (event drawer) ---------- */
+.reg-loading { font-size: 12px; color: var(--hint); padding: 4px 0; }
+.reg-count { font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 10px; }
+.reg-left { color: var(--ember); font-weight: 700; }
+.reg-full { color: var(--muted); font-weight: 700; }
+.reg-cta { display: block; width: 100%; box-sizing: border-box; padding: 14px; border-radius: 12px;
+  cursor: pointer; background: var(--clay); color: var(--cream); border: 0;
+  font-family: var(--font); font-weight: 700; font-size: 15px; }
+.reg-cta:hover:not(:disabled) { background: #b94e32; }
+.reg-cta:disabled { background: var(--line-2); color: var(--muted); cursor: not-allowed; }
+/* Registered is a state, not an action — flat and green, never a button. */
+.reg-done { padding: 13px; border-radius: 12px; text-align: center; font-weight: 700; font-size: 15px;
+  background: #EAF3EE; color: #2E6B4F; border: 1px solid #C9E2D5; }
+.reg-cancel { background: none; border: 0; padding: 0; cursor: pointer; font: inherit;
+  color: var(--hint); text-decoration: underline; }
+.reg-cancel:hover { color: var(--ember); }
+
 /* ---------- "Types" dropdown (in the search bar) ---------- */
 /* Stretch to the search field's height rather than matching it with a fixed number:
    the field gets taller on mobile (the 16px zoom guard below), so any hard-coded
@@ -1266,3 +1283,30 @@ body.has-ad .toast { bottom: calc(144px + env(safe-area-inset-bottom, 0px)); }
 .co-perk { margin: 0 0 8px; padding: 9px 12px; border-radius: 10px; background: #FBF3EC;
   border: 1px solid var(--line-2); font-size: 12px; line-height: 1.5; color: var(--muted); }
 .co-perk b { color: var(--ember); }
+
+/* ---------- publish form: how people get in ---------- */
+.co-reg { margin: 0; padding: 12px; border: 1px solid var(--line-2); border-radius: 12px; background: #FDFBF8; }
+.co-reg legend { padding: 0 6px; font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .02em; }
+/* `.co-body label { display:block }` outspecifies a bare `.co-reg-opt`, which
+   turns the radio into a full-width block stacked above its own text. Match the
+   same specificity so the row stays a row. */
+.co-body .co-reg-opt { display: flex; align-items: flex-start; gap: 9px; padding: 7px 0; cursor: pointer; margin-bottom: 0; }
+.co-body .co-reg-opt input { width: auto; margin: 3px 0 0; flex: none; accent-color: var(--clay); }
+.co-reg-opt span { display: block; }
+.co-reg-opt b { display: block; font-size: 13px; color: var(--ink); }
+.co-reg-opt small { display: block; margin-top: 2px; font-size: 11.5px; line-height: 1.45; color: var(--hint); }
+/* The follow-up field sits indented under the option it belongs to. */
+.co-body .co-reg-url, .co-body .co-reg-cap { display: block; margin: 0 0 6px 27px; font-size: 12px; color: var(--muted); }
+.co-reg[hidden], .co-reg-url[hidden], .co-reg-cap[hidden] { display: none; }
+
+/* ---------- My Events: the door list ---------- */
+.an-reg { margin: 10px 0 0; padding: 11px; border: 1px solid var(--line-2); border-radius: 10px; background: #FDFBF8; }
+.an-reg[hidden] { display: none; }
+.an-reg-load { font-size: 12px; color: var(--hint); }
+.an-reg-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 9px; font-size: 13px; }
+.an-reg-t { width: 100%; border-collapse: collapse; font-size: 12px; }
+.an-reg-t th { text-align: left; font-weight: 700; color: var(--muted); font-size: 11px;
+  text-transform: uppercase; letter-spacing: .04em; padding: 0 8px 6px 0; border-bottom: 1px solid var(--line-2); }
+.an-reg-t td { padding: 6px 8px 6px 0; border-bottom: 1px solid var(--line); color: var(--ink);
+  word-break: break-word; }
+.an-reg-note { margin: 9px 0 0; font-size: 11px; color: var(--hint); line-height: 1.5; }

@@ -119,6 +119,8 @@
         // sponsored is server-locked (trg_lock_sponsored) — a publisher asks,
         // an admin grants. Sending it here would be silently discarded.
         feature_requested: !!evt.sponsored,
+        collect_registrations: !!evt.collectRegistrations,
+        capacity: evt.capacity || null,
         popularity: 0.4, image_url: null, source_count: 1,
         cheapest_source_id: null, created_by: currentUser.id
       };
@@ -141,7 +143,8 @@
       if (!currentUser) return Promise.resolve({ error: { message: 'Not signed in' } });
       return sb.from('events').update({
         title: evt.name, description: evt.description || null, category: evt.category,
-        start_time: evt.date.toISOString(), city: evt.city || null, lat: evt.lat, lon: evt.lon
+        start_time: evt.date.toISOString(), city: evt.city || null, lat: evt.lat, lon: evt.lon,
+        collect_registrations: !!evt.collectRegistrations, capacity: evt.capacity || null
       }).eq('event_id', evt.id).eq('created_by', currentUser.id).then(logErr('updateEvent')).then(function (r) {
         if (r && r.error) return r;
         return sb.from('event_sources').update({ url: evt.ticketUrl || null, last_updated: new Date().toISOString() })
@@ -155,6 +158,31 @@
     setPublished: function (eventId, on) {
       if (!currentUser) return Promise.resolve();
       return sb.from('events').update({ published: !!on }).eq('event_id', eventId).eq('created_by', currentUser.id).then(logErr('setPublished'));
+    },
+    // ---- registration (Eventually-managed door list) ----
+    // State is readable signed-out (the count is public) so the event page can
+    // show "12 going · 68 places left" before anyone signs in.
+    registrationState: function (eventId) {
+      if (!ENABLED) return Promise.resolve(null);
+      return sb.rpc('registration_state', { p_event_id: eventId })
+        .then(function (r) { return (r && r.data) || null; }, function () { return null; });
+    },
+    register: function (eventId) {
+      if (!currentUser) return Promise.resolve({ ok: false, reason: 'not_signed_in' });
+      return sb.rpc('register_for_event', { p_event_id: eventId })
+        .then(function (r) { return (r && r.data) || { ok: false, reason: 'error' }; },
+              function () { return { ok: false, reason: 'error' }; });
+    },
+    cancelRegistration: function (eventId) {
+      if (!currentUser) return Promise.resolve({ ok: false, reason: 'not_signed_in' });
+      return sb.rpc('cancel_registration', { p_event_id: eventId })
+        .then(function (r) { return (r && r.data) || { ok: false }; }, function () { return { ok: false }; });
+    },
+    // The door list — organiser (own event) or admin only; the server enforces it.
+    eventRegistrations: function (eventId) {
+      if (!currentUser) return Promise.resolve([]);
+      return sb.rpc('event_registrations', { p_event_id: eventId })
+        .then(function (r) { return (r && r.data) || []; }, function () { return []; });
     },
     creatorStats: function () {
       if (!currentUser) return Promise.resolve([]);
