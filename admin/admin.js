@@ -253,6 +253,8 @@
         else if (e.moderation === 'rejected') flags.push('✕ rejected');
         if (e.published === false) flags.push('off globe');
         if (e.chat_enabled) flags.push('live updates on');
+        if (e.sponsored) flags.push('★ featured');
+        else if (e.feature_requested) flags.push('✦ featuring requested');
         return '<div class="ad-list-row"><div style="flex:1">' +
           '<strong>' + (e.upcoming ? '' : '· ') + esc(e.title || '(untitled)') + '</strong>' +
           '<span class="ad-hint" style="display:block">' +
@@ -265,6 +267,8 @@
         '</div><div class="ad-row-actions">' +
           '<button class="ad-btn ghost" data-pe-pub="' + esc(e.event_id) + '" data-on="' + (e.published === false ? '1' : '0') + '">' +
             (e.published === false ? 'Put back' : 'Remove from globe') + '</button>' +
+          '<button class="ad-btn' + (e.sponsored ? ' ghost' : '') + '" data-pe-feat="' + esc(e.event_id) + '" data-on="' + (e.sponsored ? '0' : '1') + '">' +
+            (e.sponsored ? 'Unfeature' : 'Feature') + '</button> ' +
           '<button class="ad-btn ghost" data-pe-del="' + esc(e.event_id) + '" data-title="' + esc(e.title || '') + '">Delete</button>' +
         '</div></div>';
       }).join('') + '</div>';
@@ -273,6 +277,13 @@
         b.onclick = function () {
           b.disabled = true;
           sb.rpc('admin_set_published', { p_event_id: b.dataset.pePub, p_on: b.dataset.on === '1' })
+            .then(renderNativeEvents, function () { b.disabled = false; });
+        };
+      });
+      box.querySelectorAll('[data-pe-feat]').forEach(function (b) {
+        b.onclick = function () {
+          b.disabled = true;
+          sb.rpc('admin_set_featured', { p_event_id: b.dataset.peFeat, p_on: b.dataset.on === '1' })
             .then(renderNativeEvents, function () { b.disabled = false; });
         };
       });

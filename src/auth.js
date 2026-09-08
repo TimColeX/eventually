@@ -116,7 +116,9 @@
         // When billing is live, featuring is granted server-side only (free quota
         // RPC or paid webhook) — never trust the client to self-feature.
         display_source: 'native', is_native: true, published: true,
-        sponsored: (global.EventuallyBilling && global.EventuallyBilling.enabled) ? false : !!evt.sponsored,
+        // sponsored is server-locked (trg_lock_sponsored) — a publisher asks,
+        // an admin grants. Sending it here would be silently discarded.
+        feature_requested: !!evt.sponsored,
         popularity: 0.4, image_url: null, source_count: 1,
         cheapest_source_id: null, created_by: currentUser.id
       };

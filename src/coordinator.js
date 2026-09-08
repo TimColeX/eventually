@@ -119,8 +119,8 @@
             '<div class="co-catcolor"><span class="co-catdot"></span>' +
               '<span class="co-catcolor-t">Shows in the <b class="co-catname">Music</b> colour on the globe &amp; card — set automatically by category.</span></div>' +
             '<label class="co-feature"><input type="checkbox" class="f-feature">' +
-              '<span class="co-feature-txt"><b>✦ Feature this event</b>' +
-              '<small>Premium placement — distinct highlight, a spike, and top of search. Billed via Eventually Plus.</small></span>' +
+              '<span class="co-feature-txt"><b>✦ Ask us to feature this event</b>' +
+              '<small>Premium placement — a distinct highlight, a guaranteed spike, and top of search. We review requests by hand; featuring is free while we are in beta.</small></span>' +
             '</label>' +
           '</div>' +
         '</div></div>' +
