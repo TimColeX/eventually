@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Email preferences — Eventually</title>
+<!-- Nothing here should ever appear in search results: it is only reached from a
+     link in someone's inbox, and it says something about that person. -->
+<meta name="robots" content="noindex,nofollow">
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #14100c; color: #ece5da; font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  .wrap { max-width: 520px; margin: 0 auto; padding: 16vh 22px 80px; }
+  a { color: #f0a24a; }
+  h1 { font-size: 1.6rem; margin: 0 0 10px; }
+  p { color: #d9cfc2; margin: 0 0 16px; }
+  .tick { display: inline-flex; align-items: center; justify-content: center;
+          width: 42px; height: 42px; border-radius: 50%; margin-bottom: 16px;
+          background: #1d3a2a; color: #6fd39b; font-size: 21px; }
+  .tick.bad { background: #3a2a1d; color: #f0a24a; }
+  .cta { display: inline-block; margin-top: 6px; padding: 11px 18px; border-radius: 10px;
+         background: #CB5A3C; color: #fff; text-decoration: none; font-weight: 600; }
+  .cta:hover { background: #b94e32; }
+  .muted { color: #9a8f80; font-size: 0.9rem; margin-top: 26px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="tick" id="mark">✓</div>
+  <h1 id="head">You're unsubscribed.</h1>
+  <p id="body">Loading…</p>
+  <a class="cta" href="/">Open Eventually</a>
+  <p class="muted">Changed your mind? Turn it back on any time under <b>Profile → Account details</b>.</p>
+</div>
+<script>
+/* The unsubscribe itself already happened server-side — the Edge Function did the
+   work and redirected here. This page only reports it.
+   It lives on the site rather than in the function because Supabase forces
+   text/plain on HTML served from a functions domain, so a page returned there
+   shows the reader its own markup instead of rendering. */
+(function () {
+  var q = new URLSearchParams(location.search);
+  var ok = q.get('ok') === '1';
+  var kind = q.get('kind') === 'digest' ? 'digest' : 'reminders';
+  var what = kind === 'digest'
+    ? "the weekly what's-on email"
+    : 'event reminders';
+
+  var head = document.getElementById('head');
+  var body = document.getElementById('body');
+  var mark = document.getElementById('mark');
+
+  if (ok) {
+    head.textContent = "Done — you're unsubscribed.";
+    body.innerHTML = "You won't get " + what + " again. " +
+      "Nothing else about your account has changed, and you'll still get messages " +
+      "you asked for directly — sign-in links, and confirmations for events you register for.";
+  } else {
+    mark.textContent = '!'; mark.className = 'tick bad';
+    head.textContent = "That link didn't work.";
+    body.textContent = "It may have already been used, or the address was cut short by your " +
+      "email app. You can change your email settings under Profile → Account details.";
+  }
+})();
+</script>
+</body>
+</html>
