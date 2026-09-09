@@ -571,8 +571,12 @@ body {
 
 /* ---------- location chip + menu ---------- */
 .loc-wrap { position: relative; }
+/* Height is fixed to match .menu-btn (also 40px) rather than left to fall out of
+   padding + line-height, which made it a few pixels short and left the two
+   controls visibly misaligned in the top bar. */
 .loc-chip {
-  display: flex; align-items: center; gap: 6px; padding: 9px 13px; border-radius: 11px; cursor: pointer;
+  display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 13px;
+  border-radius: 11px; cursor: pointer;
   font-family: var(--font); font-size: 13px; font-weight: 600; color: var(--ink);
   background: var(--paper); border: 1px solid var(--line-2);
 }
