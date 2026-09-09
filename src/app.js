@@ -1610,7 +1610,10 @@
           '<span class="pf-comm-t">' + d[1] + '<small>' + d[2] + '</small></span>' +
           '<span class="tg-state">' + (v ? 'On' : 'Off') + '</span></button>';
       }).join('') +
-      '<p class="pf-comm-note">Sent to ' + esc(user.email) + '. Unsubscribe any time.</p></div>';
+      // The address was spelled out here and wrapped to two cramped lines on
+      // every phone. It also told the reader nothing they didn't know — it is
+      // their own inbox, shown directly above under Login email.
+      '<p class="pf-comm-note">Sent to your email. Unsubscribe any time.</p></div>';
 
     box.innerHTML = h;
     if (acctEditing && acctEditing !== 'address') {

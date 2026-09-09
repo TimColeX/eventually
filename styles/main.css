@@ -761,8 +761,12 @@ body {
 .pf-addr-pick:hover { border-color: var(--clay); }
 .pf-acct-comms { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
 .pf-acct-comms > .pf-acct-k { padding: 10px 13px 3px; font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); }
-.pf-comm.pf-toggle { border: 0; border-radius: 0; background: none; border-top: 1px solid var(--line); padding: 10px 13px; font-weight: 600; }
+/* Two-line rows: the state must sit with the TITLE, not float to the middle of
+   the pair, and it must never be squeezed by a long label. */
+.pf-comm.pf-toggle { border: 0; border-radius: 0; background: none; border-top: 1px solid var(--line);
+  padding: 10px 13px; font-weight: 600; align-items: flex-start; gap: 12px; }
 .pf-comm.pf-toggle.on { background: none; }
+.pf-comm .tg-state { flex: none; line-height: 1.5; }
 .pf-acct-comms > .pf-acct-k + .pf-comm { border-top: 0; }
 .pf-acct-signin { align-self: flex-start; margin-top: 8px; padding: 9px 16px; border-radius: 10px; cursor: pointer;
   background: var(--clay); border: 1px solid var(--clay); color: var(--cream); font-family: var(--font); font-weight: 700; font-size: 13px; }
@@ -1291,10 +1295,14 @@ body.has-ad .toast { bottom: calc(144px + env(safe-area-inset-bottom, 0px)); }
 
 /* ---------- profile: email preferences ---------- */
 /* Each toggle carries a line saying what it actually sends, so nobody has to
-   guess what they're agreeing to — the old four-toggle version said nothing. */
-.pf-comm-t { display: flex; flex-direction: column; gap: 2px; text-align: left; }
-.pf-comm-t small { font-size: 11px; line-height: 1.4; color: var(--hint); font-weight: 400; }
-.pf-comm-note { margin: 9px 2px 0; font-size: 11px; line-height: 1.5; color: var(--hint); }
+   guess what they're agreeing to — the old four-toggle version said nothing.
+   `min-width:0` lets the label shrink and wrap inside the row instead of pushing
+   the On/Off state out past the panel edge on a narrow phone. */
+.pf-comm-t { display: flex; flex-direction: column; gap: 1px; text-align: left; min-width: 0; flex: 1;
+  font-size: 13px; line-height: 1.35; }
+.pf-comm-t small { font-size: 10.5px; line-height: 1.4; color: var(--hint); font-weight: 400;
+  overflow-wrap: anywhere; }
+.pf-comm-note { margin: 0; padding: 9px 13px 11px; font-size: 10.5px; line-height: 1.5; color: var(--hint); }
 
 /* ---------- publish form: venue time zone ---------- */
 .co-body .f-tz { width: 100%; }
