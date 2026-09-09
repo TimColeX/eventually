@@ -1524,8 +1524,6 @@
     }).join('') +
       (I18n.LANGS.some(function (l) { return l.soon; })
         ? '<p class="pf-hint">More host languages are on the way.</p>' : '');
-    profileEl.querySelector('.pf-notify').classList.toggle('on', p.notify);
-    profileEl.querySelector('.pf-notify .tg-state').textContent = p.notify ? 'On' : 'Off';
     profileEl.querySelector('.pf-filter').classList.toggle('on', interestFilterActive);
     profileEl.querySelector('.pf-filter .tg-state').textContent = interestFilterActive ? 'On' : 'Off';
     profileEl.querySelector('.pf-filter').style.display = (p.plus && !RT.plusComingSoon) ? '' : 'none';
@@ -1588,15 +1586,31 @@
       });
     }
 
-    h += row('contactEmail', 'Contact email', p.contactEmail, { type: 'email', ph: 'you@email.com' });
+    /* "Contact email" used to sit here. It wrote to profiles.contact_email — which
+       nothing that sends mail ever read. Every email goes to the login address, so
+       a user who set it got their mail somewhere else with no explanation. One
+       address, or a promise we don't keep. */
 
-    // Communication preferences (always-interactive toggles).
+    /* Two toggles, and the split between them is a legal one, not a stylistic one.
+       A reminder about an event the user SAVED is a service message about their own
+       action, so it is on by default. The weekly digest is a commercial electronic
+       message under CASL (we're in Saskatchewan) and under PECR/GDPR for EU/UK
+       readers — it must stay off until someone deliberately turns it on, and it
+       carries a one-click unsubscribe. Never pre-tick that one. */
     const comms = p.comms || {};
-    h += '<div class="pf-acct-comms"><div class="pf-acct-k">Communication preferences</div>' +
-      [['reminders', 'Event reminders'], ['marketing', 'Offers & news'], ['sms', 'SMS updates']].map(function (d) {
-        return '<button class="pf-toggle pf-comm' + (comms[d[0]] ? ' on' : '') + '" data-comm="' + d[0] + '">' +
-          '<span>' + d[1] + '</span><span class="tg-state">' + (comms[d[0]] ? 'On' : 'Off') + '</span></button>';
-      }).join('') + '</div>';
+    const on = function (k, dflt) { return comms[k] === undefined ? !!dflt : !!comms[k]; };
+    const TOGGLES = [
+      ['reminders', 'Event reminders', 'Before an event you saved or registered for.', true],
+      ['digest', "Weekly what's on near you", 'One email a week. Nothing else.', false]
+    ];
+    h += '<div class="pf-acct-comms"><div class="pf-acct-k">Emails</div>' +
+      TOGGLES.map(function (d) {
+        const v = on(d[0], d[3]);
+        return '<button class="pf-toggle pf-comm' + (v ? ' on' : '') + '" data-comm="' + d[0] + '">' +
+          '<span class="pf-comm-t">' + d[1] + '<small>' + d[2] + '</small></span>' +
+          '<span class="tg-state">' + (v ? 'On' : 'Off') + '</span></button>';
+      }).join('') +
+      '<p class="pf-comm-note">Sent to ' + esc(user.email) + '. Unsubscribe any time.</p></div>';
 
     box.innerHTML = h;
     if (acctEditing && acctEditing !== 'address') {
@@ -1642,11 +1656,8 @@
       acctEditing = null; renderAccount();
       return;
     }
-    if (field === 'contactEmail' && v && !EMAIL_RE.test(v)) { window.EventuallyToast('Enter a valid email address.'); return; }
-
     if (field === 'name') { P.setName(v || 'You'); renderMenuTrigger(); }
     else if (field === 'phone') { P.set({ phone: v || null }); }
-    else if (field === 'contactEmail') { P.set({ contactEmail: v || null }); }
 
     acctEditing = null;
     if (field === 'name') renderProfile(); else renderAccount();
@@ -1728,15 +1739,19 @@
     const comm = e.target.closest('.pf-comm');
     if (comm) {
       const c = Object.assign({}, P.get().comms); const k = comm.dataset.comm;
-      c[k] = !c[k]; P.set({ comms: c }); renderAccount(); syncProfile();
-      // Turning reminders on: ask for Notification permission (needs this gesture), then schedule.
-      if (k === 'reminders') {
-        if (c[k] && Reminders && !Reminders.permitted()) {
-          Reminders.requestPermission(function (ok) {
-            window.EventuallyToast(ok ? 'Reminders on — we\'ll ping you about saved events.' : 'Allow notifications to get reminders.');
-          });
-        } else { syncReminders(); }
-      }
+      // Reminders default to ON, so an undefined value means on — flipping it has
+      // to read that default, not treat undefined as off and "turn on" what is
+      // already on.
+      const dflt = (k === 'reminders');
+      const now = (c[k] === undefined) ? dflt : !!c[k];
+      c[k] = !now;
+      P.set({ comms: c }); renderAccount(); syncProfile();
+      window.EventuallyToast(c[k]
+        ? (k === 'digest' ? "You'll get one email a week." : "Reminders on — we'll email you before saved events.")
+        : 'Turned off. No more of those emails.');
+      // Reminders are sent server-side now, so no Notification permission prompt.
+      // The local in-session reminders still honour the same flag.
+      if (k === 'reminders') syncReminders();
       return;
     }
   });
@@ -1763,7 +1778,6 @@
       });
     }, 350);
   });
-  profileEl.querySelector('.pf-notify').addEventListener('click', enableNotifications);
   profileEl.querySelector('.pf-filter').addEventListener('click', function () {
     interestFilterActive = !interestFilterActive;
     refreshMarkers(); renderProfile();
@@ -1994,19 +2008,15 @@
     const it = e.target.closest('.sv-litem'); if (it) svOpenEvent(it.dataset.id);
   });
 
-  /* ---------- web notifications (frontend demo) ---------- */
-  function enableNotifications() {
-    if (!('Notification' in window)) { window.EventuallyToast('Notifications not supported here.'); return; }
-    if (P.get().notify) { P.setNotify(false); renderProfile(); syncProfile(); window.EventuallyToast('Notifications off.'); return; }
-    Notification.requestPermission().then(function (perm) {
-      if (perm === 'granted') {
-        P.setNotify(true); renderProfile(); syncProfile();
-        try { new Notification('Eventually', { body: "You're set — we'll ping you about saved & nearby events.", icon: 'assets/icon.svg' }); } catch (e) {}
-        setTimeout(function () { if (P.get().notify) try { new Notification('New nearby event', { body: 'A live music event just popped up near you.', icon: 'assets/icon.svg' }); } catch (e) {} }, 9000);
-        setTimeout(function () { if (P.get().notify) try { new Notification('Trending now', { body: 'Neon Skyline Festival is climbing fast.', icon: 'assets/icon.svg' }); } catch (e) {} }, 20000);
-      } else window.EventuallyToast('Notifications blocked in your browser settings.');
-    });
-  }
+  /* enableNotifications() was here and it has been DELETED, not disabled.
+     It asked for the Notification permission and then fired two hardcoded
+     fabrications at whoever granted it:
+        9s  → "A live music event just popped up near you."
+        20s → "Neon Skyline Festival is climbing fast."
+     There is no Neon Skyline Festival. It was demo dressing that shipped, and
+     spending a real permission grant on invented events is worse than having no
+     notifications at all — it teaches people our alerts are noise.
+     Reminders are now real emails about real saved events (see comms.reminders). */
 
   /* ---------- display ads + premium visibility ---------- */
   const adbar = document.getElementById('adbar');
@@ -2298,7 +2308,9 @@
     // Columns from 20_profile_details.sql — saved in a SEPARATE update so that if
     // that migration hasn't been run yet, the missing-column error can't block the
     // core fields above.
-    A.saveProfile({ contact_email: p.contactEmail, address: p.address, comms: p.comms });
+    // contact_email is no longer written — the column stays for now, but nothing
+    // reads it and the field is gone from the UI.
+    A.saveProfile({ address: p.address, comms: p.comms });
   }
   // Copy shown on the sign-in modal when the user reaches it via an upgrade CTA,
   // so the prompt reads as "start Plus", not a generic sign-in.

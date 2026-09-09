@@ -1289,6 +1289,13 @@ body.has-ad .toast { bottom: calc(144px + env(safe-area-inset-bottom, 0px)); }
   border: 1px solid var(--line-2); font-size: 12px; line-height: 1.5; color: var(--muted); }
 .co-perk b { color: var(--ember); }
 
+/* ---------- profile: email preferences ---------- */
+/* Each toggle carries a line saying what it actually sends, so nobody has to
+   guess what they're agreeing to — the old four-toggle version said nothing. */
+.pf-comm-t { display: flex; flex-direction: column; gap: 2px; text-align: left; }
+.pf-comm-t small { font-size: 11px; line-height: 1.4; color: var(--hint); font-weight: 400; }
+.pf-comm-note { margin: 9px 2px 0; font-size: 11px; line-height: 1.5; color: var(--hint); }
+
 /* ---------- publish form: venue time zone ---------- */
 .co-body .f-tz { width: 100%; }
 /* The confirmation line is the safeguard against a wrong zone slipping through,
