@@ -99,10 +99,13 @@
               // Was collected and silently discarded for months — there was no
               // column for it. Now stored, and required, because "Abuja" is not
               // somewhere a person can turn up to.
-              '<label>Venue<input class="f-venue" placeholder="The Roundhouse"></label>' +
+              // Placeholders describe the field; they never show a sample value. A
+              // made-up address or venue can be someone's real one, and a grey
+              // sample reads as already filled in.
+              '<label>Venue<input class="f-venue" placeholder="Venue name"></label>' +
             '</div>' +
             '<label>Address <span class="co-opt">(filled in from the map — edit if needed)</span>' +
-              '<input class="f-address" placeholder="1 Aguiyi Ironsi St, Maitama, Abuja"></label>' +
+              '<input class="f-address" placeholder="Street address, city"></label>' +
             '<label>Date<input type="date" class="f-date"></label>' +
             '<div class="co-row co-row-2">' +
               '<label>Start<input type="time" class="f-time" value="19:00"></label>' +
@@ -122,8 +125,10 @@
             '<fieldset class="co-reg">' +
               '<legend>How do people get in?</legend>' +
               '<label class="co-reg-opt"><input type="radio" name="co-reg" class="f-reg-link" value="link" checked>' +
-                '<span><b>They book somewhere else</b><small>A ticket page, Eventbrite, your own site — we send people there.</small></span></label>' +
-              '<label class="co-reg-url">Booking link<input class="f-url" placeholder="https://yourtickets.com/show"></label>' +
+                '<span><b>They book somewhere else</b><small>A ticket page or your own website — we send people there.</small></span></label>' +
+              // example.com is reserved for documentation (RFC 2606) — it can never
+              // be anyone's real site, so it is the only safe sample URL.
+              '<label class="co-reg-url">Booking link<input class="f-url" placeholder="https://example.com/tickets"></label>' +
               '<label class="co-reg-opt"><input type="radio" name="co-reg" class="f-reg-eventually" value="eventually">' +
                 '<span><b>Eventually collects registrations</b><small>People register here with one tap. You get their name and email as a list you can download.</small></span></label>' +
               '<label class="co-reg-cap" hidden>Limit places <span class="co-opt">(optional)</span>' +

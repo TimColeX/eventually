@@ -852,7 +852,7 @@
   }
 
   // Per-source breakdown (live). Dynamic — any new source appears automatically.
-  const SRC_LABELS = { ticketmaster: 'Ticketmaster', predicthq: 'PredictHQ', native: 'Eventually', meetup: 'Meetup', eventbrite: 'Eventbrite', seatgeek: 'SeatGeek' };
+  const SRC_LABELS = { ticketmaster: 'Ticketmaster', predicthq: 'PredictHQ', native: 'Eventually', meetup: 'Meetup', seatgeek: 'SeatGeek' };
   function renderSourceBreakdown() {
     const box = document.getElementById('ad-src');
     if (!box) return;
@@ -1372,8 +1372,12 @@
       '<div class="ad-field"><label>Message (read aloud verbatim)</label>' +
         '<textarea id="db-spon-msg" placeholder="e.g. Acme Coffee — grab a cup on King Street, two minutes from the venue."></textarea>' +
         '<span class="ad-hint">The host reads <b>“A quick word from our sponsor.”</b> before this, so you don\'t need “brought to you by” — and shouldn\'t claim the whole briefing, since a worldwide and a city sponsor can both play.</span></div>' +
-      '<div class="ad-row"><div class="ad-field"><label>Active from (optional)</label><input id="db-spon-from" type="date"></div>' +
-        '<div class="ad-field"><label>Active to (optional)</label><input id="db-spon-to" type="date"></div></div>' +
+      // Windows are compared against the UTC date, not the listener's. Said plainly here
+      // because a window set to start "today" from a UTC-negative timezone would otherwise
+      // look like a sponsor that simply never airs — which is exactly what happened once.
+      '<div class="ad-row"><div class="ad-field"><label>Active from (optional, UTC)</label><input id="db-spon-from" type="date"></div>' +
+        '<div class="ad-field"><label>Active to (optional, UTC)</label><input id="db-spon-to" type="date"></div></div>' +
+      '<div class="ad-hint">Dates are UTC and inclusive. Leave blank to air indefinitely.</div>' +
       '<div><button class="ad-save" id="db-spon-add">Add sponsor</button><span class="ad-saved" id="db-spon-ok"></span></div></div>';
 
     return '<div class="ad-sec"><h2>Briefing content &amp; controls</h2>' +

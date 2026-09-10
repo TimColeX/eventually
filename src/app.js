@@ -1091,7 +1091,7 @@
       // community / feed events (e.g. university, library, museum) say "View event" so we
       // never falsely promise a purchase.
       var ticketed = (ev.sources || []).some(function (s) { return s.price != null; }) ||
-        /ticketmaster|seatgeek|eventbrite|ticketweb|axs|stubhub|dice/i.test(String(ev.source || '') + ' ' + (ev.sources || []).map(function (s) { return s.source || ''; }).join(' '));
+        /ticketmaster|seatgeek|ticketweb|axs|stubhub|dice/i.test(String(ev.source || '') + ' ' + (ev.sources || []).map(function (s) { return s.source || ''; }).join(' '));
       var cta = ticketed ? 'Get Tickets ↗' : 'View event ↗';
       var note = ticketed
         ? "You'll be taken to " + esc(ev.sourceLabel || 'the official provider') + " to book."

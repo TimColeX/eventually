@@ -658,8 +658,10 @@
     this._rotateLine();
   };
 
-  // Plus: play the cached premium audio segments (briefing body + any verbatim promo
-  // clips) back-to-back, then a music GAP. Each clip is a pre-rendered ElevenLabs mp3.
+  // Play the cached audio segments back-to-back, then a music GAP. Each clip is a
+  // pre-rendered mp3. The server decides the order — currently sponsor clip(s), then the
+  // briefing body, then any announcement — so nothing here may assume segs[0] is the
+  // briefing; each segment carries its own caption and is played as it comes.
   AIHost.prototype._playPremiumSegments = function (segs, i) {
     if (!this.speaking || this.briefingPlaying) return;
     if (i >= segs.length) { this._afterSegment(); return; }   // done → GAP → refresh on next rotate

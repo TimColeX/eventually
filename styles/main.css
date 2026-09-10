@@ -1363,8 +1363,12 @@ body.has-ad .toast { bottom: calc(144px + env(safe-area-inset-bottom, 0px)); }
 .co-tz-note .co-tz-check { color: var(--ember); }
 
 /* ---------- publish form: how people get in ---------- */
-.co-reg { margin: 0; padding: 12px; border: 1px solid var(--line-2); border-radius: 12px; background: #FDFBF8; }
-.co-reg legend { padding: 0 6px; font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .02em; }
+.co-reg { margin: 0; padding: 14px 14px 8px; border: 1px solid var(--line-2); border-radius: 12px; background: #FDFBF8; }
+/* A <legend> is drawn ON the fieldset's top border by default, so the heading cut
+   through the line and crowded the rounded corner. Floating it is the standard way
+   to make a legend lay out like an ordinary block INSIDE the box. */
+.co-reg legend { float: left; width: 100%; padding: 0; margin: 0 0 4px; font-size: 12.5px; font-weight: 700; color: var(--ink); letter-spacing: .01em; }
+.co-reg legend + * { clear: both; }
 /* `.co-body label { display:block }` outspecifies a bare `.co-reg-opt`, which
    turns the radio into a full-width block stacked above its own text. Match the
    same specificity so the row stays a row. */

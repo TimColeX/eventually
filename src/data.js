@@ -1,5 +1,5 @@
 /* Eventually — mock event data layer.
- * Simulates the aggregated pipeline (Eventbrite / Ticketmaster / Eventually-native).
+ * Simulates the aggregated pipeline (Ticketmaster / Eventually-native).
  * Front-end demo only: no network calls. Swap getEvents() for a real fetch later.
  */
 (function (global) {
@@ -18,7 +18,6 @@
   }
 
   const SOURCES = {
-    eventbrite:  { label: 'Eventbrite',   color: '#CB5A3C', badge: 'Official listing' },
     ticketmaster:{ label: 'Ticketmaster', color: '#8A3B1E', badge: 'Official listing' },
     predicthq:   { label: 'PredictHQ',    color: '#2E7D8A', badge: 'Verified listing' },
     meetup:      { label: 'Meetup',       color: '#B5722F', badge: 'Community event' },
@@ -48,60 +47,60 @@
   const RAW = [
     // [name, city, lat, lon, dayOffset, type, category, source, banner]
     ['Neon Skyline Festival', 'Tokyo',        35.68, 139.69,   0, 'Music',  'ticketmaster', ['#ff6ec7','#7a3cff']],
-    ['Shibuya Synth Night',   'Tokyo',        35.66, 139.70,   0, 'Music',  'eventbrite',   ['#21d4fd','#7a3cff']],
+    ['Shibuya Synth Night',   'Tokyo',        35.66, 139.70,   0, 'Music',  'ticketmaster', ['#21d4fd','#7a3cff']],
     ['AI Builders Summit',    'San Francisco',37.77,-122.41,   0, 'Tech',   'orbit',        ['#21d4fd','#0a84ff']],
-    ['Sunset Rooftop Sessions','Los Angeles', 34.05,-118.24,   0, 'Music',  'eventbrite',   ['#ffb547','#ff5d5d']],
+    ['Sunset Rooftop Sessions','Los Angeles', 34.05,-118.24,   0, 'Music',  'ticketmaster', ['#ffb547','#ff5d5d']],
     ['Midnight Gallery Crawl','Berlin',       52.52,  13.40,   0, 'Art',    'orbit',        ['#ffb547','#ff6ec7']],
     ['Thames Light Parade',   'London',       51.50,  -0.12,   0, 'Art',    'ticketmaster', ['#9ad0ff','#21d4fd']],
-    ['Copacabana Beat',       'Rio de Janeiro',-22.97,-43.18,  0, 'Music',  'eventbrite',   ['#7CFFB2','#21d4fd']],
+    ['Copacabana Beat',       'Rio de Janeiro',-22.97,-43.18,  0, 'Music',  'ticketmaster', ['#7CFFB2','#21d4fd']],
     ['Harbour Food Carnival', 'Sydney',      -33.86, 151.21,   0, 'Food',   'orbit',        ['#7CFFB2','#ffb547']],
 
-    ['Quantum Dev Conf',      'Austin',       30.27, -97.74,   2, 'Tech',   'eventbrite',   ['#21d4fd','#7a3cff']],
+    ['Quantum Dev Conf',      'Austin',       30.27, -97.74,   2, 'Tech',   'ticketmaster', ['#21d4fd','#7a3cff']],
     ['Desert Bloom Rave',     'Dubai',        25.20,  55.27,   3, 'Music',  'ticketmaster', ['#ff6ec7','#ffb547']],
     ['Nordic Film Premiere',  'Stockholm',    59.33,  18.06,   4, 'Film',   'orbit',        ['#b388ff','#21d4fd']],
-    ['Street Food Worlds',    'Bangkok',      13.75, 100.50,   5, 'Food',   'eventbrite',   ['#7CFFB2','#ff6ec7']],
+    ['Street Food Worlds',    'Bangkok',      13.75, 100.50,   5, 'Food',   'ticketmaster', ['#7CFFB2','#ff6ec7']],
     ['Andean Sound Ritual',   'Bogotá',        4.71, -74.07,   6, 'Music',  'orbit',        ['#ffb547','#7CFFB2']],
     ['Champions Final',       'Madrid',       40.42,  -3.70,   7, 'Sports', 'ticketmaster', ['#ff5d5d','#ffb547']],
-    ['Future of Web',         'Toronto',      43.65, -79.38,   8, 'Tech',   'eventbrite',   ['#21d4fd','#9ad0ff']],
+    ['Future of Web',         'Toronto',      43.65, -79.38,   8, 'Tech',   'ticketmaster', ['#21d4fd','#9ad0ff']],
     ['Sahara Stargazing',     'Marrakesh',    31.63,  -7.99,   9, 'Talks',  'orbit',        ['#9ad0ff','#b388ff']],
-    ['Cape Jazz Weekend',     'Cape Town',   -33.92,  18.42,  10, 'Music',  'eventbrite',   ['#ff6ec7','#21d4fd']],
+    ['Cape Jazz Weekend',     'Cape Town',   -33.92,  18.42,  10, 'Music',  'ticketmaster', ['#ff6ec7','#21d4fd']],
     ['Bollywood Lights',      'Mumbai',       19.08,  72.88,  11, 'Film',   'ticketmaster', ['#ffb547','#ff6ec7']],
     ['Aurora Tech Expo',      'Reykjavik',    64.15, -21.94,  12, 'Tech',   'orbit',        ['#7CFFB2','#21d4fd']],
-    ['Tango Under Stars',     'Buenos Aires',-34.60, -58.38,  13, 'Music',  'eventbrite',   ['#b388ff','#ff6ec7']],
+    ['Tango Under Stars',     'Buenos Aires',-34.60, -58.38,  13, 'Music',  'ticketmaster', ['#b388ff','#ff6ec7']],
     ['Great Wall Run',        'Beijing',      39.90, 116.40,  14, 'Sports', 'ticketmaster', ['#ff5d5d','#ffb547']],
     ['Maple Art Biennale',    'Montreal',     45.50, -73.57,  16, 'Art',    'orbit',        ['#ffb547','#b388ff']],
-    ['Pacific Code Camp',     'Auckland',    -36.85, 174.76,  18, 'Tech',   'eventbrite',   ['#21d4fd','#7CFFB2']],
+    ['Pacific Code Camp',     'Auckland',    -36.85, 174.76,  18, 'Tech',   'ticketmaster', ['#21d4fd','#7CFFB2']],
     ['Saffron Night Market',  'Istanbul',     41.01,  28.98,  20, 'Food',   'orbit',        ['#ffb547','#ff5d5d']],
-    ['Nairobi Beats',         'Nairobi',      -1.29,  36.82,  22, 'Music',  'eventbrite',   ['#7CFFB2','#ff6ec7']],
+    ['Nairobi Beats',         'Nairobi',      -1.29,  36.82,  22, 'Music',  'ticketmaster', ['#7CFFB2','#ff6ec7']],
     ['Alpine Film Fest',      'Zurich',       47.37,   8.54,  25, 'Film',   'ticketmaster', ['#b388ff','#9ad0ff']],
     ['Monsoon Tech Fair',     'Singapore',     1.35, 103.82,  28, 'Tech',   'orbit',        ['#21d4fd','#0a84ff']],
-    ['Pyramid Light Show',    'Cairo',        30.04,  31.24,  30, 'Art',    'eventbrite',   ['#ffb547','#7a3cff']],
+    ['Pyramid Light Show',    'Cairo',        30.04,  31.24,  30, 'Art',    'ticketmaster', ['#ffb547','#7a3cff']],
     ['Northern Gastronomy',   'Oslo',         59.91,  10.75,  34, 'Food',   'orbit',        ['#7CFFB2','#21d4fd']],
     ['Carnival of Colours',   'Lisbon',       38.72,  -9.14,  38, 'Art',    'ticketmaster', ['#ff6ec7','#ffb547']],
-    ['Outback Sound',         'Perth',       -31.95, 115.86,  42, 'Music',  'eventbrite',   ['#ffb547','#ff5d5d']],
+    ['Outback Sound',         'Perth',       -31.95, 115.86,  42, 'Music',  'ticketmaster', ['#ffb547','#ff5d5d']],
     ['Steppe Marathon',       'Almaty',       43.26,  76.95,  46, 'Sports', 'orbit',        ['#ff5d5d','#7CFFB2']],
-    ['Hanoi Lantern Nights',  'Hanoi',        21.03, 105.85,  50, 'Art',    'eventbrite',   ['#ffb547','#ff6ec7']],
+    ['Hanoi Lantern Nights',  'Hanoi',        21.03, 105.85,  50, 'Art',    'ticketmaster', ['#ffb547','#ff6ec7']],
 
     // Live today in North America — gives the Host countdowns + a "sporting events underway" beat.
     ['Vancouver Jazz Festival', 'Vancouver',    49.28,-123.12,  0, 'Music',  'ticketmaster', ['#CB5A3C','#8A3B1E']],
     ['Pacific Coast Classic',   'Los Angeles',   34.05,-118.25,  0, 'Sports', 'ticketmaster', ['#A23A22','#CB5A3C']],
-    ['Lakeshore Marathon',      'Chicago',       41.88, -87.63,  0, 'Sports', 'eventbrite',   ['#A23A22','#E0875F']],
+    ['Lakeshore Marathon',      'Chicago',       41.88, -87.63,  0, 'Sports', 'ticketmaster', ['#A23A22','#E0875F']],
     ['Bay City Derby',          'San Francisco', 37.77,-122.43,  0, 'Sports', 'orbit',        ['#A23A22','#B5722F']],
 
     // Extra events sharing a city, to show location markers with a count badge.
-    ['Bay Area Future Fest',   'San Francisco',37.78,-122.42,  0, 'Tech',   'eventbrite',   ['#21d4fd','#7CFFB2']],
+    ['Bay Area Future Fest',   'San Francisco',37.78,-122.42,  0, 'Tech',   'ticketmaster', ['#21d4fd','#7CFFB2']],
     ['SoMa Night Market',      'San Francisco',37.78,-122.40,  0, 'Food',   'orbit',        ['#7CFFB2','#ffb547']],
     ['West End Late Show',     'London',       51.51,  -0.13,  0, 'Film',   'ticketmaster', ['#b388ff','#21d4fd']],
-    ['Kreuzberg Beats',        'Berlin',       52.50,  13.42,  0, 'Music',  'eventbrite',   ['#ff6ec7','#7a3cff']],
-    ['Harbour Lights Encore',  'Sydney',      -33.87, 151.20,  0, 'Art',    'eventbrite',   ['#ffb547','#ff6ec7']],
+    ['Kreuzberg Beats',        'Berlin',       52.50,  13.42,  0, 'Music',  'ticketmaster', ['#ff6ec7','#7a3cff']],
+    ['Harbour Lights Encore',  'Sydney',      -33.87, 151.20,  0, 'Art',    'ticketmaster', ['#ffb547','#ff6ec7']],
     ['Austin Code Jam',        'Austin',       30.26, -97.75,  2, 'Tech',   'orbit',        ['#21d4fd','#0a84ff']],
-    ['Austin Food Trucks Fest','Austin',       30.27, -97.73,  2, 'Food',   'eventbrite',   ['#7CFFB2','#ffb547']],
+    ['Austin Food Trucks Fest','Austin',       30.27, -97.73,  2, 'Food',   'ticketmaster', ['#7CFFB2','#ffb547']],
 
     // A few in the past, surfaced when scrubbing the timeline backwards.
     ['Spring Echo Fest',      'Seoul',        37.57, 126.98,  -4, 'Music',  'ticketmaster', ['#ff6ec7','#21d4fd']],
-    ['Retro Arcade Expo',     'Chicago',      41.88, -87.63,  -7, 'Tech',   'eventbrite',   ['#21d4fd','#b388ff']],
+    ['Retro Arcade Expo',     'Chicago',      41.88, -87.63,  -7, 'Tech',   'ticketmaster', ['#21d4fd','#b388ff']],
     ['Harvest Plates',        'Mexico City',  19.43, -99.13, -10, 'Food',   'orbit',        ['#7CFFB2','#ffb547']],
-    ['Polar Lights Talks',    'Helsinki',     60.17,  24.94, -14, 'Talks',  'eventbrite',   ['#9ad0ff','#21d4fd']],
+    ['Polar Lights Talks',    'Helsinki',     60.17,  24.94, -14, 'Talks',  'ticketmaster', ['#9ad0ff','#21d4fd']],
     ['Monsoon Melodies',      'Jakarta',      -6.21, 106.85, -20, 'Music',  'ticketmaster', ['#ff6ec7','#ffb547']]
   ];
 
@@ -153,20 +152,17 @@
     'Sports': 40, 'Film & Media': 18, 'Community': 0, 'Nightlife': 20, 'Comedy': 22
   };
   const PLATFORM_URL = {
-    eventbrite: function (id) { return 'https://www.eventbrite.com/e/' + id; },
     meetup: function (id) { return 'https://www.meetup.com/events/' + id; },
     ticketmaster: function (id) { return 'https://www.ticketmaster.com/event/' + id; },
     native: function () { return null; }
   };
   // Same event also listed on other platforms (price + small time drift to test the engine).
   const MULTI = {
-    'Neon Skyline Festival':  [{ source: 'ticketmaster', price: 45 }, { source: 'eventbrite', price: 48, hr: 1 }],
-    'Vancouver Jazz Festival':[{ source: 'ticketmaster', price: 35 }, { source: 'eventbrite', price: 39, hr: -1 }],
-    'Champions Final':        [{ source: 'ticketmaster', price: 25 }, { source: 'eventbrite', price: 30, hr: 2 }],
-    'Quantum Dev Conf':       [{ source: 'eventbrite', price: 20 }, { source: 'meetup', price: 0, hr: 1 }],
-    'Future of Web':          [{ source: 'eventbrite', price: 15 }, { source: 'meetup', price: 0, hr: -2 }],
-    'Street Food Worlds':     [{ source: 'eventbrite', price: 10 }, { source: 'meetup', price: 0, hr: 1 }],
-    'Copacabana Beat':        [{ source: 'eventbrite', price: 25 }, { source: 'ticketmaster', price: 28, hr: 2 }]
+    // Eventbrite was removed as a source (it is not used anywhere in the app), so the
+    // pairs that listed it are gone rather than faked under another real platform's name.
+    'Quantum Dev Conf':       [{ source: 'ticketmaster', price: 20 }, { source: 'meetup', price: 0, hr: 1 }],
+    'Future of Web':          [{ source: 'ticketmaster', price: 15 }, { source: 'meetup', price: 0, hr: -2 }],
+    'Street Food Worlds':     [{ source: 'ticketmaster', price: 10 }, { source: 'meetup', price: 0, hr: 1 }]
   };
 
   let _sid = 0;
@@ -244,7 +240,7 @@
     ['Addis Ababa',9.03,38.74],['Dakar',14.72,-17.47]
   ];
   const CATS = Object.keys(CATEGORIES);
-  const SIM_PLATFORMS = ['ticketmaster', 'eventbrite', 'meetup'];
+  const SIM_PLATFORMS = ['ticketmaster', 'meetup'];
   function rnd(a, b) { return a + Math.random() * (b - a); }
   function pickOne(a) { return a[(Math.random() * a.length) | 0]; }
   (function generate() {

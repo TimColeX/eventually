@@ -1,5 +1,5 @@
 /* Eventually — cross-source deduplication engine (frontend, runs in the browser).
- * Groups the SAME event seen across sources (Eventbrite/Meetup/Ticketmaster/native)
+ * Groups the SAME event seen across sources (Ticketmaster/PredictHQ/feeds/native)
  * into one cluster WITHOUT merging field data — every source record is preserved.
  * Modular: weights/threshold are config; scalable shape: candidate bucketing keeps
  * comparisons local (<200 per event), so it extends to large feeds. */
