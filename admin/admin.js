@@ -535,25 +535,68 @@
       if (r.error) { body.innerHTML = '<div class="ad-center">Could not load (' + esc(r.error.message) + ').</div>'; return; }
       pendingCount = rows.length; setPendingBadge();     // keep the tab badge in sync
       if (!rows.length) { body.innerHTML = '<div class="ad-sec"><h2>Review Events</h2><p class="ad-hint">Nothing pending — all caught up. ✓</p></div>'; return; }
-      let html = '<div class="ad-sec"><h2>Pending review (' + rows.length + ')</h2>' +
-        '<p class="ad-hint">Events submitted by users wait here for your approval before they appear on the globe. Editing an already-approved event sends it back here for re-review.</p>';
+      let html = '<div class="ad-sec"><h2>Review (' + rows.length + ')</h2>' +
+        '<p class="ad-hint">New events wait here for your approval before they appear on the globe; editing an approved event sends it back. ' +
+        'Featuring requests are decided here too — the organiser is emailed your decision.</p>';
+      // One decision per card. A new event that asked to be featured gets three choices;
+      // an event that is already live with an open request gets Feature / Decline.
+      const tag = function (text, feat) {
+        return '<span style="display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;margin:0 6px 4px 0;' +
+          (feat ? 'background:#FDF1E7;color:#8A3B1E' : 'background:#EFE8DD;color:#6B5E4E') + '">' + text + '</span>';
+      };
       rows.forEach(function (e) {
-        html += '<div class="rv-row" data-id="' + esc(e.event_id) + '">' +
-          '<div class="rv-main"><strong>' + esc(e.title) + '</strong>' +
+        // Before 77, pending_events() returned ONLY pending rows and no moderation field.
+        const isNew = (e.moderation || 'pending') === 'pending';
+        const wantsFeature = !!e.feature_requested && !e.sponsored;
+        const id = esc(e.event_id);
+        const btn = function (cls, decision, label, ask) {
+          return '<button class="' + cls + ' rv-act" data-id="' + id + '" data-d="' + decision + '"' + (ask ? ' data-ask="' + ask + '"' : '') + '>' + label + '</button>';
+        };
+        const tags = tag(isNew ? 'New event' : 'Already live', false) +
+          (wantsFeature ? tag('✦ Featuring requested', true) : '') +
+          (e.sponsored ? tag('★ Featured', true) : '');
+        const actions = isNew
+          ? (wantsFeature ? btn('ad-save', 'approve_feature', 'Approve &amp; feature') + btn('an-act', 'approve', 'Approve', 'feature')
+                          : btn('ad-save', 'approve', 'Approve')) +
+            btn('an-act an-danger', 'reject', 'Reject', 'reject')
+          : btn('ad-save', 'feature', 'Feature') + btn('an-act', 'decline_feature', 'Decline featuring', 'feature');
+        html += '<div class="rv-row" data-id="' + id + '">' +
+          '<div class="rv-main"><div>' + tags + '</div><strong>' + esc(e.title) + '</strong>' +
           '<small>' + esc(e.category || '') + ' · ' + esc(e.city || '') + ' · ' + (e.start_time ? new Date(e.start_time).toLocaleDateString() : '') + '</small>' +
           (e.description ? '<p class="rv-desc">' + esc(e.description) + '</p>' : '') + '</div>' +
-          '<div class="rv-actions">' +
-            '<button class="ad-save rv-approve" data-id="' + esc(e.event_id) + '">Approve</button>' +
-            '<button class="an-act an-danger rv-reject" data-id="' + esc(e.event_id) + '">Reject</button>' +
-          '</div></div>';
+          // .rv-actions is flex:none in admin.css — fine for two buttons, but three would
+          // crowd out the event text, so let them wrap inside a fixed width.
+          '<div class="rv-actions" style="flex:0 1 auto;flex-wrap:wrap;justify-content:flex-end;max-width:290px">' + actions + '</div></div>';
       });
       body.innerHTML = html + '</div>';
-      function moderate(id, status, reason) {
-        sb.rpc('moderate_event', { p_id: id, p_status: status, p_reason: reason || null }).then(function () { renderReview(body); });
-      }
-      body.querySelectorAll('.rv-approve').forEach(function (b) { b.onclick = function () { moderate(b.dataset.id, 'approved'); }; });
-      body.querySelectorAll('.rv-reject').forEach(function (b) {
-        b.onclick = function () { const reason = prompt('Reason for rejection (the creator will see this):', ''); if (reason === null) return; moderate(b.dataset.id, 'rejected', reason); };
+      body.querySelectorAll('.rv-act').forEach(function (b) {
+        b.onclick = function () {
+          let reason = null;
+          if (b.dataset.ask === 'reject') {
+            reason = prompt('Reason for rejection (the organiser will see this):', '');
+            if (reason === null) return;
+          } else if (b.dataset.ask === 'feature') {
+            reason = prompt('Not featuring it. Reason for the organiser (optional — leave blank to give none):', '');
+            if (reason === null) return;
+          }
+          b.disabled = true;
+          sb.rpc('review_event', { p_id: b.dataset.id, p_decision: b.dataset.d, p_reason: reason || null }).then(function (r) {
+            const err = (r && r.error && r.error.message) || (r && r.data && r.data.error);
+            if (err) {
+              // Before 77 is run, review_event doesn't exist. Keep approving and rejecting
+              // working through the old moderate_event rather than locking the queue.
+              if (/review_event/.test(String(err)) && (b.dataset.d === 'approve' || b.dataset.d === 'reject')) {
+                sb.rpc('moderate_event', { p_id: b.dataset.id, p_status: b.dataset.d === 'approve' ? 'approved' : 'rejected',
+                  p_reason: b.dataset.d === 'reject' ? reason : null }).then(function () { renderReview(body); });
+                return;
+              }
+              b.disabled = false;
+              alert('Could not save: ' + err + (/review_event/.test(String(err)) ? '\n\nRun backend/77_feature_in_review.sql first.' : ''));
+              return;
+            }
+            renderReview(body);
+          }, function (x) { b.disabled = false; alert('Could not save: ' + ((x && x.message) || x)); });
+        };
       });
     });
   }

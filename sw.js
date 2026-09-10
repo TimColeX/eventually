@@ -22,7 +22,7 @@
  * and index.html's build stamp, which is what lets a running app notice a
  * deploy at all. Bumping this constant by hand leaves those two behind.
  */
-const CACHE = 'eventually-v179';
+const CACHE = 'eventually-v180';
 const ASSETS = [
   './', './index.html', './styles/main.css',
   './src/tz.js', './src/dedup.js', './src/data.js', './src/api.js', './src/auth.js', './src/billing.js', './src/subscriptions.js', './src/signature.js', './src/geo.js', './src/hostvoice.js', './src/landdata.js', './src/profile.js', './src/reminders.js', './src/monetize.js',

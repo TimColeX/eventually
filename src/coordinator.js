@@ -151,7 +151,10 @@
               '<span class="co-catcolor-t">Shows in the <b class="co-catname">Music</b> colour on the globe &amp; card — set automatically by category.</span></div>' +
             '<label class="co-feature"><input type="checkbox" class="f-feature">' +
               '<span class="co-feature-txt"><b>✦ Ask us to feature this event</b>' +
-              '<small>Premium placement — a distinct highlight, a guaranteed spike, and top of search. We review requests by hand; featuring is free while we are in beta.</small></span>' +
+              // Only what featuring actually does. It used to promise "a guaranteed spike"
+              // (featured spikes are capped at 12, 3 per continent) and "top of search"
+              // (search ranks by popularity only).
+              '<small>A ★ Featured badge, a taller spike on the globe, and first place in its location\'s event list. We review every request by hand and email you our decision — featuring is free while we\'re in beta.</small></span>' +
             '</label>' +
           '</div>' +
         '</div></div>' +
