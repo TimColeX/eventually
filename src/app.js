@@ -2150,7 +2150,9 @@
     // /browse/ indexes all 88 city pages and nothing in the app linked to it, so it
     // was invisible to users. Site-level destination, hence the lower group.
     h += '<button class="dd-item" data-act="browse">Browse Cities</button>';
-    h += '<button class="dd-item" data-act="contact">Contact Sales</button>';
+    // "Contact Sales" said nothing about what is for sale. The distinctive product is
+    // a line read by the AI host in one city's briefing — name that.
+    h += '<button class="dd-item" data-act="contact">Advertise on Eventually</button>';
     if (RT.plusComingSoon) h += '<button class="dd-item" data-act="plus">Eventually Plus</button>';
     else if (!p.plus) h += '<button class="dd-item" data-act="plus">Get Eventually Plus</button>';
     if (user) h += '<div class="dd-sep"></div><button class="dd-item dd-muted" data-act="signout">Sign Out</button>';
@@ -2306,12 +2308,20 @@
   function refreshPlusModal() { if (modal.classList.contains('open') && modal.querySelector('.plus-modal')) openPlus(); }
   const SALES_EMAIL = 'info@eventually-app.com';
   function openContact() {
-    openModal('Contact Sales',
-      '<p class="modal-lead">Partner with Eventually — sponsorships, featured placements and ticketing.</p>' +
+    /* Was: "Partner with Eventually — sponsorships, featured placements and ticketing."
+       Two of those three aren't sold (featuring is free in beta; we don't sell tickets),
+       and it buried the one thing nobody else offers: a line read aloud by the AI host
+       in a single city's briefing. Local radio, targetable to one city. */
+    openModal('Advertise on Eventually',
+      '<p class="modal-lead">Your business, read aloud by the Eventually host in the briefing for your city.</p>' +
+      '<p class="modal-body-text">People open Eventually to find something to do tonight — a gig, a talk, a market. ' +
+      'The host tells them what\'s on nearby, and your message plays right after it, introduced as a sponsor. ' +
+      'Choose one city or worldwide, set how often it runs, and we report exactly how many times it aired.</p>' +
       '<form class="contact-form">' +
         '<label>Name<input name="name" required></label>' +
-        '<label>Work email<input name="email" type="email" required></label>' +
-        '<label>How can we help?<textarea name="msg" rows="3"></textarea></label>' +
+        '<label>Email<input name="email" type="email" required></label>' +
+        '<label>Which city?<input name="city" placeholder="Regina, Saskatoon…"></label>' +
+        '<label>Tell us about your business<textarea name="msg" rows="3"></textarea></label>' +
         // Honeypot: hidden from people, irresistible to bots. Never shown, never focusable.
         '<input name="company" tabindex="-1" autocomplete="off" aria-hidden="true" style="display:none">' +
         '<button type="submit">Send enquiry</button>' +
@@ -2325,9 +2335,17 @@
           e.preventDefault();
           const cfg = window.EVENTUALLY_CONFIG || {};
           const base = (cfg.supabaseUrl || '').replace(/\/+$/, '');
+          /* The city is folded into the message rather than sent as its own field:
+             the contact function reads only name/email/message (+ the honeypot), so a
+             `city` key would be accepted by the form and silently dropped before it
+             ever reached the inbox. Same class of bug as the venue column and the
+             contact-email field — collected, then thrown away. */
+          const city = (form.city.value || '').trim();
+          const msg = form.msg.value.trim();
           const payload = {
             name: form.name.value.trim(), email: form.email.value.trim(),
-            message: form.msg.value.trim(), company: form.company.value
+            message: (city ? 'City of interest: ' + city + '\n\n' : '') + msg,
+            company: form.company.value
           };
           btn.disabled = true; btn.textContent = 'Sending…';
           // No endpoint configured → hand them their mail client rather than

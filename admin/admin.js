@@ -1365,7 +1365,13 @@
       '<div class="ad-row" style="margin-top:10px">' +
         '<div class="ad-field"><label>Scope</label><input id="db-spon-scope" placeholder="world   or   toronto"></div>' +
         '<div class="ad-field"><label>Weight</label><input id="db-spon-weight" type="number" min="1" value="1"></div></div>' +
-      '<div class="ad-field"><label>Message (read aloud verbatim)</label><textarea id="db-spon-msg" placeholder="e.g. This briefing is brought to you by Acme Coffee — grab a cup on King Street."></textarea></div>' +
+      // The old placeholder ("This briefing is brought to you by Acme Coffee…") invited
+      // every sponsor to claim the WHOLE briefing — so a world sponsor and a city sponsor
+      // both did, in the same playback. The host now says "A quick word from our sponsor."
+      // before each one, so the message itself should just sell.
+      '<div class="ad-field"><label>Message (read aloud verbatim)</label>' +
+        '<textarea id="db-spon-msg" placeholder="e.g. Acme Coffee — grab a cup on King Street, two minutes from the venue."></textarea>' +
+        '<span class="ad-hint">The host reads <b>“A quick word from our sponsor.”</b> before this, so you don\'t need “brought to you by” — and shouldn\'t claim the whole briefing, since a worldwide and a city sponsor can both play.</span></div>' +
       '<div class="ad-row"><div class="ad-field"><label>Active from (optional)</label><input id="db-spon-from" type="date"></div>' +
         '<div class="ad-field"><label>Active to (optional)</label><input id="db-spon-to" type="date"></div></div>' +
       '<div><button class="ad-save" id="db-spon-add">Add sponsor</button><span class="ad-saved" id="db-spon-ok"></span></div></div>';
@@ -1373,8 +1379,16 @@
     return '<div class="ad-sec"><h2>Briefing content &amp; controls</h2>' +
       '<p class="ad-hint">Claude authors the AI Host briefing per area (the two-host conversation, or the single-host script). Toggle it on/off, add a global announcement, cap daily generations, and manage sponsors. The hosts, voices and provider are set in <b>AI Host Manager</b> above. Changes apply to briefings generated after you save.</p>' +
       '<label class="ad-toggle"><input type="checkbox" id="db-en"' + (enabled ? ' checked' : '') + '> AI Host briefing enabled</label>' +
+      // This box reaches BOTH tiers, including Plus — which is sold as ad-free. Putting a
+      // sponsorship message here therefore routes paid content to subscribers, skips the
+      // spoken disclosure, and skips per-sponsor airings accounting. It happened: a
+      // sponsor line sat here for 129 airings alongside a real sponsor row, so listeners
+      // heard two different companies each claim to sponsor the same briefing.
       '<div class="ad-field"><label>Global announcement (read to everyone, verbatim)</label>' +
-      '<textarea id="db-ann">' + esc(dbCfg.announcement || '') + '</textarea></div>' +
+      '<textarea id="db-ann">' + esc(dbCfg.announcement || '') + '</textarea>' +
+      '<span class="ad-hint"><b>Editorial and operational notices only</b> — e.g. “Live updates are now on event pages.” ' +
+      'This is read to <b>everyone, including Plus</b>, which is ad-free, and it carries no sponsor disclosure. ' +
+      'Anything paid belongs in <b>Sponsors</b> below, where it is disclosed, free-tier only, and counted per advertiser.</span></div>' +
       '<div class="ad-field"><label>Daily voice-generation ceiling (0 = unlimited)</label>' +
       '<input id="db-budget" type="number" min="0" step="1" value="' + (vbCfg.maxDailyGenerations != null ? vbCfg.maxDailyGenerations : 0) + '">' +
       '<div class="ad-hint" id="db-ceiling">' + budgetCeilingText(vbCfg.maxDailyGenerations != null ? vbCfg.maxDailyGenerations : 0) + '</div>' +
