@@ -106,9 +106,39 @@
   }
 
   // Initial load. Resolves false (and leaves mock data in place) on any failure.
+  //
+  // It waits (briefly) for the admin config first. Loading straight away used the
+  // built-in 60-day window; the config then arrived with 120 and app.js re-fetched the
+  // whole world with it — two of the heaviest calls the app makes, per visitor, the
+  // first thrown away. That doubled load is part of what pushed events_in_view into its
+  // statement timeout. Now there is one call, with the window the server has cached.
   function boot() {
     if (!REMOTE) return Promise.resolve(false);
-    return fetchEvents({}).then(function (events) {
+    const cfgReady = getConfig().then(function (cfg) {
+      if (cfg && typeof cfg.windowDays === 'number' && cfg.windowDays > 0) setWindowDays(cfg.windowDays);
+    });
+    // Never let a slow config hold the globe hostage: after 1.5 s, load with what we have.
+    const waitCfg = Promise.race([cfgReady, new Promise(function (r) { setTimeout(r, 1500); })]);
+    return waitCfg.then(function () {
+      const used = windowDays;
+      return loadOnce().then(function (ok) {
+        // Config landed after the timeout, with a different window → load once more
+        // with the right one. Rare; the common path makes exactly one call.
+        cfgReady.then(function () {
+          if (ok && windowDays !== used) fetchEvents({}).then(function (evs) { if (evs && evs.length) emit(evs); }).catch(function () {});
+        });
+        return ok;
+      });
+    });
+  }
+  // One retry on failure. The timeouts were intermittent — the same call succeeded a
+  // second later — so a single retry turns most of them into a short delay instead of
+  // demo data.
+  function loadOnce() {
+    return fetchEvents({}).catch(function (e) {
+      console.warn('[EventuallyAPI] live load failed, retrying once:', e.message);
+      return new Promise(function (r) { setTimeout(r, 1200); }).then(function () { return fetchEvents({}); });
+    }).then(function (events) {
       if (events && events.length) { emit(events); return true; }
       console.warn('[EventuallyAPI] backend reachable but returned 0 events — staying on demo data.');
       return false;
@@ -130,12 +160,17 @@
   }
 
   // Remote app config (admin-tunable). Resolves null if unavailable → code defaults.
+  // One request shared by every caller: boot() and app.js both need it at start-up.
+  let configP = null;
   function getConfig() {
     if (!REMOTE) return Promise.resolve(null);
-    return fetch(BASE + '/rest/v1/app_config?select=config&limit=1', { headers: headers() })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (rows) { return (rows && rows[0] && rows[0].config) || null; })
-      .catch(function () { return null; });
+    if (!configP) {
+      configP = fetch(BASE + '/rest/v1/app_config?select=config&limit=1', { headers: headers() })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (rows) { return (rows && rows[0] && rows[0].config) || null; })
+        .catch(function () { return null; });
+    }
+    return configP;
   }
 
   // Full-database search (any approved upcoming event, not just the loaded globe).

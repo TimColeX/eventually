@@ -2765,12 +2765,13 @@
         if (!cfg) return;
         if (cfg.spikes) RT.spikes = Object.assign({}, RT.spikes, cfg.spikes);
         if (typeof cfg.maxClusters === 'number') RT.maxClusters = cfg.maxClusters;
-        // Admin-tunable globe time window (days). Re-load the globe with the wider window so
-        // more upcoming events appear as markers (the RPC default is 60).
+        // Admin-tunable globe time window (days). boot() already waited for this same config
+        // and loaded the globe with it, so there is no second whole-world fetch here — that
+        // re-fetch doubled the heaviest call per visitor and helped push events_in_view into
+        // its timeout. This only widens the scrubber to match.
         if (typeof cfg.windowDays === 'number' && cfg.windowDays > 0 && window.EventuallyAPI.setWindowDays) {
           window.EventuallyAPI.setWindowDays(cfg.windowDays);
           if (timeline && timeline.setMaxDays) timeline.setMaxDays(cfg.windowDays);   // let the scrubber reach the full window
-          if (cfg.windowDays !== 60) refreshLiveEvents();
         }
         if (typeof cfg.adsEnabled === 'boolean') RT.adsEnabled = cfg.adsEnabled;
         if (typeof cfg.hostEnabled === 'boolean') RT.hostEnabled = cfg.hostEnabled;
