@@ -283,6 +283,12 @@ function page(c, prose, adsOn) {
   const distinct = collapse(c.events);
   const events = distinct.slice(0, MAX_LISTED);
 
+  /* Send the city's coordinates with the link. The app can then fly straight there
+     instead of geocoding a name — and it removes the "which London?" problem, since
+     these pages already disambiguate by country in their slug. */
+  const anchor = c.events.find((e) => e.lat != null && e.lon != null);
+  const geo = anchor ? `&lat=${anchor.lat}&lon=${anchor.lon}` : '';
+
   // JSON-LD so Google can show these as rich event results.
   const ld = {
     '@context': 'https://schema.org', '@type': 'ItemList',
@@ -343,6 +349,14 @@ function page(c, prose, adsOn) {
   .ev-when { color:#9a8f80; font-size:.88rem; white-space:nowrap; font-variant-numeric:tabular-nums; }
   .ev-cat { color:#9a8f80; font-size:.82rem; grid-column:1/-1; margin-top:-4px; }
   .ev-runs { color:#f0a24a; font-size:.8rem; }
+  /* The organiser pitch. Set apart from the listings so it reads as addressed to a
+     different reader — someone who runs events, not someone looking for one. */
+  .organiser { background:#1b1610; border:1px solid #2e2820; border-radius:14px; padding:22px 22px 26px; }
+  .organiser h2 { margin-top:0; }
+  ul.perks { list-style:none; padding:0; margin:14px 0 4px; }
+  ul.perks li { padding:9px 0 9px 26px; position:relative; }
+  ul.perks li::before { content:"→"; position:absolute; left:0; color:#f0a24a; }
+  ul.perks b { color:#ece5da; }
   .tag { display:inline-block; font-size:.72rem; color:#f0a24a; border:1px solid #4a3a24;
     border-radius:99px; padding:1px 8px; margin-left:6px; vertical-align:middle; }
   hr { border:none; border-top:1px solid #2e2820; margin:30px 0; }
@@ -358,7 +372,7 @@ function page(c, prose, adsOn) {
   <h1>Events in ${esc(c.city)}</h1>
   <p class="lead">${distinct.length} event${distinct.length === 1 ? '' : 's'} happening in ${esc(c.city)}${c.country ? ', ' + esc(c.country) : ''} over the next ${DAYS_AHEAD} days${c.n > distinct.length ? `, across ${c.n} dates` : ''}.</p>
   <p class="muted">Updated daily · ${c.venueCount} venue${c.venueCount === 1 ? '' : 's'}</p>
-  <a class="cta" href="/?city=${encodeURIComponent(c.city)}">Explore ${esc(c.city)} on the globe →</a>
+  <a class="cta" href="/?city=${encodeURIComponent(c.city)}${geo}">Explore ${esc(c.city)} on the globe →</a>
 ${prose ? '\n  <h2>About ' + esc(c.city) + '</h2>\n' + prose.map((p) => '  <p>' + esc(p) + '</p>').join('\n') + '\n' : ''}
   <h2>What's on</h2>
   <ul class="events">
@@ -370,6 +384,25 @@ ${events.map((e) => {
   }).join('\n')}
   </ul>
 ${distinct.length > MAX_LISTED ? `  <p class="muted" style="margin-top:14px">…and ${distinct.length - MAX_LISTED} more. <a href="/?city=${encodeURIComponent(c.city)}">See them all on the globe →</a></p>\n` : ''}${adUnit}
+  <hr>
+  <section class="organiser">
+    <h2>Organising something in ${esc(c.city)}?</h2>
+    <p>Publish it here and it appears on the globe alongside everything on this page.
+       Free while we are in beta, and we don't take a cut of your ticket sales.</p>
+    <ul class="perks">
+      <li><b>Take registrations, if you want them.</b> People register in one tap and you
+          get a door list with names and emails, downloadable as a spreadsheet. Or just
+          link to wherever you already sell tickets — your choice at publish time.</li>
+      <li><b>Post live updates while it's running.</b> Doors open, parking round the back,
+          running fifteen minutes late — straight to everyone viewing your event.</li>
+      <li><b>You keep the relationship.</b> Booking stays with you, and the people who
+          register are yours to check in.</li>
+    </ul>
+    <p class="muted">New listings are checked by hand before they appear, so there's a short
+       wait the first time. You'll get an email when it's live.</p>
+    <a class="cta" href="/?publish=1">Publish an event in ${esc(c.city)} →</a>
+  </section>
+
   <hr>
   <h2>Nearby cities</h2>
   <p class="nearby">__NEARBY__</p>

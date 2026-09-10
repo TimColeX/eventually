@@ -1273,6 +1273,47 @@
   }
   // Fly to a chosen result. When live, first load that area's events (so cities/
   // events that weren't on the loaded globe appear), then open it.
+  /* Deep links from the generated city pages.
+   *
+   * Those pages have always ended with "Explore Regina on the globe →" pointing at
+   * /?city=Regina — and the app read only `notrack`, so the link silently landed
+   * people on the default view. The one conversion path off 88 SEO pages went
+   * nowhere. The pages now also send lat/lon, which the generator already knows,
+   * so there is no geocoding round trip and no guessing which "London" is meant.
+   *
+   * ?publish=1 opens the publish flow directly, for the organiser call to action.
+   * It reuses requireLogin, so signing in first is handled the same way as the
+   * in-app button. Runs once, after the first real data has landed. */
+  let _deepLinkDone = false;
+  function openDeepLink() {
+    if (_deepLinkDone) return;
+    _deepLinkDone = true;
+    let q;
+    try { q = new URLSearchParams(location.search); } catch (e) { return; }
+
+    if (q.get('publish') === '1') {
+      track('publish_open');
+      requireLogin(function () { coordinator.open(); },
+        'Sign in to publish your event — it takes a minute and it is free while we are in beta.');
+      return;
+    }
+
+    const city = (q.get('city') || '').trim();
+    if (!city) return;
+    const lat = parseFloat(q.get('lat')), lon = parseFloat(q.get('lon'));
+    track('city_search', city);
+    if (Number.isFinite(lat) && Number.isFinite(lon)) {
+      goToSearchResult({ lat: lat, lon: lon, city: city, explore: true });
+      return;
+    }
+    // No coordinates (a hand-typed or older link) — fall back to the geocoder.
+    if (window.EventuallyGeo) {
+      window.EventuallyGeo.forward(city).then(function (r) {
+        if (r) goToSearchResult({ lat: r.lat, lon: r.lon, city: r.city || city, explore: true });
+      }).catch(function () {});
+    }
+  }
+
   function goToSearchResult(o) {
     searchResults.classList.remove('show'); searchInput.value = '';
     // The AI host now follows the place you navigated to.
@@ -2706,6 +2747,7 @@
       pruneSaved();                     // drop finished/ghost saved events → correct badge count
       syncReminders();                  // saved events are now resolvable → (re)schedule
       launchSignature();                // real data in → accurate "near you" count
+      openDeepLink();                   // ?city= / ?publish= from a city page
     });
     window.EventuallyAPI.boot().then(function (ok) {
       if (!ok) {                      // load failed → fall back to demo data
