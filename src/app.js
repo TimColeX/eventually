@@ -2080,10 +2080,8 @@
     adbar.classList.remove('adbar-unit');
     adbar.innerHTML =
       '<nav class="bb-nav" aria-label="Quick links">' +
-        '<button class="bb-link bb-primary" data-bb="publish">' +
-          '<span class="bb-ic" aria-hidden="true">✦</span>Publish on the Globe</button>' +
-        '<button class="bb-link" data-bb="help">' +
-          '<span class="bb-ic" aria-hidden="true">?</span>Help Centre</button>' +
+        '<button class="bb-link" data-bb="publish">Publish Event</button>' +
+        '<button class="bb-link" data-bb="help">Help Centre</button>' +
       '</nav>';
   }
   adbar.addEventListener('click', function (e) {

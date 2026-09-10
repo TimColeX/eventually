@@ -828,19 +828,20 @@ body {
    sure it can never widen the page on narrow phones: the bar's 16px side padding leaves
    only 288px on a 320px viewport, so drop the padding below 352px and clip as a backstop. */
 /* ---------- bottom bar: quick links (was the ad strip) ---------- */
-/* Centred so it reads as app chrome rather than a leftover advert rail. */
+/* Two identical buttons, centred in the viewport on every width. `flex: 1 1 0`
+   with a shared max-width makes them EXACTLY equal regardless of label length —
+   a fixed px width would need re-tuning the moment a word changes. */
 .bb-nav { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; }
-.bb-link { display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
-  padding: 8px 15px; border-radius: 10px; border: 1px solid var(--line-2);
-  background: var(--paper); color: var(--ink);
+.bb-link { flex: 1 1 0; min-width: 0; max-width: 172px;
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+  padding: 9px 14px; border-radius: 10px; border: 1px solid var(--line-2);
+  background: var(--paper); color: var(--clay);
   font-family: var(--font); font-size: 13px; font-weight: 600; white-space: nowrap; }
-.bb-link:hover { border-color: var(--clay); color: var(--clay); }
-.bb-primary { background: var(--clay); border-color: var(--clay); color: var(--cream); }
-.bb-primary:hover { background: #b94e32; border-color: #b94e32; color: var(--cream); }
-.bb-ic { font-size: 12px; line-height: 1; opacity: .9; }
-/* Narrow phones: shrink rather than wrap — the strip is a fixed 56px. */
+.bb-link:hover { border-color: var(--clay); background: #FBF3EC; }
+/* Narrow phones: tighten the padding so both still fit side by side — the strip
+   is a fixed 56px and must never wrap to two rows. */
 @media (max-width: 420px) {
-  .bb-link { padding: 8px 11px; font-size: 12.5px; gap: 5px; }
+  .bb-link { padding: 9px 10px; font-size: 12.5px; max-width: 150px; }
 }
 
 .adbar.adbar-unit { justify-content: center; overflow: hidden; }
