@@ -1296,6 +1296,9 @@
       return;
     }
 
+    // The city pages have no bottom bar, so their footer links here for Help.
+    if (q.get('help') === '1') { openHelp(); return; }
+
     const city = (q.get('city') || '').trim();
     if (!city) return;
     const lat = parseFloat(q.get('lat')), lon = parseFloat(q.get('lon'));

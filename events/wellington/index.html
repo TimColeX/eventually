@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Events in Wellington — what's on | Eventually</title>
-<meta name="description" content="175 events happening in Wellington, New Zealand over the next 90 days. Concerts, theatre, markets and more, updated daily.">
+<meta name="description" content="176 events happening in Wellington, New Zealand over the next 90 days. Concerts, theatre, markets and more, updated daily.">
 <meta name="robots" content="index,follow">
 <link rel="canonical" href="https://eventually-app.com/events/wellington/">
 <meta property="og:title" content="Events in Wellington — what's on | Eventually">
-<meta property="og:description" content="175 events happening in Wellington, New Zealand over the next 90 days. Concerts, theatre, markets and more, updated daily.">
+<meta property="og:description" content="176 events happening in Wellington, New Zealand over the next 90 days. Concerts, theatre, markets and more, updated daily.">
 <meta property="og:url" content="https://eventually-app.com/events/wellington/">
 <meta property="og:type" content="website">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -63,7 +63,7 @@
 <div class="wrap">
   <a class="back" href="/">← Eventually</a>
   <h1>Events in Wellington</h1>
-  <p class="lead">61 events happening in Wellington, New Zealand over the next 90 days, across 175 dates.</p>
+  <p class="lead">61 events happening in Wellington, New Zealand over the next 90 days, across 176 dates.</p>
   <p class="muted">Updated daily · 2 venues</p>
   <a class="cta" href="/?city=Wellington&lat=-41.2942734&lon=174.7753448">Explore Wellington on the globe →</a>
 
@@ -83,7 +83,7 @@
     <li><span class="ev-name">August Burns Red 'Season Of Surrender' NZ Tour 2026</span><span class="ev-when">Wed 7 Oct · 19:00</span><span class="ev-cat">Music</span></li>
     <li><span class="ev-name">Mountain Boy - The Nights Tour</span><span class="ev-when">Thu 8 Oct · 19:00</span><span class="ev-cat">Music</span></li>
     <li><span class="ev-name">Fletch, Vaughan and Hayley LIVE - The Genuine Friends Tour</span><span class="ev-when">Fri 9 Oct · 19:30</span><span class="ev-cat">Arts</span></li>
-    <li><span class="ev-name">Cornelia Parker Exhibition</span><span class="ev-when">Sat 10 Oct · 16:00 <span class="ev-runs">+ 59 more dates</span></span><span class="ev-cat">Arts</span></li>
+    <li><span class="ev-name">Cornelia Parker Exhibition</span><span class="ev-when">Sat 10 Oct · 16:00 <span class="ev-runs">+ 60 more dates</span></span><span class="ev-cat">Arts</span></li>
     <li><span class="ev-name">RAY O'LEARY | I CAN SEE O'LEARY NOW THE RAY HAS GONE</span><span class="ev-when">Sat 10 Oct · 17:30 <span class="ev-runs">+ 1 more date</span></span><span class="ev-cat">Comedy</span></li>
     <li><span class="ev-name">Where’s Jai aus/nz tour</span><span class="ev-when">Sat 10 Oct · 19:00</span><span class="ev-cat">Music</span></li>
     <li><span class="ev-name">Che Fu &amp; The Kratez - 25 years of Navigator</span><span class="ev-when">Sun 11 Oct · 20:00</span><span class="ev-cat">Music</span></li>
@@ -135,7 +135,11 @@
   <h2>Nearby cities</h2>
   <p class="nearby"><a href="/events/hamilton-nz/">Hamilton</a> <a href="/events/auckland/">Auckland</a> <a href="/events/sydney/">Sydney</a> <a href="/events/brisbane/">Brisbane</a> <a href="/events/melbourne/">Melbourne</a> <a href="/events/adelaide/">Adelaide</a></p>
   <hr>
-  <p class="muted">Eventually · <a href="/">Globe</a> · <a href="/browse/">All cities</a> · <a href="/about.html">About</a> · <a href="/privacy.html">Privacy</a> · <a href="/terms.html">Terms</a></p>
+  <!-- Help is a modal inside the app, not a page of its own, so it needs the same
+       deep-link treatment as ?publish=1 — see openDeepLink() in src/app.js. Without
+       it someone arriving here from a search has no route to Help at all: these
+       pages carry no bottom bar. -->
+  <p class="muted">Eventually · <a href="/">Globe</a> · <a href="/browse/">All cities</a> · <a href="/?help=1">Help</a> · <a href="/about.html">About</a> · <a href="/privacy.html">Privacy</a> · <a href="/terms.html">Terms</a></p>
 </div>
 </body>
 </html>
