@@ -852,7 +852,7 @@
   }
 
   // Per-source breakdown (live). Dynamic — any new source appears automatically.
-  const SRC_LABELS = { ticketmaster: 'Ticketmaster', predicthq: 'PredictHQ', native: 'Eventually', meetup: 'Meetup', seatgeek: 'SeatGeek' };
+  const SRC_LABELS = { ticketmaster: 'Ticketmaster', predicthq: 'PredictHQ', native: 'Eventually' };
   function renderSourceBreakdown() {
     const box = document.getElementById('ad-src');
     if (!box) return;

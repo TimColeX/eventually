@@ -20,7 +20,6 @@
   const SOURCES = {
     ticketmaster:{ label: 'Ticketmaster', color: '#8A3B1E', badge: 'Official listing' },
     predicthq:   { label: 'PredictHQ',    color: '#2E7D8A', badge: 'Verified listing' },
-    meetup:      { label: 'Meetup',       color: '#B5722F', badge: 'Community event' },
     native:      { label: 'Eventually',   color: '#21d4fd', badge: '' },
     orbit:       { label: 'Eventually Native', color: '#21d4fd', badge: '' }
   };
@@ -152,17 +151,15 @@
     'Sports': 40, 'Film & Media': 18, 'Community': 0, 'Nightlife': 20, 'Comedy': 22
   };
   const PLATFORM_URL = {
-    meetup: function (id) { return 'https://www.meetup.com/events/' + id; },
     ticketmaster: function (id) { return 'https://www.ticketmaster.com/event/' + id; },
     native: function () { return null; }
   };
   // Same event also listed on other platforms (price + small time drift to test the engine).
   const MULTI = {
-    // Eventbrite was removed as a source (it is not used anywhere in the app), so the
-    // pairs that listed it are gone rather than faked under another real platform's name.
-    'Quantum Dev Conf':       [{ source: 'ticketmaster', price: 20 }, { source: 'meetup', price: 0, hr: 1 }],
-    'Future of Web':          [{ source: 'ticketmaster', price: 15 }, { source: 'meetup', price: 0, hr: -2 }],
-    'Street Food Worlds':     [{ source: 'ticketmaster', price: 10 }, { source: 'meetup', price: 0, hr: 1 }]
+    // Empty on purpose. Every demo pair listed a platform the app does not use
+    // (Eventbrite, Meetup), and re-labelling them as another real platform would
+    // just fake listings under a different company's name. Real cross-source
+    // duplicates come from live ingest (Ticketmaster + PredictHQ + feeds).
   };
 
   let _sid = 0;
@@ -240,7 +237,7 @@
     ['Addis Ababa',9.03,38.74],['Dakar',14.72,-17.47]
   ];
   const CATS = Object.keys(CATEGORIES);
-  const SIM_PLATFORMS = ['ticketmaster', 'meetup'];
+  const SIM_PLATFORMS = ['ticketmaster'];
   function rnd(a, b) { return a + Math.random() * (b - a); }
   function pickOne(a) { return a[(Math.random() * a.length) | 0]; }
   (function generate() {
