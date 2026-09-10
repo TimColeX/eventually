@@ -234,8 +234,23 @@ const titleKey = (t) => String(t || '').trim().toLowerCase().replace(/\s+/g, ' '
 
 /* Gate on DISTINCT events, not occurrences. Using the raw count let a city with
    42 dates of a single exhibition clear a "10 events" bar with one thing to do —
-   exactly the thin page this threshold exists to prevent. */
-const qualifies = (c) => c.distinctN >= MIN_EVENTS && c.venueCount >= MIN_VENUES;
+   exactly the thin page this threshold exists to prevent.
+ *
+ * The venue test is a PROXY for "a real place with a real scene, rather than one
+ * venue's calendar wearing a city's name". Distinct coordinates usually say that
+ * well, but they misfire on community feeds: every event from a feed inherits the
+ * one campus coordinate in its config, so the University of Saskatchewan's 242
+ * distinct public events across two calendars counted as 2 "venues" and Saskatoon
+ * was refused a page. Wellington, a capital city, was refused for the same reason.
+ *
+ * So: three locations as before, OR two locations backed by real volume. That
+ * still rejects the case the guard was built for — Merksem (80 events, ONE
+ * coordinate, a district of Antwerp that already has its own page) stays out,
+ * because a single location is never enough however many events it lists. */
+const VOLUME_OVERRIDE = 40;
+const qualifies = (c) =>
+  c.distinctN >= MIN_EVENTS &&
+  (c.venueCount >= MIN_VENUES || (c.venueCount >= 2 && c.distinctN >= VOLUME_OVERRIDE));
 
 // ── Page template (dark, matching about.html; Sora for headings only) ────────
 function page(c, prose, adsOn) {

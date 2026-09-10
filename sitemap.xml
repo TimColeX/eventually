@@ -19,6 +19,7 @@
   <url><loc>https://eventually-app.com/events/hamburg/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/zurich/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/cologne/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://eventually-app.com/events/saskatoon/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/oslo/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/brussels/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/ankara/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
@@ -26,13 +27,13 @@
   <url><loc>https://eventually-app.com/events/milan/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/vienna/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/frankfurt-am-main/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://eventually-app.com/events/wellington/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/sydney/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/ottawa/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/krakow/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
-  <url><loc>https://eventually-app.com/events/las-vegas/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/rotterdam/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
-  <url><loc>https://eventually-app.com/events/vancouver/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/munich/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://eventually-app.com/events/vancouver/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/stockholm/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/antalya/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/poznan/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
@@ -41,6 +42,7 @@
   <url><loc>https://eventually-app.com/events/cork/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/brisbane/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/montreal/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://eventually-app.com/events/las-vegas/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/wroclaw/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/bursa/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/linkoping/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
@@ -67,14 +69,14 @@
   <url><loc>https://eventually-app.com/events/athens/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/katowice/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/denizli/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
-  <url><loc>https://eventually-app.com/events/cape-town/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/regina/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://eventually-app.com/events/cape-town/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/eskisehir/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
-  <url><loc>https://eventually-app.com/events/new-york/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/hamilton-ca/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/the-hague/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/geneva/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/hamilton-nz/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://eventually-app.com/events/new-york/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/winnipeg/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/samsun/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/rome/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
@@ -82,7 +84,6 @@
   <url><loc>https://eventually-app.com/events/birmingham/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/kinna/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/odense/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
-  <url><loc>https://eventually-app.com/events/los-angeles/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/madrid/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/limerick/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/konya/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
@@ -90,7 +91,6 @@
   <url><loc>https://eventually-app.com/events/calgary/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/stuttgart/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/utrecht/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
-  <url><loc>https://eventually-app.com/events/phoenix/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/mugla/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://eventually-app.com/events/lublin/</loc><lastmod>2026-09-10</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
 </urlset>
