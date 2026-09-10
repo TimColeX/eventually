@@ -43,7 +43,11 @@
     const date = new Date(a.start_time);
     const cat = CATS[a.category] ? a.category : 'Community';
     const pop = (a.popularity != null) ? Number(a.popularity) : 0.3;
-    const likes = Math.round(Math.max(0.05, Math.min(1, pop)) * 2000);
+    // Globe ranking only. This number used to be SHOWN as the like count (and ×0.4 as
+    // "going", ×3 as clicks), so every listing displayed invented engagement — a test
+    // event read "♥ 800 · ✓ 320". It is now a private ranking weight that keeps the
+    // globe's glow exactly as it was; real counts come from event_counts() (78).
+    const rank = Math.round(Math.max(0.05, Math.min(1, pop)) * 2000);
     const sources = (a.sources || []).map(function (s) {
       const lbl = SRC[s.source] ? SRC[s.source].label : s.source;
       const price = s.price == null ? null : Number(s.price);
@@ -66,9 +70,10 @@
       // 132 live listings have no city; this used to read "<title> in null — …".
       description: a.description || (a.title + (a.city ? ' in ' + a.city : '') + ' — pulled live onto the Eventually globe.'),
       ticketUrl: (sources[0] && sources[0].url) || null,
-      likes: likes, attending: Math.round(likes * 0.4), clicks: likes * 3,
+      likes: 0, attending: 0, clicks: 0, _rank: rank,      // real counts load when the event opens
       sponsored: !!a.sponsored,
-      startsInMin: Math.max(5, Math.abs(Math.round((date.getTime() - Date.now()) / 60000)) % 240),
+      // Real minutes until it starts (was an invented number between 5 and 240).
+      startsInMin: Math.round((date.getTime() - Date.now()) / 60000),
       userLiked: false, userAttending: false,
       sources: sources, sourceCount: a.source_count || sources.length || 1,
       is_native: !!a.is_native, topScore: 1,

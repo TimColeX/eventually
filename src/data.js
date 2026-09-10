@@ -317,7 +317,10 @@
 
   // Popularity 0..1 drives glow brightness / dot size / pillar height.
   function popularity(evt) {
-    const score = evt.likes + evt.attending * 2;
+    // Live events carry a private ranking weight (_rank, see api.js toEvent) instead of
+    // the invented like/"going" counts they used to have; ×1.8 reproduces the old
+    // likes + 2 × (0.4 × likes), so the globe looks exactly the same.
+    const score = evt._rank != null ? evt._rank * 1.8 : evt.likes + evt.attending * 2;
     return Math.max(0.15, Math.min(1, score / 2600));
   }
 

@@ -104,14 +104,21 @@
         const pool = live.length ? live : focusPool().list;
         if (!pool.length) return { kind: 'tip', data: {} };
         const e = pick(pool.slice(0, 5));
-        return { kind: 'spotlight', data: { event: e.name, city: e.city, going: e.attending } };
+        // No "N people are heading there": that number was invented (api.js toEvent).
+        return { kind: 'spotlight', data: { event: e.name, city: e.city } };
       },
-      // Tour guide — countdown for a live event in the focus city
+      // Tour guide — countdown, only for an event that REALLY starts within 3 hours.
+      // It used to pick any event today and quote a made-up "starts in N minutes",
+      // so an event days away could be announced as kicking off shortly.
       function () {
-        const live = focusLive();
-        if (!live.length) return { kind: 'tip', data: {} };
-        const e = pick(live);
-        return { kind: 'countdown', data: { event: e.name, min: e.startsInMin, city: e.city } };
+        const now = Date.now();
+        const soon = focusLive().filter(function (e) {
+          const m = (e.date.getTime() - now) / 60000;
+          return m >= 1 && m <= 180;
+        });
+        if (!soon.length) return { kind: 'tip', data: {} };
+        const e = pick(soon);
+        return { kind: 'countdown', data: { event: e.name, min: Math.round((e.date.getTime() - now) / 60000), city: e.city } };
       },
       // News anchor — the worldwide pulse
       function () { return { kind: 'welcome', data: { count: worldwideLive() } }; },
@@ -130,12 +137,8 @@
         const cat = Object.keys(byRegion[r]).sort(function (a, b) { return byRegion[r][b] - byRegion[r][a]; })[0];
         return { kind: 'region', data: { n: byRegion[r][cat], cat: cat, region: r } };
       },
-      // DJ — trending
-      function () {
-        const top = ctx.data.getEvents().slice().sort(function (a, b) { return ctx.data.popularity(b) - ctx.data.popularity(a); })[0];
-        if (!top) return { kind: 'tip', data: {} };
-        return { kind: 'trending', data: { event: top.name, city: top.city, likes: top.likes } };
-      }
+      // (The "Trending tonight … climbing fast, with N likes" line was removed: the like
+      //  count was invented and nothing measures an event "climbing".)
     ];
 
     return {

@@ -403,7 +403,7 @@ ${distinct.length > MAX_LISTED ? `  <p class="muted" style="margin-top:14px">…
   <section class="organiser">
     <h2>Organising something in ${esc(c.city)}?</h2>
     <p>Publish it here and it appears on the globe alongside everything on this page.
-       Free while we are in beta, and we don't take a cut of your ticket sales.</p>
+       Your first 10 events a year are free, and we don't take a cut of your ticket sales.</p>
     <ul class="perks">
       <li><b>Take registrations, if you want them.</b> People register in one tap and you
           get a door list with names and emails, downloadable as a spreadsheet. Or just

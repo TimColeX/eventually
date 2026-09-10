@@ -124,7 +124,7 @@
         const p = D.popularity(ev);
         if (p > maxPop) maxPop = p;
         if (p > bestPop) { bestPop = p; col = ev.categoryColor; }
-        likeSum += ev.likes;
+        likeSum += ev._rank != null ? ev._rank : ev.likes;   // ranking weight, never shown
       }
       c._visible = vis;
       c._hasLive = live > 0;
@@ -1140,8 +1140,10 @@
         transparency +
         '<p class="evd-desc">' + esc(ev.description) + '</p>' +
         '<div class="evd-actions">' +
-          '<button class="ev-like' + (ev.userLiked ? ' on' : '') + '" data-act="like">♥ <span class="n">' + ev.likes.toLocaleString() + '</span></button>' +
-          '<button class="ev-attend' + (ev.userAttending ? ' on' : '') + '" data-act="attend">✓ <span class="n">' + ev.attending.toLocaleString() + '</span></button>' +
+          // Counts are REAL (event_counts, 78) and fill in once the panel is open. Until
+          // then — or when there are none — no number is shown, never an invented one.
+          '<button class="ev-like' + (ev.userLiked ? ' on' : '') + '" data-act="like">♥ <span class="n">' + (ev.likes > 0 ? ev.likes.toLocaleString() : '') + '</span></button>' +
+          '<button class="ev-attend' + (ev.userAttending ? ' on' : '') + '" data-act="attend">✓ <span class="n">' + (ev.attending > 0 ? ev.attending.toLocaleString() : '') + '</span></button>' +
           '<button class="ev-save' + (P.isSaved(ev.id) ? ' on' : '') + '" data-act="save">' + (P.isSaved(ev.id) ? '★' : '☆') + '</button>' +
         '</div>' +
         '<div class="live-updates" hidden></div>' +
@@ -1151,10 +1153,34 @@
     // is open, so a closed or disabled event shows nothing at all.
     if (window.EventuallyUpdates) window.EventuallyUpdates.mount(eventScroll.querySelector('.live-updates'), ev.id);
     mountRegistration(eventScroll.querySelector('.reg-box'));
+    mountCounts(ev);
     M.mountAdSense(eventScroll);
     eventEl.classList.add('open');
   }
   function closeEvent() { eventEl.classList.remove('open'); activeEventId = null; if (window.EventuallyUpdates) window.EventuallyUpdates.unmount(); }
+
+  /* Real like / "going" counts for the open event (event_counts, 78). Every event used
+     to show invented numbers derived from its ranking score (a test event read
+     "♥ 800 · ✓ 320"). These are the marks people actually made, plus whether the
+     viewer made them, so ♥ and ✓ start in the right state. Through the auth client,
+     so a signed-in viewer's own marks are recognised. Before 78 is run, or offline,
+     the call fails and the buttons simply show no number. Counts only — never who. */
+  function mountCounts(ev) {
+    const A = window.EventuallyAuth;
+    if (!ev || !A || !A.client) return;
+    const id = ev.id;
+    A.client.rpc('event_counts', { p_event_id: id }).then(function (r) {
+      if (!r || r.error || !r.data || activeEventId !== id) return;   // failed, or the panel moved on
+      const c = r.data;
+      ev.likes = Math.max(0, +c.likes || 0);
+      ev.attending = Math.max(0, +c.going || 0);
+      ev.userLiked = !!c.liked;
+      ev.userAttending = !!c.going_me;
+      const like = eventScroll.querySelector('.ev-like'), att = eventScroll.querySelector('.ev-attend');
+      if (like) { like.classList.toggle('on', ev.userLiked); like.querySelector('.n').textContent = ev.likes > 0 ? ev.likes.toLocaleString() : ''; }
+      if (att) { att.classList.toggle('on', ev.userAttending); att.querySelector('.n').textContent = ev.attending > 0 ? ev.attending.toLocaleString() : ''; }
+    }, function () {});
+  }
 
   /* ---- Eventually-managed registration -----------------------------------
      For events where the organiser chose "Eventually collects registrations".
@@ -1258,16 +1284,16 @@
     }
     requireLogin(function () {
       if (act.dataset.act === 'like') {
-        ev.userLiked = !ev.userLiked; ev.likes += ev.userLiked ? 1 : -1;
-        act.classList.toggle('on', ev.userLiked); act.querySelector('.n').textContent = ev.likes.toLocaleString();
+        ev.userLiked = !ev.userLiked; ev.likes = Math.max(0, ev.likes + (ev.userLiked ? 1 : -1));
+        act.classList.toggle('on', ev.userLiked); act.querySelector('.n').textContent = ev.likes > 0 ? ev.likes.toLocaleString() : '';
         if (acctEnabled()) A.setUserEvent('like', ev.id, snap(ev), ev.userLiked);
-        window.EventuallyToast(ev.userLiked ? 'Liked — the marker glows brighter.' : 'Like removed.');
+        window.EventuallyToast(ev.userLiked ? 'Liked.' : 'Like removed.');
       } else {
-        ev.userAttending = !ev.userAttending; ev.attending += ev.userAttending ? 1 : -1;
+        ev.userAttending = !ev.userAttending; ev.attending = Math.max(0, ev.attending + (ev.userAttending ? 1 : -1));
         if (ev.userAttending) P.markAttended(ev.id);
-        act.classList.toggle('on', ev.userAttending); act.querySelector('.n').textContent = ev.attending.toLocaleString();
+        act.classList.toggle('on', ev.userAttending); act.querySelector('.n').textContent = ev.attending > 0 ? ev.attending.toLocaleString() : '';
         if (acctEnabled()) A.setUserEvent('attend', ev.id, snap(ev), ev.userAttending);
-        window.EventuallyToast(ev.userAttending ? "You're attending — globe updated." : 'Removed from attending.');
+        window.EventuallyToast(ev.userAttending ? "Marked as going." : 'No longer going.');
       }
       refreshMarkers();
     });
@@ -1313,12 +1339,15 @@
     if (q.get('publish') === '1') {
       track('publish_open');
       requireLogin(function () { coordinator.open(); },
-        'Sign in to publish your event — it takes a minute and it is free while we are in beta.');
+        'Sign in to publish your event — it takes a minute, and your first 10 events each year are free.');
       return;
     }
 
     // The city pages have no bottom bar, so their footer links here for Help.
     if (q.get('help') === '1') { openHelp(); return; }
+
+    // A direct link to the Advertise form (for example from a marketing email).
+    if (q.get('advertise') === '1') { track('advertise_open'); openContact(); return; }
 
     const city = (q.get('city') || '').trim();
     if (!city) return;
@@ -2113,7 +2142,7 @@
     if (b.dataset.bb === 'publish') {
       track('publish_open');
       requireLogin(function () { coordinator.open(); },
-        'Sign in to publish your event — free while we are in beta.');
+        'Sign in to publish your event — your first 10 events each year are free.');
     } else if (b.dataset.bb === 'help') { openHelp(); }
   });
 
