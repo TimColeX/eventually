@@ -1127,10 +1127,16 @@
     } else {
       avail = '<div class="evd-section"><p class="evd-note">Ticket link coming soon for this event.</p></div>';
     }
+    // ‹ Back only when there is a list to go back to (the city panel is open underneath);
+    // opened from search or Saved there isn't one, so only ✕ shows. ✕ closes both.
+    const fromList = place.classList.contains('open');
     eventScroll.innerHTML =
-      '<div class="evd-banner" style="background:linear-gradient(135deg,' + ev.categoryColor + ',#211A15)">' +
-        '<button class="evd-back" aria-label="Back">‹ Back</button>' +
+      '<div class="evd-bar' + (fromList ? '' : ' no-back') + '">' +
+        (fromList ? '<button class="evd-back" aria-label="Back to the list">‹ Back</button>' : '') +
+        '<span class="evd-bar-title">' + esc(ev.name) + '</span>' +
         '<button class="evd-x" aria-label="Close">✕</button>' +
+      '</div>' +
+      '<div class="evd-banner" style="background:linear-gradient(135deg,' + ev.categoryColor + ',#211A15)">' +
         '<span class="evd-cat">' + esc(ev.category) + '</span>' +
       '</div>' +
       '<div class="evd-body">' +
@@ -1160,9 +1166,13 @@
     mountRegistration(eventScroll.querySelector('.reg-box'));
     mountCounts(ev);
     M.mountAdSense(eventScroll);
+    eventScroll.scrollTop = 0; syncEventShade();
     eventEl.classList.add('open');
   }
   function closeEvent() { eventEl.classList.remove('open'); activeEventId = null; if (window.EventuallyUpdates) window.EventuallyUpdates.unmount(); }
+  // Pinned bar fills in once the 120px banner has scrolled up under it (styles: .evd-bar).
+  function syncEventShade() { eventEl.classList.toggle('is-scrolled', eventScroll.scrollTop > 66); }
+  eventScroll.addEventListener('scroll', syncEventShade, { passive: true });
 
   /* Real like / "going" counts for the open event (event_counts, 78). Every event used
      to show invented numbers derived from its ranking score (a test event read
@@ -1271,7 +1281,8 @@
   }
 
   eventEl.addEventListener('click', function (e) {
-    if (e.target.closest('.evd-x') || e.target.closest('.evd-back')) { closeEvent(); return; }
+    if (e.target.closest('.evd-back')) { closeEvent(); return; }                 // back to the list
+    if (e.target.closest('.evd-x')) { closeEvent(); place.classList.remove('open'); activeClusterId = null; return; }
     const tix = e.target.closest('[data-tickets]');
     if (tix) {
       // The anchor navigates to /go (server resolves affiliate + logs the click);

@@ -25,6 +25,7 @@
   --radius: 14px;
   --shadow:    0 1px 3px rgba(33,26,21,0.10);
   --shadow-lg: 0 20px 50px rgba(33,26,21,0.20);
+  --frame: rgba(33,26,21,.55);   /* dark outline on the side panels (place, event, profile, saved) */
   --font: 'Sora', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --mono: 'Space Mono', ui-monospace, 'SFMono-Regular', monospace;
 }
@@ -189,8 +190,8 @@ body {
   position: fixed; top: 78px; right: -460px; z-index: 40;
   width: 400px; max-width: calc(100vw - 28px);
   max-height: calc(100vh - 180px); display: flex; flex-direction: column;
-  /* Dark frame so the panel reads as one object against the globe. Shared with .evdetail. */
-  background: var(--cream); border: 1px solid rgba(33,26,21,.55);
+  /* Dark frame so the panel reads as one object against the globe (all side panels). */
+  background: var(--cream); border: 1px solid var(--frame);
   border-radius: 20px; overflow: hidden; box-shadow: var(--shadow-lg);
   transition: right .35s cubic-bezier(.22,1,.36,1);
 }
@@ -625,7 +626,7 @@ body {
   position: fixed; top: 78px; right: -440px; z-index: 45;
   width: 380px; max-width: calc(100vw - 28px); max-height: calc(100vh - 180px);
   display: flex; flex-direction: column;
-  background: var(--cream); border: 1px solid var(--line); border-radius: 20px;
+  background: var(--cream); border: 1px solid var(--frame); border-radius: 20px;
   overflow: hidden; box-shadow: var(--shadow-lg); transition: right .35s cubic-bezier(.22,1,.36,1);
 }
 .profile.open, .saved.open { right: 18px; }
@@ -992,16 +993,34 @@ body.has-ad .toast { bottom: calc(144px + env(safe-area-inset-bottom, 0px)); }
   position: fixed; top: 78px; right: -480px; z-index: 50;
   width: 420px; max-width: calc(100vw - 28px); max-height: calc(100vh - 180px);
   display: flex; flex-direction: column;
-  background: var(--cream); border: 1px solid rgba(33,26,21,.55); border-radius: 20px;
+  background: var(--cream); border: 1px solid var(--frame); border-radius: 20px;
   overflow: hidden; box-shadow: var(--shadow-lg); transition: right .35s cubic-bezier(.22,1,.36,1);
 }
 .evdetail.open { right: 18px; }
 .evd-scroll { overflow-y: auto; }
 .evd-banner { position: relative; height: 120px; display: flex; align-items: flex-end; padding: 14px; }
 .evd-banner::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to top, rgba(33,26,21,.5), transparent 60%); }
-.evd-back, .evd-x { position: absolute; top: 12px; z-index: 2; border: 0; cursor: pointer; background: rgba(33,26,21,.42); color: #fff; border-radius: 999px; }
+/* Pinned Back / close. A zero-height sticky bar so the buttons float over the banner and
+   stay put while the detail scrolls. Once the banner has gone (see syncEventShade) the bar
+   fills in cream with the event name and the same soft shadow as the list header. */
+.evd-bar { position: sticky; top: 0; z-index: 3; height: 0; }
+.evd-bar::before {
+  content: ''; position: absolute; left: 0; right: 0; top: 0; height: 54px; pointer-events: none;
+  background: var(--cream); border-bottom: 1px solid var(--line); box-shadow: 0 9px 12px -9px rgba(33,26,21,.32);
+  opacity: 0; transition: opacity .2s ease;
+}
+.evd-bar-title {
+  position: absolute; top: 0; left: 92px; right: 54px; height: 54px; line-height: 54px; pointer-events: none;
+  font-size: 14px; font-weight: 700; letter-spacing: -0.01em; color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0; transition: opacity .2s ease;
+}
+.evd-bar.no-back .evd-bar-title { left: 18px; }
+.evdetail.is-scrolled .evd-bar::before, .evdetail.is-scrolled .evd-bar-title { opacity: 1; }
+.evd-back, .evd-x { position: absolute; top: 12px; border: 0; cursor: pointer; background: rgba(33,26,21,.42); color: #fff; border-radius: 999px; transition: background .2s, color .2s; }
 .evd-back { left: 12px; padding: 6px 12px; font-family: var(--font); font-size: 13px; font-weight: 600; }
 .evd-x { right: 12px; width: 30px; height: 30px; font-size: 14px; }
+.evdetail.is-scrolled .evd-back, .evdetail.is-scrolled .evd-x { background: #ece2d4; color: var(--ink); }
+.evdetail .evd-back:hover, .evdetail .evd-x:hover { background: var(--clay); color: var(--cream); }
 .evd-cat { position: relative; z-index: 1; font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #fff; background: rgba(33,26,21,.4); padding: 4px 10px; border-radius: 999px; }
 .evd-body { padding: 16px 18px 22px; }
 .evd-badges { display: flex; gap: 8px; margin-bottom: 8px; }
