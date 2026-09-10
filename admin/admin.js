@@ -1453,10 +1453,17 @@
       for (const it of items) {
         const t = byTag[await tailTag(it.msg)];
         const plays = t ? +t.plays : 0;
+        // Attempts that produced no audio. Previously these were counted AS airings,
+        // so a sponsor could read "3 airings" having been spoken zero times — the
+        // one number an advertiser is shown, quietly wrong.
+        const failed = t && t.failed ? +t.failed : 0;
         const last = t && t.last_played ? new Date(t.last_played).toLocaleString() : null;
         rows.push('<div class="ad-list-row"><div style="flex:1">' +
           '<strong>' + (plays ? plays.toLocaleString() : '0') + ' airing' + (plays === 1 ? '' : 's') + '</strong> ' +
           '<span class="ad-hint">· ' + esc(it.kind) + (it.off ? ' · disabled' : '') + '</span>' +
+          (failed ? '<span class="ad-hint" style="display:block;color:#b3402a">⚠ ' + failed +
+            ' attempt' + (failed === 1 ? '' : 's') + ' produced no audio — this sponsor is not being heard' +
+            (t.last_error ? ' · ' + esc(String(t.last_error).slice(0, 120)) : '') + '</span>' : '') +
           '<span class="ad-hint" style="display:block">' + esc(String(it.msg).slice(0, 80)) + (it.msg.length > 80 ? '…' : '') +
           (last ? ' · last played ' + esc(last) : (plays ? '' : ' · not yet aired')) + '</span>' +
         '</div></div>');
