@@ -1,11 +1,10 @@
 /* Eventually — backend client (the data seam).
  *
  * Talks to the Supabase backend when window.EVENTUALLY_CONFIG is filled in;
- * otherwise stays dormant and the app runs entirely on the built-in demo data
- * in data.js. Design = stale-while-revalidate: the globe paints instantly on
- * mock data, then this swaps in live events when they arrive. If the backend is
- * empty, unreachable, or unconfigured, the app simply keeps showing mock data —
- * it can never go blank.
+ * otherwise stays dormant. The globe starts EMPTY with a "Loading live events…"
+ * hint and fills when the events arrive. If the backend is empty or unreachable,
+ * the app says so and keeps retrying (app.js) — there is no demo data to fall back
+ * on any more: it presented made-up events as real, and was removed 2026-09-10.
  *
  * Read path uses Supabase's auto-generated PostgREST RPC endpoints
  * (events_in_view / search_events) with the public anon key. No secret keys
@@ -111,7 +110,7 @@
     }).then(function (rows) { return (rows || []).map(toEvent); });
   }
 
-  // Initial load. Resolves false (and leaves mock data in place) on any failure.
+  // Initial load. Resolves false on any failure; the caller shows that and retries.
   //
   // It waits (briefly) for the admin config first. Loading straight away used the
   // built-in 60-day window; the config then arrived with 120 and app.js re-fetched the
@@ -139,17 +138,17 @@
   }
   // One retry on failure. The timeouts were intermittent — the same call succeeded a
   // second later — so a single retry turns most of them into a short delay instead of
-  // demo data.
+  // an error message.
   function loadOnce() {
     return fetchEvents({}).catch(function (e) {
       console.warn('[EventuallyAPI] live load failed, retrying once:', e.message);
       return new Promise(function (r) { setTimeout(r, 1200); }).then(function () { return fetchEvents({}); });
     }).then(function (events) {
       if (events && events.length) { emit(events); return true; }
-      console.warn('[EventuallyAPI] backend reachable but returned 0 events — staying on demo data.');
+      console.warn('[EventuallyAPI] backend reachable but returned 0 events — will retry.');
       return false;
     }).catch(function (e) {
-      console.warn('[EventuallyAPI] live load failed, staying on demo data:', e.message);
+      console.warn('[EventuallyAPI] live load failed, will retry:', e.message);
       return false;
     });
   }

@@ -2777,14 +2777,29 @@
   }
 
   /* ---------- live data (Supabase) ----------
-     When a backend is configured we do NOT paint the dense demo dataset first
-     (that caused a "flash" of many dots that then collapsed to the real, sparser
-     set). Instead we show a clean globe with a small "loading" hint, fetch the
-     real events, and populate once. If the load fails, we fall back to the demo
-     data so the globe is never empty. */
-  function setGlobeLoading(on) {
+     The globe starts empty with a small "Loading live events…" hint, fetches the
+     real events, and populates once. If the load fails it SAYS SO and keeps
+     retrying. It used to fall back to a built-in demo world so the globe was
+     "never empty" — which meant showing made-up events as real. Removed 2026-09-10. */
+  function setGlobeLoading(on, problem) {
     const el = document.getElementById('globe-loading');
-    if (el) el.classList.toggle('show', !!on);
+    if (!el) return;
+    el.classList.toggle('show', !!on);
+    el.innerHTML = '<span class="gl-dots"><i></i><i></i><i></i></span> ' +
+      (problem ? 'Couldn’t load events — retrying…' : 'Loading live events…');
+  }
+  // Retry with growing gaps (5 s, 10 s, 20 s, 40 s, then every 60 s), and at once when
+  // the connection comes back. Stops for good as soon as events have arrived.
+  let _liveLoaded = false, _liveRetryTimer = null, _liveRetries = 0;
+  function retryLiveLoad() {
+    clearTimeout(_liveRetryTimer);
+    if (_liveLoaded) return;
+    window.EventuallyAPI.boot().then(function (ok) { if (!ok && !_liveLoaded) scheduleLiveRetry(); });
+  }
+  function scheduleLiveRetry() {
+    clearTimeout(_liveRetryTimer);
+    const wait = Math.min(60000, 5000 * Math.pow(2, _liveRetries++));
+    _liveRetryTimer = setTimeout(retryLiveLoad, wait);
   }
   if (window.EventuallyAPI && window.EventuallyAPI.config.remote) {
     // Admin-configured sponsors for the Host bar (Admin → Sponsors). None → the Host
@@ -2831,7 +2846,7 @@
         refreshMarkers(); applyMonetization();
       });
     }
-    globe.setClusters([]);            // clear the demo markers before the first paint
+    globe.setClusters([]);            // start clean; markers arrive with the live data
     refreshMarkers();
     setGlobeLoading(true);
     window.EventuallyAPI.onData(function (events) {
@@ -2842,6 +2857,7 @@
       updateStats();
       rerenderPlace();
       if (timeline && timeline._drawSpark) timeline._drawSpark();
+      _liveLoaded = true; clearTimeout(_liveRetryTimer);
       setGlobeLoading(false);
       pruneSaved();                     // drop finished/ghost saved events → correct badge count
       syncReminders();                  // saved events are now resolvable → (re)schedule
@@ -2849,13 +2865,12 @@
       openDeepLink();                   // ?city= / ?publish= from a city page
     });
     window.EventuallyAPI.boot().then(function (ok) {
-      if (!ok) {                      // load failed → fall back to demo data
-        globe.setClusters(D.getClusters());
-        refreshMarkers(); updateStats();
-        if (timeline && timeline._drawSpark) timeline._drawSpark();
-      }
-      setGlobeLoading(false);
+      if (ok || _liveLoaded) { setGlobeLoading(false); return; }
+      // Nothing to show: say so plainly, keep the globe empty, and keep trying.
+      setGlobeLoading(true, true);
+      scheduleLiveRetry();
     });
+    window.addEventListener('online', function () { if (!_liveLoaded) retryLiveLoad(); });
   }
 
   /* ---------- signature opening (brand launch moment) ----------
