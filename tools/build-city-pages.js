@@ -107,6 +107,21 @@ function slugify(city) {
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+/* Titles arrive pre-mangled from the providers and it shows on the page:
+ *   "Ocean&apos;s Edge"     -> esc() escapes the & again -> "Ocean&amp;apos;s Edge"
+ *   "Edge \- Book Talk"     -> an iCal backslash escape that was never unescaped
+ * Decode first, then esc() re-escapes correctly exactly once. */
+const ENTITIES = { amp: '&', apos: "'", quot: '"', lt: '<', gt: '>', nbsp: ' ', ndash: '–', mdash: '—', hellip: '…' };
+function cleanTitle(raw) {
+  return String(raw == null ? '' : raw)
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
+    .replace(/&([a-z]+);/gi, (m, name) => (name.toLowerCase() in ENTITIES ? ENTITIES[name.toLowerCase()] : m))
+    .replace(/\\([-.,;:'"])/g, '$1')     // stray iCal-style escapes
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 // ── Data ─────────────────────────────────────────────────────────────────────
 async function fetchAll(select, filter) {
   const out = [];
@@ -153,6 +168,7 @@ async function analyse() {
 
   const byCity = new Map();
   for (const e of rows) {
+    e.title = cleanTitle(e.title);          // normalise once, before anything groups on it
     const city = cleanCity(e.city);
     if (!city) continue;
     const slug = slugify(city);
@@ -181,6 +197,14 @@ async function analyse() {
     target.events.push(...blank.events);
     blank.venues.forEach((v) => target.venues.add(v));
     byCity.delete(key);
+  }
+
+  /* Re-sort after merging. The fetch is ordered by start_time, but the merge above
+     APPENDS one city's events to another's, so a merged city (Regina — Ticketmaster
+     rows plus the community feeds) came out interleaved: 11 Sept, 15 Sept, 11 Sept.
+     The list is chronological or it is noise. */
+  for (const c of byCity.values()) {
+    c.events.sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
   }
 
   const all = [...byCity.values()].map((c) => ({
@@ -439,7 +463,13 @@ function sitemap(list) {
      the pages carry real content. */
   const noAds = !args.includes('--ads');
   const topArg = args.find((a) => a.startsWith('--top='));
-  const top = topArg ? parseInt(topArg.split('=')[1], 10) : 50;
+  /* Publish EVERY city that clears the bar, not an arbitrary top slice.
+     The old default of 50 was a blunt quality proxy from when the gate counted
+     occurrences rather than distinct events. Now that qualifies() is a real test,
+     capping just discards legitimate pages — it was dropping Regina (#64, the home
+     market and the only city with native events), New York (#66) and Madrid (#79).
+     --top=N still works for testing. */
+  const top = topArg ? parseInt(topArg.split('=')[1], 10) : Infinity;
 
   const { all, total } = await analyse();
   const good = all.filter(qualifies);
@@ -448,7 +478,7 @@ function sitemap(list) {
   if (listOnly) {
     console.log(`Upcoming events (next ${DAYS_AHEAD} days): ${total}`);
     console.log(`Distinct cities after cleanup: ${all.length}`);
-    console.log(`QUALIFYING (>= ${MIN_EVENTS} events AND >= ${MIN_VENUES} venues): ${good.length}\n`);
+    console.log(`QUALIFYING (>= ${MIN_EVENTS} DISTINCT events AND >= ${MIN_VENUES} venues): ${good.length}\n`);
     console.log(`TOP ${Math.min(top, good.length)} — review before publishing`);
     console.log('  #   city                              country            events  venues  url');
     good.slice(0, top).forEach((c, i) => {
