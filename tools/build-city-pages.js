@@ -27,13 +27,16 @@ const ANON = process.env.SUPABASE_ANON_KEY ||
 
 const SITE = 'https://eventually-app.com';
 // Where to write. Two different layouts have to work:
-//   • this working copy, where the deployable site lives in Eventually-site/
-//   • the GitHub Pages repo, where the site IS the repo root (no Eventually-site/ there)
-// Detecting it means the same script runs locally and in CI with no edits.
-const OUT_ROOT = fs.existsSync(path.join(__dirname, '..', 'Eventually-site'))
-  ? path.join(__dirname, '..', 'Eventually-site')
-  : path.join(__dirname, '..');
-const MIN_EVENTS = 10;        // below this a page is too thin to be worth publishing
+// The repo root IS the deployable site, here and in CI.
+//
+// This used to write into `Eventually-site/` whenever that folder existed, from the
+// era when the site was uploaded from a staging copy. That copy is now gitignored
+// and retired, but it still sits in the working tree — so every LOCAL build wrote
+// 110 pages into a dead directory and silently changed nothing, while CI (a fresh
+// checkout, where the folder does not exist) wrote to the right place. A build that
+// reports success and edits nothing is worse than one that fails.
+const OUT_ROOT = path.join(__dirname, '..');
+const MIN_EVENTS = 10;        // DISTINCT events — see titleKey/qualifies below
 const MIN_VENUES = 3;         // distinct locations — guards against one venue faking a "city"
 const DAYS_AHEAD = 90;
 const MAX_LISTED = 40;        // events shown per page
@@ -143,7 +146,8 @@ async function analyse() {
   const now = new Date().toISOString();
   const to = new Date(Date.now() + DAYS_AHEAD * 86400000).toISOString();
   const rows = await fetchAll(
-    'event_id,title,city,country,start_time,end_time,category,lat,lon,is_native',
+    // `timezone` is what makes the printed times correct — see fmt() below.
+    'event_id,title,city,country,start_time,end_time,category,lat,lon,is_native,timezone,venue',
     `moderation=eq.approved&published=not.is.false&start_time=gte.${now}&start_time=lte.${to}&order=start_time.asc`
   );
 
@@ -180,8 +184,11 @@ async function analyse() {
   }
 
   const all = [...byCity.values()].map((c) => ({
-    ...c, n: c.events.length, venueCount: c.venues.size,
-  })).sort((a, b) => b.n - a.n);
+    ...c,
+    n: c.events.length,                                   // occurrences (dates)
+    distinctN: new Set(c.events.map((e) => titleKey(e.title)).filter(Boolean)).size,
+    venueCount: c.venues.size,
+  })).sort((a, b) => b.distinctN - a.distinctN);           // rank by real variety
 
   // Disambiguate collisions (there is more than one London, Springfield, Cambridge…).
   const slugCount = new Map();
@@ -197,27 +204,70 @@ async function analyse() {
   return { all, total: rows.length };
 }
 
-const qualifies = (c) => c.n >= MIN_EVENTS && c.venueCount >= MIN_VENUES;
+/* One recurring show listed forty times is one event, not forty. Both the publish
+   gate and the on-page list key off this, so they can never disagree. */
+const titleKey = (t) => String(t || '').trim().toLowerCase().replace(/\s+/g, ' ');
+
+/* Gate on DISTINCT events, not occurrences. Using the raw count let a city with
+   42 dates of a single exhibition clear a "10 events" bar with one thing to do —
+   exactly the thin page this threshold exists to prevent. */
+const qualifies = (c) => c.distinctN >= MIN_EVENTS && c.venueCount >= MIN_VENUES;
 
 // ── Page template (dark, matching about.html; Sora for headings only) ────────
 function page(c, prose, adsOn) {
   const title = `Events in ${c.city} — what's on | Eventually`;
   const desc = `${c.n} events happening in ${c.city}${c.country ? ', ' + c.country : ''} over the next ${DAYS_AHEAD} days. Concerts, theatre, markets and more, updated daily.`;
   const url = `${SITE}/events/${c.slug}/`;
-  const fmt = (iso) => {
+  /* Print the time AT THE VENUE.
+   *
+   * This used to call toLocaleTimeString with no timeZone, so it formatted in
+   * whatever zone the build machine ran in — UTC on the GitHub Action. An Adelaide
+   * gig at 19:00 local was published as "9:30", which is worse than no page: a
+   * reader who trusts it misses the event. Every event now carries an IANA zone,
+   * so use it, and fall back to UTC (labelled) only if one is somehow missing. */
+  const fmt = (iso, zone) => {
     const d = new Date(iso);
-    return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) + ' · ' +
-      d.toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit' });
+    const tz = zone || 'UTC';
+    try {
+      const day = new Intl.DateTimeFormat('en-GB', { timeZone: tz, weekday: 'short', day: 'numeric', month: 'short' }).format(d);
+      const time = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: 'numeric', minute: '2-digit' }).format(d);
+      return day + ' · ' + time;
+    } catch {
+      return d.toUTCString().slice(0, 16) + ' · ' + d.toUTCString().slice(17, 22) + ' UTC';
+    }
   };
-  const events = c.events.slice(0, MAX_LISTED);
+
+  /* Collapse a recurring event into ONE row.
+   *
+   * A run like "Art for Takayna" appearing fifteen times at fifteen start times is
+   * how the Adelaide page came to be mostly the same four words. It reads as
+   * spam to a person and as thin/duplicate content to a crawler, and it buries the
+   * other events. The list arrives ordered by start_time, so the first occurrence
+   * is the earliest — keep that one and count the rest. */
+  const collapse = (list) => {
+    const byTitle = new Map();
+    for (const e of list) {
+      const key = titleKey(e.title);
+      if (!key) continue;
+      const hit = byTitle.get(key);
+      if (hit) hit._more++;
+      else byTitle.set(key, Object.assign({}, e, { _more: 0 }));
+    }
+    return Array.from(byTitle.values());
+  };
+
+  const distinct = collapse(c.events);
+  const events = distinct.slice(0, MAX_LISTED);
 
   // JSON-LD so Google can show these as rich event results.
   const ld = {
     '@context': 'https://schema.org', '@type': 'ItemList',
     itemListElement: events.slice(0, 20).map((e, i) => ({
       '@type': 'ListItem', position: i + 1,
+      // Built from the DEDUPED list, so the structured data no longer repeats the
+      // same event twenty times — which Google reads as duplicate content too.
       item: { '@type': 'Event', name: e.title, startDate: e.start_time,
-        location: { '@type': 'Place', name: c.city, address: { '@type': 'PostalAddress', addressLocality: c.city, addressCountry: c.country } } },
+        location: { '@type': 'Place', name: e.venue || c.city, address: { '@type': 'PostalAddress', addressLocality: c.city, addressCountry: c.country } } },
     })),
   };
 
@@ -268,6 +318,7 @@ function page(c, prose, adsOn) {
   .ev-name { color:#ece5da; font-weight:600; }
   .ev-when { color:#9a8f80; font-size:.88rem; white-space:nowrap; font-variant-numeric:tabular-nums; }
   .ev-cat { color:#9a8f80; font-size:.82rem; grid-column:1/-1; margin-top:-4px; }
+  .ev-runs { color:#f0a24a; font-size:.8rem; }
   .tag { display:inline-block; font-size:.72rem; color:#f0a24a; border:1px solid #4a3a24;
     border-radius:99px; padding:1px 8px; margin-left:6px; vertical-align:middle; }
   hr { border:none; border-top:1px solid #2e2820; margin:30px 0; }
@@ -281,15 +332,20 @@ function page(c, prose, adsOn) {
 <div class="wrap">
   <a class="back" href="/">← Eventually</a>
   <h1>Events in ${esc(c.city)}</h1>
-  <p class="lead">${c.n} event${c.n === 1 ? '' : 's'} happening in ${esc(c.city)}${c.country ? ', ' + esc(c.country) : ''} over the next ${DAYS_AHEAD} days.</p>
+  <p class="lead">${distinct.length} event${distinct.length === 1 ? '' : 's'} happening in ${esc(c.city)}${c.country ? ', ' + esc(c.country) : ''} over the next ${DAYS_AHEAD} days${c.n > distinct.length ? `, across ${c.n} dates` : ''}.</p>
   <p class="muted">Updated daily · ${c.venueCount} venue${c.venueCount === 1 ? '' : 's'}</p>
   <a class="cta" href="/?city=${encodeURIComponent(c.city)}">Explore ${esc(c.city)} on the globe →</a>
 ${prose ? '\n  <h2>About ' + esc(c.city) + '</h2>\n' + prose.map((p) => '  <p>' + esc(p) + '</p>').join('\n') + '\n' : ''}
   <h2>What's on</h2>
   <ul class="events">
-${events.map((e) => `    <li><span class="ev-name">${esc(e.title)}${e.is_native ? '<span class="tag">On Eventually</span>' : ''}</span><span class="ev-when">${fmt(e.start_time)}</span>${e.category ? `<span class="ev-cat">${esc(e.category)}</span>` : ''}</li>`).join('\n')}
+${events.map((e) => {
+    // A collapsed run says so, so "one row" never reads as "one night only".
+    const runs = e._more ? ` <span class="ev-runs">+ ${e._more} more date${e._more === 1 ? '' : 's'}</span>` : '';
+    const meta = [e.category ? esc(e.category) : '', e.venue ? esc(e.venue) : ''].filter(Boolean).join(' · ');
+    return `    <li><span class="ev-name">${esc(e.title)}${e.is_native ? '<span class="tag">On Eventually</span>' : ''}</span><span class="ev-when">${fmt(e.start_time, e.timezone)}${runs}</span>${meta ? `<span class="ev-cat">${meta}</span>` : ''}</li>`;
+  }).join('\n')}
   </ul>
-${c.n > MAX_LISTED ? `  <p class="muted" style="margin-top:14px">…and ${c.n - MAX_LISTED} more. <a href="/?city=${encodeURIComponent(c.city)}">See them all on the globe →</a></p>\n` : ''}${adUnit}
+${distinct.length > MAX_LISTED ? `  <p class="muted" style="margin-top:14px">…and ${distinct.length - MAX_LISTED} more. <a href="/?city=${encodeURIComponent(c.city)}">See them all on the globe →</a></p>\n` : ''}${adUnit}
   <hr>
   <h2>Nearby cities</h2>
   <p class="nearby">__NEARBY__</p>
@@ -387,7 +443,7 @@ function sitemap(list) {
 
   const { all, total } = await analyse();
   const good = all.filter(qualifies);
-  const rejected = all.filter((c) => c.n >= MIN_EVENTS && !qualifies(c));
+  const rejected = all.filter((c) => c.distinctN >= MIN_EVENTS && !qualifies(c));
 
   if (listOnly) {
     console.log(`Upcoming events (next ${DAYS_AHEAD} days): ${total}`);
@@ -431,11 +487,34 @@ function sitemap(list) {
     fs.writeFileSync(path.join(dir, 'index.html'), html, 'utf8');
   });
 
+  /* PRUNE cities that no longer qualify.
+   *
+   * Without this, a page written once lives forever. A city whose events thin out,
+   * or which drops below the bar after a threshold change, keeps its page — absent
+   * from the sitemap and unlinked from /browse/, but still live and still crawlable.
+   * That is how this build ended up with 114 directories serving 50 real pages: 64
+   * orphans, every one of them exactly the thin, unmaintained content AdSense
+   * flagged. Unlinked is not the same as gone.
+   *
+   * Deliberately narrow: only directories directly under events/ that contain
+   * nothing but the index.html this script generates. Anything else is left alone. */
+  const keep = new Set(publish.map((c) => c.slug));
+  let pruned = 0;
+  for (const name of fs.readdirSync(eventsDir)) {
+    if (keep.has(name)) continue;
+    const dir = path.join(eventsDir, name);
+    if (!fs.statSync(dir).isDirectory()) continue;
+    const contents = fs.readdirSync(dir);
+    if (contents.length !== 1 || contents[0] !== 'index.html') continue;   // not ours — leave it
+    fs.rmSync(dir, { recursive: true, force: true });
+    pruned++;
+  }
+
   fs.mkdirSync(path.join(OUT_ROOT, 'browse'), { recursive: true });
   fs.writeFileSync(path.join(OUT_ROOT, 'browse', 'index.html'), browseIndex(publish), 'utf8');
   fs.writeFileSync(path.join(OUT_ROOT, 'sitemap.xml'), sitemap(publish), 'utf8');
   fs.writeFileSync(path.join(OUT_ROOT, 'robots.txt'),
     `User-agent: *\nAllow: /\n\nSitemap: ${SITE}/sitemap.xml\n`, 'utf8');
 
-  console.log(`Wrote ${publish.length} city pages + /browse/ + sitemap.xml + robots.txt`);
+  console.log(`Wrote ${publish.length} city pages${pruned ? `, pruned ${pruned} that no longer qualify` : ''} + /browse/ + sitemap.xml + robots.txt`);
 })().catch((e) => { console.error('FAILED:', e.message); process.exit(1); });
