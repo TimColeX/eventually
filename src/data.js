@@ -342,6 +342,10 @@
       const key = Math.round(ev.lat / CELL) + '_' + Math.round(ev.lon / CELL);
       let c = cells[key];
       if (!c) { c = cells[key] = { id: 'loc_' + (++_loc), lat: ev.lat, lon: ev.lon, city: ev.city, eventIds: [], _n: 0 }; CLUSTERS.push(c); }
+      // The first event in a cell places and names the cluster. If it has no city, take
+      // the name from the next event that does, so the cluster isn't left unnamed. The
+      // position still comes from the first event.
+      if (!c.city && ev.city) c.city = ev.city;
       c.eventIds.push(ev.id);
       c._n++;
       c.lat += (ev.lat - c.lat) / c._n;             // running centroid

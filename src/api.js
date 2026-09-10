@@ -63,7 +63,8 @@
       category: cat, categoryColor: CATS[cat],
       source: ds, sourceLabel: SRC[ds] ? SRC[ds].label : ds, sourceColor: SRC[ds] ? SRC[ds].color : '#CB5A3C',
       banner: [CATS[cat], '#211A15'],
-      description: a.description || (a.title + ' in ' + a.city + ' — pulled live onto the Eventually globe.'),
+      // 132 live listings have no city; this used to read "<title> in null — …".
+      description: a.description || (a.title + (a.city ? ' in ' + a.city : '') + ' — pulled live onto the Eventually globe.'),
       ticketUrl: (sources[0] && sources[0].url) || null,
       likes: likes, attending: Math.round(likes * 0.4), clicks: likes * 3,
       sponsored: !!a.sponsored,

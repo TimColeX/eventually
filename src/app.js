@@ -212,7 +212,7 @@
     if (id) {
       const c = clusterById(id);
       const n = c._visible;
-      tip.textContent = c.city + ' · ' + n + ' event' + (n === 1 ? '' : 's');
+      tip.textContent = (c.city ? c.city + ' · ' : '') + n + ' event' + (n === 1 ? '' : 's');
       if (c) prewarmCity({ city: c.city, lat: c.lat, lon: c.lon });   // warm the briefing before the tap
     } else { clearTimeout(_warmTimer); }
   };
@@ -541,7 +541,7 @@
     let s = 'Good ' + part + (name ? ', ' + name : '') + '. Here\'s your Eventually briefing for ' + place + '. ';
     s += localCount ? ('There are ' + localCount + ' events coming up near you. ')
                     : 'There\'s plenty happening around the world. ';
-    s += 'Top of the list: ' + top[0].name + ' in ' + top[0].city + '. ';
+    s += 'Top of the list: ' + top[0].name + (top[0].city ? ' in ' + top[0].city : '') + '. ';
     if (top[1]) s += 'Also worth a look, ' + top[1].name + (top[1].city ? ' in ' + top[1].city : '') + '. ';
     if (top[2]) s += 'And keep an eye on ' + top[2].name + '. ';
     s += 'Spin the globe to explore more.';
@@ -758,7 +758,10 @@
   // The nav trigger (avatar / ⋯) and its dropdown are wired in the menu section below.
 
   /* ---------- location popup (scrollable list of events at one place) ---------- */
-  function esc(s) { return String(s).replace(/[&<>"]/g, function (m) {
+  // Missing values render as nothing, like every other esc() in the codebase. This one
+  // used String(s), so an event with no city printed the word "null" on its card and
+  // in its detail view.
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (m) {
     return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[m]; }); }
 
   // Events at a location that match the current timeline date (live or upcoming),
@@ -827,7 +830,7 @@
             featured + badge +
           '</div>' +
           '<h4 class="ev-title">' + esc(ev.name) + '</h4>' +
-          '<p class="ev-date">' + dateLabel + '  ·  ' + esc(ev.city) + countdownChip(ev) + '</p>' +
+          '<p class="ev-date">' + dateLabel + (ev.city ? '  ·  ' + esc(ev.city) : '') + countdownChip(ev) + '</p>' +
           '<p class="ev-desc">' + esc(ev.description) + '</p>' +
           '<div class="ev-foot">' + srcs + '<span class="ev-view">View ›</span></div>' +
         '</div>' +
@@ -1130,7 +1133,8 @@
         '<h2 class="evd-title">' + esc(ev.name) + '</h2>' +
         '<p class="evd-meta">' + esc(dateLabel) + ' · ' + esc(timeLabel) +
           (ev.endsAt ? '–' + esc(inZone(new Date(ev.endsAt), { hour: 'numeric', minute: '2-digit' })) : '') + tzTag +
-          '  —  ' + (ev.venue ? esc(ev.venue) + ', ' : '') + esc(ev.city) + '</p>' +
+          // Venue and city are each optional; show whichever exist, and no dangling dash.
+          ((ev.venue || ev.city) ? '  —  ' + [ev.venue, ev.city].filter(Boolean).map(esc).join(', ') : '') + '</p>' +
         (ev.address ? '<p class="evd-addr">📍 ' + esc(ev.address) + '</p>' : '') +
         (type === 'upcoming' ? '<div class="evd-cd"><span class="cd-label">Starts in</span><span class="ev-cd" data-start="' + ev.date.getTime() + '">⏳ ' + esc(fmtCountdown(ev.date.getTime() - Date.now())) + '</span></div>' : '') +
         transparency +
@@ -1391,7 +1395,7 @@
     const cities = Object.keys(byCity).map(function (k) { return byCity[k]; }).sort(function (a, b) { return b.n - a.n; }).slice(0, 3);
     const events = D.getEvents().filter(function (e) {
       if (RT._hidEv[e.id] || RT._hidCity[(e.city || '').toLowerCase()]) return false;
-      return (e.name + ' ' + e.city + ' ' + e.category).toLowerCase().indexOf(q) > -1;
+      return (e.name + ' ' + (e.city || '') + ' ' + e.category).toLowerCase().indexOf(q) > -1;
     }).sort(function (a, b) { return D.popularity(b) - D.popularity(a); }).slice(0, 5)
       .map(function (e) { return { id: e.id, name: e.name, city: e.city, lat: e.lat, lon: e.lon, color: e.categoryColor }; });
     renderSearchResults(cities, events);
