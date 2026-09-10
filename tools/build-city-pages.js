@@ -375,7 +375,13 @@ function sitemap(list) {
 (async () => {
   const args = process.argv.slice(2);
   const listOnly = args.includes('--list');
-  const noAds = args.includes('--no-ads');
+  /* Ads are OFF by default as of 2026-09-09 — AdSense flagged these pages as
+     "low value content" (~30 words of original prose each, the rest an aggregated
+     Ticketmaster listing repeated across 110 near-identical templates). Opting IN
+     with --ads rather than out with --no-ads means the daily rebuild Action cannot
+     quietly reintroduce the violation by forgetting a flag. Re-enable only once
+     the pages carry real content. */
+  const noAds = !args.includes('--ads');
   const topArg = args.find((a) => a.startsWith('--top='));
   const top = topArg ? parseInt(topArg.split('=')[1], 10) : 50;
 

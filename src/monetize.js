@@ -58,7 +58,29 @@
    * Ads are only rendered for non-Plus users when the admin has ads enabled
    * (the app gates on RT.adsEnabled && !plus before calling adSlotHTML). */
   const ADSENSE = {
-    enabled: true,                                // LIVE — approved 2026-09-01, manual units (Auto ads deliberately OFF)
+    /* OFF since 2026-09-09. AdSense flagged the site "Needs attention" with two
+     * policy violations, both of them fair:
+     *
+     *   1. "Google-served ads on screens without publisher-content" — the main
+     *      screen is a 3D globe, a search bar and a timeline. That is an
+     *      application interface, which the policy names directly ("screens used
+     *      for alerts, navigation or other behavioral purposes"). No amount of
+     *      placement tuning changes what that screen is.
+     *   2. "Low value content" — the 110 generated city pages carry ~30 words of
+     *      original prose each; the rest is a list of event titles aggregated from
+     *      Ticketmaster, with the same recurring event repeated a dozen times and
+     *      the same template stamped across every city.
+     *
+     * Decision: not worth chasing at current traffic. Approval would need real
+     * per-city editorial (a content business, not a code change), and the revenue
+     * at this scale is pennies against the UX cost on a product still trying to
+     * sign its first organiser. Slots fall back to house creatives, which keep the
+     * layout honest and cost nothing.
+     *
+     * To revisit: fix the two violations FIRST, then flip this and request review.
+     * Requesting review before they are genuinely fixed makes the next attempt
+     * harder, not easier. Publisher id and slot ids are kept so it is one flag. */
+    enabled: false,
     client: 'ca-pub-9120618442042757',            // publisher id (live)
     slots: {                                      // per-placement ad-unit ids from AdSense → Ads → By ad unit
       banner: '3532231028',                       // bottom bar (horizontal)
