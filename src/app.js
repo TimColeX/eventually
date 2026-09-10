@@ -2136,10 +2136,17 @@
     else h += '<button class="dd-item dd-primary" data-act="signin">Sign In / Sign Up</button>';
     h += '<button class="dd-item" data-act="profile">Profile</button>';
     h += '<button class="dd-item" data-act="saved">Saved Events <span class="dd-badge">' + p.saved.length + '</span></button>';
-    h += '<button class="dd-item" data-act="create">Publish an Event</button>';
+    // "Publish an Event" has moved to the bottom bar, where it is the boldest thing
+    // on screen and reachable from every state (verified: it stays hittable with the
+    // event drawer and profile open on a 375px phone). Help Centre deliberately
+    // stays in BOTH — it is where someone looks when they are lost, and the menu is
+    // the conventional place to look; that is worth one duplicated line.
     if (user) h += '<button class="dd-item" data-act="myevents">My Events</button>';
     h += '<div class="dd-sep"></div>';
     h += '<button class="dd-item" data-act="help">Help Centre</button>';
+    // /browse/ indexes all 88 city pages and nothing in the app linked to it, so it
+    // was invisible to users. Site-level destination, hence the lower group.
+    h += '<button class="dd-item" data-act="browse">Browse Cities</button>';
     h += '<button class="dd-item" data-act="contact">Contact Sales</button>';
     if (RT.plusComingSoon) h += '<button class="dd-item" data-act="plus">Eventually Plus</button>';
     else if (!p.plus) h += '<button class="dd-item" data-act="plus">Get Eventually Plus</button>';
@@ -2158,10 +2165,11 @@
     else if (act === 'saved') openSaved();
     else if (act === 'plus') openPlus();
     else if (act === 'profile') openProfile();
-    else if (act === 'create') { track('publish_open'); requireLogin(function () { coordinator.open(); }); }
+    // 'create' is gone with its menu item — publishing lives in the bottom bar.
     else if (act === 'myevents') requireLogin(function () { openMyEvents(); });
     else if (act === 'types') openTypes();
     else if (act === 'help') openHelp();
+    else if (act === 'browse') location.href = '/browse/';
     else if (act === 'contact') openContact();
   });
   renderMenuTrigger();
