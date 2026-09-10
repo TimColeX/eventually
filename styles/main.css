@@ -827,6 +827,22 @@ body {
 /* AdSense banner = a FIXED 320x50 unit (see monetize.js). Centre it in the bar and make
    sure it can never widen the page on narrow phones: the bar's 16px side padding leaves
    only 288px on a 320px viewport, so drop the padding below 352px and clip as a backstop. */
+/* ---------- bottom bar: quick links (was the ad strip) ---------- */
+/* Centred so it reads as app chrome rather than a leftover advert rail. */
+.bb-nav { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; }
+.bb-link { display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+  padding: 8px 15px; border-radius: 10px; border: 1px solid var(--line-2);
+  background: var(--paper); color: var(--ink);
+  font-family: var(--font); font-size: 13px; font-weight: 600; white-space: nowrap; }
+.bb-link:hover { border-color: var(--clay); color: var(--clay); }
+.bb-primary { background: var(--clay); border-color: var(--clay); color: var(--cream); }
+.bb-primary:hover { background: #b94e32; border-color: #b94e32; color: var(--cream); }
+.bb-ic { font-size: 12px; line-height: 1; opacity: .9; }
+/* Narrow phones: shrink rather than wrap — the strip is a fixed 56px. */
+@media (max-width: 420px) {
+  .bb-link { padding: 8px 11px; font-size: 12.5px; gap: 5px; }
+}
+
 .adbar.adbar-unit { justify-content: center; overflow: hidden; }
 .adbar .adsbygoogle { max-width: 100%; }
 @media (max-width: 351px) { .adbar { padding-left: 0; padding-right: 0; } }

@@ -890,13 +890,11 @@
       shown = list.slice(0, PLACE_TOP);
       more = '<button class="see-all" data-seeall="1">See all ' + list.length + ' events ↓</button>';
     }
-    // Interleave a native in-feed ad slot every AD_EVERY cards (non-Plus only).
-    const AD_EVERY = 4;
+    // The in-feed slot that used to break up this list every 4 cards is gone.
+    // Someone scrolling a city's events is doing the one thing the app is for;
+    // interrupting them with a promo nobody paid for was pure cost.
     let cardsHtml = '';
-    shown.forEach(function (ev, i) {
-      cardsHtml += eventCardHTML(ev);
-      if (adsOn() && (i + 1) % AD_EVERY === 0 && i < shown.length - 1) cardsHtml += adSlot('infeed');
-    });
+    shown.forEach(function (ev) { cardsHtml += eventCardHTML(ev); });
     placeList.innerHTML = cardsHtml + more + partnerCardHTML(c);
     M.mountAdSense(placeList);
     if (focusEventId) {
@@ -1126,7 +1124,7 @@
           '<button class="ev-save' + (P.isSaved(ev.id) ? ' on' : '') + '" data-act="save">' + (P.isSaved(ev.id) ? '★' : '☆') + '</button>' +
         '</div>' +
         '<div class="live-updates" hidden></div>' +
-        avail + adSlot('panel') +
+        avail +
       '</div>';
     // Live updates from the organiser. Hidden unless the server says the window
     // is open, so a closed or disabled event shows nothing at all.
@@ -2070,47 +2068,52 @@
   // A reserved ad container (banner | infeed | panel). Empty string when ads are
   // off so nothing renders/reserves space. Provider-agnostic (house creative now,
   // AdSense later) — see monetize.js adSlotHTML/mountAdSense.
-  function adSlot(kind) {
-    if (!adsOn()) return '';
-    return '<div class="ad-slot ad-' + kind + '" data-ad="' + kind + '">' + M.adSlotHTML(kind) + '</div>';
-  }
-  function renderAd() {
-    adbar.innerHTML = M.adSlotHTML('banner');
-    // A real AdSense unit is a FIXED 320x50 box — centre it in the bar. The house
-    // creative is a full-width row (tag + copy + "Remove ads"), so it keeps the
-    // default left-aligned flex layout.
-    adbar.classList.toggle('adbar-unit', !!adbar.querySelector('.adsbygoogle'));
-    M.mountAdSense(adbar);
-    const plus = adbar.querySelector('.ad-plus');
-    if (plus) plus.addEventListener('click', openPlus);
-  }
+  /* No ad slots anywhere in the app. The in-feed card interrupted a list someone
+     was reading, and the panel rectangle sat inside an event they had chosen to
+     open — both asking for attention nobody was selling. Kept as a function so the
+     call sites read honestly rather than being silently deleted. */
+  function adSlot() { return ''; }
 
-  /* House creatives now DO something. They previously ended in "Learn more ›" that
-     was plain text with no handler — a call to action that did nothing when tapped.
-     One delegated listener covers every slot, including ones rendered later into
-     the event list and detail panel. */
-  document.addEventListener('click', function (e) {
-    const b = e.target.closest('[data-house]');
-    if (!b) return;
-    e.preventDefault();
-    const act = b.getAttribute('data-house');
-    if (act === 'publish') {
+  /* The bottom strip: two things people actually want, always reachable.
+     Both also live in the ⋯ menu, but that is behind a button — this is in view. */
+  function renderBottomBar() {
+    adbar.classList.remove('adbar-unit');
+    adbar.innerHTML =
+      '<nav class="bb-nav" aria-label="Quick links">' +
+        '<button class="bb-link bb-primary" data-bb="publish">' +
+          '<span class="bb-ic" aria-hidden="true">✦</span>Publish on the Globe</button>' +
+        '<button class="bb-link" data-bb="help">' +
+          '<span class="bb-ic" aria-hidden="true">?</span>Help Centre</button>' +
+      '</nav>';
+  }
+  adbar.addEventListener('click', function (e) {
+    const b = e.target.closest('[data-bb]'); if (!b) return;
+    if (b.dataset.bb === 'publish') {
       track('publish_open');
       requireLogin(function () { coordinator.open(); },
         'Sign in to publish your event — free while we are in beta.');
-    } else if (act === 'saved') {
-      openSaved();
-    }
+    } else if (b.dataset.bb === 'help') { openHelp(); }
   });
+
+  /* The [data-house] listener that lived here is gone with the house creatives that
+     used it. The bottom bar has its own handler on #adbar (see renderBottomBar). */
+  /* The bottom strip is NAVIGATION now, not an ad slot.
+   *
+   * It used to be gated on RT.adsEnabled and hidden from Plus subscribers, which
+   * made sense while it carried a creative. As permanent chrome it must not depend
+   * on an ads switch — an admin turning ads off would otherwise remove the Publish
+   * and Help Centre links with them. It is always shown, for everyone.
+   *
+   * `has-ad` keeps its name: eight CSS rules offset the timeline, host bar and
+   * globe controls by the strip's height, and renaming the class across all of
+   * them buys nothing. The strip is still 56px, so the offsets are still right. */
   function applyMonetization() {
-    const showAds = RT.adsEnabled && (RT.plusComingSoon || !P.get().plus);   // admin can disable ads globally
-    document.body.classList.toggle('has-ad', showAds);
-    adbar.style.display = showAds ? '' : 'none';
-    if (showAds) renderAd();
-    rerenderPlace();                 // show/hide the partner card
+    document.body.classList.add('has-ad');
+    adbar.style.display = '';
+    renderBottomBar();
+    rerenderPlace();
   }
   applyMonetization();
-  setInterval(function () { if (!P.get().plus) renderAd(); }, 30000);  // rotate ad creatives
 
   /* ---------- ⋯ menu (consolidated nav) ---------- */
   const menuBtn = document.getElementById('nav-menu');

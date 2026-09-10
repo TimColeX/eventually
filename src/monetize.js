@@ -25,12 +25,7 @@
    * A house ad for your own product is honest advertising. Every line below describes
    * something that actually works today, and every one now goes somewhere — the old
    * "Learn more ›" was inert text, a call to action that did nothing. */
-  const ADS = [
-    { brand: 'Publish your event',   text: 'Free while we are in beta. It appears on the globe within a day.', act: 'publish' },
-    { brand: 'Take registrations',   text: 'People sign up in one tap; you get a door list with names and emails.', act: 'publish' },
-    { brand: 'Post live updates',    text: 'Doors, parking, running late — straight to everyone at your event.', act: 'publish' },
-    { brand: 'Never miss one',       text: 'Save an event and we will email you before it starts.', act: 'saved' }
-  ];
+  const ADS = [];   // empty: the app renders no ad slots at all (see houseCreative note below)
 
   /* Revenue Stream 4 — local business partners. DELETED, not commented out.
    *
@@ -105,26 +100,13 @@
   // Reserved min-heights (px) — keep in sync with .ad-slot CSS to avoid layout shift.
   const SLOT_H = { banner: 56, infeed: 96, panel: 250 };
 
-  function houseCreative(kind) {
-    const ad = ADS[Math.floor(Math.random() * ADS.length)];
-    // "Sponsored" / "Ad" would be a lie on our own promotion — nobody paid for these.
-    // The tag names what it is: a message from Eventually.
-    const tag = '<span class="ad-tag ad-house">Eventually</span>';
-    const act = ' data-house="' + ad.act + '"';
-    if (kind === 'infeed') {
-      return tag + '<div class="ad-native-body"><strong>' + ad.brand + '</strong>' +
-        '<span>' + ad.text + '</span></div>' +
-        '<button class="ad-cta"' + act + '>Get started ›</button>';
-    }
-    if (kind === 'panel') {
-      return tag + '<strong>' + ad.brand + '</strong><span>' + ad.text + '</span>' +
-        '<button class="ad-cta"' + act + '>Get started ›</button>';
-    }
-    // banner (bottom bar) — keeps the "Remove ads" → Plus affordance.
-    return tag + '<button class="ad-body ad-house-link"' + act + '><strong>' + ad.brand +
-      '</strong><span>' + ad.text + '</span></button>' +
-      '<button class="ad-plus">Remove ads</button>';
-  }
+  /* houseCreative() is gone. The app no longer renders ad slots anywhere: the
+     bottom strip is navigation (Publish / Help Centre), the in-feed card that broke
+     up event lists is removed, and so is the rectangle inside the event panel.
+     Nothing is being sold, so nothing should be interrupting anyone.
+     The AdSense config below stays dormant — if display ads ever return they belong
+     in listings, never on the globe screen, which is what the policy violation was
+     about. See the note on ADSENSE.enabled. */
 
   const api = {
     get sponsors() { return adminSponsors; },   // live admin-configured sponsors (was a demo array)
@@ -132,7 +114,7 @@
     plusBenefits: PLUS_BENEFITS,
     adsense: ADSENSE,
 
-    randomAd: function () { return ADS[Math.floor(Math.random() * ADS.length)]; },
+    randomAd: function () { return ADS.length ? ADS[Math.floor(Math.random() * ADS.length)] : null; },
     // Returns null while PARTNERS is empty — the old modulo threw on an empty list.
     partnerFor: function (seed) { return PARTNERS.length ? PARTNERS[Math.abs(seed | 0) % PARTNERS.length] : null; },
 
@@ -154,7 +136,7 @@
           'data-ad-client="' + ADSENSE.client + '" data-ad-slot="' + (ADSENSE.slots[kind] || '') + '" ' +
           'data-ad-format="auto" data-full-width-responsive="true"></ins>';
       }
-      return houseCreative(kind);
+      return '';        // no AdSense configured and no house creatives → render nothing
     },
     // After inserting slots into the DOM, activate any AdSense units within `root`.
     // No-op until ADSENSE is configured (house creatives need nothing).
