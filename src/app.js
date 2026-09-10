@@ -1035,6 +1035,17 @@
     }
   } catch (e) { track('open', null); }
 
+  // The site a booking link actually opens, as people see it in the address bar
+  // ("seatgeek.com"). An event's source label says who LISTED it, which is not
+  // always who SELLS it — Ticketmaster's feed hands us links to other sites.
+  function siteOf(url) {
+    try {
+      const u = new URL(url);
+      if (!/^https?:$/.test(u.protocol)) return null;
+      return u.hostname.replace(/^www\./i, '') || null;
+    } catch (e) { return null; }
+  }
+
   function ticketUrl(ev) {
     const base = goBase();
     if (!base) return ev.ticketUrl || '#';                         // no backend (pure demo) → direct link
@@ -1093,9 +1104,15 @@
       var ticketed = (ev.sources || []).some(function (s) { return s.price != null; }) ||
         /ticketmaster|ticketweb|axs|stubhub|dice/i.test(String(ev.source || '') + ' ' + (ev.sources || []).map(function (s) { return s.source || ''; }).join(' '));
       var cta = ticketed ? 'Get Tickets ↗' : 'View event ↗';
+      // Name where the button really goes. /go redirects to the event's stored
+      // ticket_url (an affiliate program only wraps it), which is ev.ticketUrl — so
+      // the host of that URL is the site the visitor lands on. The source label
+      // ("Ticketmaster") is only the fallback: it named Ticketmaster for listings
+      // whose booking link opens a different site entirely.
+      var dest = siteOf(ev.ticketUrl) || ev.sourceLabel;
       var note = ticketed
-        ? "You'll be taken to " + esc(ev.sourceLabel || 'the official provider') + " to book."
-        : "You'll be taken to " + esc(ev.sourceLabel || 'the source') + " for details.";
+        ? "You'll be taken to " + esc(dest || 'the official provider') + " to book."
+        : "You'll be taken to " + esc(dest || 'the source') + " for details.";
       avail = '<div class="evd-section">' +
         '<a class="evd-tickets" data-tickets="' + esc(ev.id) + '" href="' + esc(ticketUrl(ev)) + '" target="_blank" rel="noopener nofollow">' + cta + '</a>' +
         '<p class="evd-note">' + note + '</p></div>';
