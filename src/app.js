@@ -905,7 +905,11 @@
       if (el) { el.classList.add('focus'); el.scrollIntoView({ block: 'center' }); }
       focusEventId = null;
     }
+    syncPlaceShade();
   }
+  // Header shadow only while the list is scrolled (styles: .place.is-scrolled).
+  function syncPlaceShade() { place.classList.toggle('is-scrolled', placeList.scrollTop > 2); }
+  placeList.addEventListener('scroll', syncPlaceShade, { passive: true });
   function openPlace(clusterId, focusId) {
     const c = clusterById(clusterId);
     if (!c) return;
@@ -944,6 +948,7 @@
     placeList.innerHTML = h;
     const btn = placeList.querySelector('.pe-near');
     if (btn) btn.addEventListener('click', function () { openPlace(btn.getAttribute('data-near')); });
+    syncPlaceShade();
     place.classList.add('open');
   }
   function rerenderPlace() {
