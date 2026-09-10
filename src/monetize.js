@@ -13,21 +13,35 @@
   let adminSponsors = [];      // [{ scope, message, weight, active_from, active_to }]
   let sponsorCity = null;      // the city the host is currently covering (for city-scoped sponsors)
 
-  // Revenue Stream 1 — display ads (mock creatives for the 60px bottom zone).
+  /* HOUSE CREATIVES — Eventually promoting Eventually, and nothing else.
+   *
+   * These four used to be invented advertisers, shown under a "Sponsored" tag:
+   *   Coastal Hotels · ABC Airlines · Brightline Rail · Verve Mobile
+   * Two problems, one of them serious. They claimed sponsorships that do not exist —
+   * the same reason the demo sponsor lines above were removed. And BRIGHTLINE RAIL IS
+   * A REAL COMPANY: putting a fabricated offer under a real business's name, labelled
+   * Sponsored, is impersonating that business. Not a placeholder anyone should ship.
+   *
+   * A house ad for your own product is honest advertising. Every line below describes
+   * something that actually works today, and every one now goes somewhere — the old
+   * "Learn more ›" was inert text, a call to action that did nothing. */
   const ADS = [
-    { brand: 'Coastal Hotels', text: 'Stay where the events are — 20% off weekend rates.' },
-    { brand: 'ABC Airlines',   text: 'Fly to the festival. One-way fares from $89.' },
-    { brand: 'Brightline Rail', text: 'Skip the traffic. Trains to every major venue.' },
-    { brand: 'Verve Mobile',   text: 'Unlimited data for travellers. First month free.' }
+    { brand: 'Publish your event',   text: 'Free while we are in beta. It appears on the globe within a day.', act: 'publish' },
+    { brand: 'Take registrations',   text: 'People sign up in one tap; you get a door list with names and emails.', act: 'publish' },
+    { brand: 'Post live updates',    text: 'Doors, parking, running late — straight to everyone at your event.', act: 'publish' },
+    { brand: 'Never miss one',       text: 'Save an event and we will email you before it starts.', act: 'saved' }
   ];
 
-  // Revenue Stream 4 — local business partners (surfaced by user location).
-  const PARTNERS = [
-    { type: 'Restaurant', name: 'The Copper Kettle', pitch: 'Looking for dinner before the show?' },
-    { type: 'Hotel',      name: 'Riverside Suites',  pitch: 'Stay the night, steps from the venue.' },
-    { type: 'Bar',        name: 'Lantern & Co.',     pitch: 'Grab a drink after the encore.' },
-    { type: 'Transport',  name: 'GoCity Rides',      pitch: 'Get there and back, no parking stress.' }
-  ];
+  /* Revenue Stream 4 — local business partners. DELETED, not commented out.
+   *
+   * This was four invented businesses (The Copper Kettle, Riverside Suites, Lantern &
+   * Co., GoCity Rides) shown to real users as "our featured partner near <your city>".
+   * partnerCardHTML() in app.js already returns '' so nothing rendered — but the data
+   * and its accessors stayed exported, one early-return away from telling somebody to
+   * go and have dinner at a restaurant that does not exist.
+   * When real partners are signed, source them the way sponsors are: from the admin
+   * config, not from a literal in the bundle. */
+  const PARTNERS = [];
 
   // Benefit-led (concierge intelligence first, premium voice last) — Plus is bought
   // for what the host KNOWS, not just how it sounds.
@@ -93,19 +107,23 @@
 
   function houseCreative(kind) {
     const ad = ADS[Math.floor(Math.random() * ADS.length)];
+    // "Sponsored" / "Ad" would be a lie on our own promotion — nobody paid for these.
+    // The tag names what it is: a message from Eventually.
+    const tag = '<span class="ad-tag ad-house">Eventually</span>';
+    const act = ' data-house="' + ad.act + '"';
     if (kind === 'infeed') {
-      return '<span class="ad-tag">Sponsored</span>' +
-        '<div class="ad-native-body"><strong>' + ad.brand + '</strong>' +
-        '<span>' + ad.text + '</span></div><span class="ad-cta">Learn more ›</span>';
+      return tag + '<div class="ad-native-body"><strong>' + ad.brand + '</strong>' +
+        '<span>' + ad.text + '</span></div>' +
+        '<button class="ad-cta"' + act + '>Get started ›</button>';
     }
     if (kind === 'panel') {
-      return '<span class="ad-tag">Ad</span>' +
-        '<strong>' + ad.brand + '</strong><span>' + ad.text + '</span>' +
-        '<span class="ad-cta">Learn more ›</span>';
+      return tag + '<strong>' + ad.brand + '</strong><span>' + ad.text + '</span>' +
+        '<button class="ad-cta"' + act + '>Get started ›</button>';
     }
     // banner (bottom bar) — keeps the "Remove ads" → Plus affordance.
-    return '<span class="ad-tag">Ad</span><div class="ad-body"><strong>' + ad.brand +
-      '</strong><span>' + ad.text + '</span></div><button class="ad-plus">Remove ads</button>';
+    return tag + '<button class="ad-body ad-house-link"' + act + '><strong>' + ad.brand +
+      '</strong><span>' + ad.text + '</span></button>' +
+      '<button class="ad-plus">Remove ads</button>';
   }
 
   const api = {
@@ -115,7 +133,8 @@
     adsense: ADSENSE,
 
     randomAd: function () { return ADS[Math.floor(Math.random() * ADS.length)]; },
-    partnerFor: function (seed) { return PARTNERS[Math.abs(seed | 0) % PARTNERS.length]; },
+    // Returns null while PARTNERS is empty — the old modulo threw on an empty list.
+    partnerFor: function (seed) { return PARTNERS.length ? PARTNERS[Math.abs(seed | 0) % PARTNERS.length] : null; },
 
     // Inner HTML for an ad placement. Emits an AdSense <ins> when configured,
     // otherwise a house creative. Caller wraps it in the reserved .ad-slot box.

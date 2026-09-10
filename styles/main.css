@@ -806,7 +806,16 @@ body {
   background: rgba(244,236,226,0.94); border-top: 1px solid var(--line-2); backdrop-filter: blur(8px);
 }
 .ad-tag { font-family: var(--mono); font-size: 9px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); border: 1px solid var(--line-2); padding: 3px 6px; border-radius: 5px; flex: none; }
-.ad-body { display: flex; align-items: baseline; gap: 8px; min-width: 0; overflow: hidden; }
+/* The banner copy and the CTA are <button>s now (they act), so strip the native
+   button chrome — they must still read as ad copy, not as form controls. */
+.ad-body { display: flex; align-items: baseline; gap: 8px; min-width: 0; overflow: hidden;
+  background: none; border: 0; padding: 0; margin: 0; font-family: var(--font); text-align: left; color: inherit; }
+.ad-house-link { cursor: pointer; }
+.ad-house-link:hover strong { color: var(--clay); }
+.ad-cta { background: none; border: 0; padding: 0; font-family: var(--mono); cursor: pointer; }
+/* Our own promotion, not a paid placement — tag it in brand colour so it never
+   reads as "Sponsored". */
+.ad-tag.ad-house { color: var(--clay); border-color: var(--line-2); }
 .ad-body strong { font-size: 13.5px; white-space: nowrap; }
 .ad-body span { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ad-plus { margin-left: auto; flex: none; padding: 7px 13px; border-radius: 9px; cursor: pointer; font-family: var(--font); font-size: 12px; font-weight: 700; background: var(--clay); color: var(--cream); border: 0; }

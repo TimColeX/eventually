@@ -2084,6 +2084,24 @@
     const plus = adbar.querySelector('.ad-plus');
     if (plus) plus.addEventListener('click', openPlus);
   }
+
+  /* House creatives now DO something. They previously ended in "Learn more ›" that
+     was plain text with no handler — a call to action that did nothing when tapped.
+     One delegated listener covers every slot, including ones rendered later into
+     the event list and detail panel. */
+  document.addEventListener('click', function (e) {
+    const b = e.target.closest('[data-house]');
+    if (!b) return;
+    e.preventDefault();
+    const act = b.getAttribute('data-house');
+    if (act === 'publish') {
+      track('publish_open');
+      requireLogin(function () { coordinator.open(); },
+        'Sign in to publish your event — free while we are in beta.');
+    } else if (act === 'saved') {
+      openSaved();
+    }
+  });
   function applyMonetization() {
     const showAds = RT.adsEnabled && (RT.plusComingSoon || !P.get().plus);   // admin can disable ads globally
     document.body.classList.toggle('has-ad', showAds);
