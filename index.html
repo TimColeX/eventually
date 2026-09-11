@@ -163,6 +163,11 @@
         <button class="pf-toggle pf-filter" style="display:none"><span>Filter globe to my interests</span><span class="tg-state">Off</span></button>
       </section>
 
+      <!-- Undo for the intro's "Go straight to the globe next time" (signature.js). -->
+      <section class="pf-sec">
+        <button class="pf-toggle pf-intro" type="button" role="switch" aria-checked="true"><span>Show the intro when I open Eventually</span><span class="tg-state">On</span></button>
+      </section>
+
       <section class="pf-sec pf-identities" style="display:none">
         <div class="pf-label">Sign-in methods</div>
         <div class="pf-id-list"></div>
@@ -235,7 +240,7 @@
   <script>
     /* Build stamp. Must match sw.js CACHE and version.json — `node tools/bump-version.js`
        keeps all three in step. This is how a running app knows a newer one exists. */
-    window.EVENTUALLY_BUILD = 'v185';
+    window.EVENTUALLY_BUILD = 'v186';
     window.EVENTUALLY_CONFIG = {
       supabaseUrl: 'https://gpsetmqivzchlvyrcgld.supabase.co',
       supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdwc2V0bXFpdnpjaGx2eXJjZ2xkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1MDM2NzcsImV4cCI6MjA5ODA3OTY3N30.a0BB-FQDh5NKFvgxeSgJ3YmeN_HYOWGLOJza29wW8KI',

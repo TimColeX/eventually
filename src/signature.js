@@ -176,7 +176,8 @@
         '<p class="sg-count">' + countLine + '</p>' +
         upsell +
         '<button class="sg-enter" type="button">Tap to enter <span aria-hidden="true">›</span></button>' +
-        '<button class="sg-off" type="button">Don’t show this again</button>' +
+        // Undo lives in Profile → "Show the intro when I open Eventually".
+        '<button class="sg-off" type="button">Go straight to the globe next time</button>' +
       '</div>';
     document.body.appendChild(el);
     countUp(el.querySelector('.sg-num'), target);
@@ -186,8 +187,8 @@
       if (e.target.closest('.sg-plus')) { e.stopPropagation(); dismiss(); if (opts.onUpgrade) opts.onUpgrade(); return; }
       enter(opts);   // tap anywhere else = enter (plays the sonic logo)
     });
-    // The intro waits for the user ("Tap to enter", the Plus invitation, or "Don't show
-    // this again") — audio needs a gesture, so auto-advancing early would skip the sonic
+    // The intro waits for the user ("Tap to enter", the Plus invitation, or "Go straight
+    // to the globe next time") — audio needs a gesture, so auto-advancing early would skip the sonic
     // logo + welcome entirely. Safety net only: after a long grace period reveal the
     // globe SILENTLY, so a distracted user never comes back to a blocked app.
     timer = setTimeout(function () { if (!entered) { entered = true; dismiss(); } }, 20000);

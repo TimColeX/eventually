@@ -1635,6 +1635,11 @@
     profileEl.querySelector('.pf-filter').classList.toggle('on', interestFilterActive);
     profileEl.querySelector('.pf-filter .tg-state').textContent = interestFilterActive ? 'On' : 'Off';
     profileEl.querySelector('.pf-filter').style.display = (p.plus && !RT.plusComingSoon) ? '' : 'none';
+    const introOn = !window.EventuallySignature || window.EventuallySignature.isEnabled();
+    const introBtn = profileEl.querySelector('.pf-intro');
+    introBtn.classList.toggle('on', introOn);
+    introBtn.setAttribute('aria-checked', String(introOn));
+    introBtn.querySelector('.tg-state').textContent = introOn ? 'On' : 'Off';
     profileEl.querySelector('.pf-logout').style.display = user ? '' : 'none';
     renderAccount();
     renderIdentities();
@@ -1893,6 +1898,13 @@
     interestFilterActive = !interestFilterActive;
     refreshMarkers(); renderProfile();
     window.EventuallyToast(interestFilterActive ? 'Globe filtered to your interests.' : 'Showing all events.');
+  });
+  // Undo for the intro's "Go straight to the globe next time" (same localStorage flag).
+  profileEl.querySelector('.pf-intro').addEventListener('click', function () {
+    const S = window.EventuallySignature; if (!S) return;
+    const on = !S.isEnabled();
+    S.setEnabled(on); renderProfile();
+    window.EventuallyToast(on ? 'The intro will play when you open Eventually.' : 'You’ll go straight to the globe next time.');
   });
   profileEl.querySelector('.pf-logout').addEventListener('click', function () { logout(); profileEl.classList.remove('open'); });
 
