@@ -2163,7 +2163,11 @@
       '<nav class="bb-nav" aria-label="Quick links">' +
         '<button class="bb-link" data-bb="publish">Publish Event</button>' +
         '<button class="bb-link" data-bb="help">Help Centre</button>' +
-      '</nav>';
+      '</nav>' +
+      // Always-visible legal links (Google's brand review wants the Privacy Policy linked
+      // from the home page). Desktop only — on phones they stay in Help Centre and About.
+      '<div class="bb-legal"><a href="privacy.html" target="_blank" rel="noopener">Privacy</a> · ' +
+        '<a href="terms.html" target="_blank" rel="noopener">Terms</a></div>';
   }
   adbar.addEventListener('click', function (e) {
     const b = e.target.closest('[data-bb]'); if (!b) return;

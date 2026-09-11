@@ -852,6 +852,12 @@ body {
 /* Same size, colour and shape as its neighbour — only the weight differs, so the
    priority action reads first without breaking the symmetry. */
 .bb-link[data-bb="publish"] { font-weight: 800; }
+/* Quiet Privacy · Terms line at the strip's right edge (desktop). */
+.bb-legal { position: absolute; right: 18px; top: 50%; transform: translateY(-50%); pointer-events: auto;
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .03em; color: var(--faint); white-space: nowrap; }
+.bb-legal a { color: var(--muted); text-decoration: none; }
+.bb-legal a:hover { color: var(--clay); text-decoration: underline; }
+@media (max-width: 760px) { .bb-legal { display: none; } }
 /* Ready for a third link (Browse cities): three equal buttons no longer fit at
    172px on a phone, so shrink them when a third appears rather than overflowing. */
 .bb-nav:has(.bb-link:nth-child(3)) .bb-link { max-width: 132px; font-size: 12.5px; padding: 9px 8px; }

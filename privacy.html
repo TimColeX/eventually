@@ -38,6 +38,7 @@
   <h3>Information you provide</h3>
   <ul>
     <li><strong>Account information</strong> — when you create an account: your name, sign-in email address, and (optionally) a contact email and phone number.</li>
+    <li><strong>If you sign in with Google</strong> — Google shares your name, email address (and whether Google has verified it), profile picture, and a Google account identifier with us. That is all: we never see your Google password, and we have no access to your Gmail, contacts, calendar, files, or any other Google data. We use these details only to create your Eventually account, sign you in, and show your name in the app. We do not sell them, share them with advertisers, or use them for advertising. Our use of information received from Google adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener">Google API Services User Data Policy</a>. You can remove Eventually’s access at any time in your Google Account under <a href="https://myaccount.google.com/connections" target="_blank" rel="noopener">Third-party apps &amp; services</a>; deleting your Eventually account (see Section 9) deletes these details.</li>
     <li><strong>Preferences</strong> — your saved events, interests, and communication preferences.</li>
     <li><strong>Events you submit</strong> — if you publish an event, the details you enter.</li>
     <li><strong>Live updates you post</strong> — if you post an update to an event you organize, the text of that update and the fact that your account posted it. These are shown publicly to anyone viewing the event while it is taking place.</li>
@@ -71,6 +72,7 @@
   <table>
     <tr><th>Provider</th><th>Purpose</th><th>Data involved</th></tr>
     <tr><td>Supabase</td><td>Backend, authentication, database, and file storage</td><td>Account data, preferences, saved events</td></tr>
+    <tr><td>Google (Sign in with Google)</td><td>Optional sign-in</td><td>Google knows you signed in to Eventually; it sends us your name, email, profile picture, and account identifier (see Section 2)</td></tr>
     <tr><td>Anthropic (Claude)</td><td>Generates the AI host briefing text</td><td>Your city/region and public event details (no account identifiers)</td></tr>
     <tr><td>EasyVoice / other voice providers</td><td>Converts briefing text to audio</td><td>Briefing text only</td></tr>
     <tr><td>Ticketmaster, PredictHQ</td><td>Event listings data</td><td>None of your personal data (inbound event data)</td></tr>
