@@ -26,7 +26,8 @@
     this.getDailyBriefing = opts.getDailyBriefing || null;  // () -> Promise<{text}|null> (free daily briefing, device voice)
     this.getWelcome = opts.getWelcome || null;    // () -> Promise<{url,text}|null> (official cached "Welcome to Eventually…")
     this.getIntro = opts.getIntro || null;        // ({have}) -> Promise<{changed,sig,segments}|null> (one-time host self-intro)
-    this.getIdent = opts.getIdent || null;        // (city) -> Promise<{url,text}|null> (cached "heading to <city>" switch ident)
+    this.getTransitions = opts.getTransitions || null;  // () -> Promise<[{url,text}]|null> (generic cached city-switch transitions)
+    this._transIdx = 0;                           // rotates through the transition lines
     this.getCityFiller = opts.getCityFiller || null;  // () -> Promise<{segments,filler}|null> (cached city radio filler for the current city)
     this.MUSIC_GAP = 4200;                        // ~4s music swell between radio-filler segments (uses the play-button bed)
     this._fillerPlaying = false;                  // true while cached city filler segments are playing (incl. music gaps)
@@ -196,7 +197,7 @@
     if (!this.speaking && !this._musicHold) return;
     this._gen++;                                 // invalidate ANY in-flight generation for the old city (#4)
     clearTimeout(this._replayTimer); this._replayTimer = null;   // cancel any pending continuous-radio replay
-    this._identCity = city || this._focusCity || null;   // spoken "heading to <city>" masks the fetch
+    this._identCity = city || this._focusCity || null;   // → the generic transition plays while the new city loads
     this._primeAudio();                          // iOS: keep the audio element alive within THIS tap gesture
     const self = this;
     // Two-host conversation already finished (music bed playing) → start the NEW city's
@@ -236,6 +237,20 @@
     this._openingDone = false;                  // replay the opening (ident → briefing) for the new city
     this._openerDone = false;                   // ← two-host / stinger: re-run the opener for the NEW city (#3)
     if (this.speaking) this._rotate();
+  };
+
+  // Next generic city-switch transition ({url,text}) in rotation, or null. The list is
+  // fetched once and pre-downloaded (hostvoice.getTransitions), so this is instant after
+  // the first time. Never rejects.
+  AIHost.prototype._nextTransition = function () {
+    if (!this.getTransitions) return Promise.resolve(null);
+    const self = this;
+    return this.getTransitions().then(function (list) {
+      if (!list || !list.length) return null;
+      const t = list[self._transIdx % list.length];
+      self._transIdx++;
+      return t;
+    }).catch(function () { return null; });
   };
 
   // True while the Host is "on" — actively narrating OR holding on the music bed after a
@@ -302,6 +317,7 @@
   // Idle "new briefing ready" cue on the Play button (browsers block autoplay, so a
   // location search while stopped can't start sound — it prompts a tap instead).
   AIHost.prototype.setNewBriefingCue = function (on, city) {
+    this._cuePending = !!on;                     // a city was picked while stopped → Play opens with the transition
     const c = this.el.querySelector('.ah-cue');
     if (c) c.style.display = on ? '' : 'none';
     const play = this.el.querySelector('.ah-play');
@@ -544,9 +560,13 @@
         this._setBuffering(true);
         const myGen = this._gen;                             // tie this show to the CURRENT city
         const stale = function () { return myGen !== self._gen || !self.speaking; };
-        const fetchAndPlay = function (quick) {
+        // Play a briefing once its fetch resolves. `pending` = { p, ready }: a briefing that
+        // finished loading while the transition played starts at once, with no
+        // "Preparing your briefing…" flash in between.
+        const playBriefing = function (pending) {
           if (stale()) { self._setBuffering(false); return; }   // superseded → abandon (never leave buffering stuck)
-          self.getBriefing(quick).then(function (b) {            // quick → short "headline" (fast synth) on a switch
+          if (!pending.ready) self._setBuffering(true);
+          pending.p.then(function (b) {
             if (stale()) { self._setBuffering(false); return; } // a newer city started → ignore this result (#4/#5)
             self._setBuffering(false);
             if (b && b.segments && b.segments.length) {
@@ -557,19 +577,29 @@
             } else self._continueWithFiller(myGen);          // no event audio → try city filler, else music
           }).catch(function () { self._setBuffering(false); if (stale()) return; self._continueWithFiller(myGen); });
         };
-        // On a CITY SWITCH, play a short cached "heading to <city>" ident FIRST (instant),
-        // masking the new briefing's generation latency; then fetch + play the (short) briefing.
+        const load = function (quick) {                        // quick → short "headline" (fast synth) on a switch
+          const pending = { p: self.getBriefing(quick), ready: false };
+          pending.p.then(function () { pending.ready = true; }, function () { pending.ready = true; });
+          return pending;
+        };
+        // CITY TRANSITION: when a city was just picked, play one of the generic cached bridge
+        // lines ("Let me pull up what's happening right there.") WHILE that city's briefing
+        // loads. The line exists to cover the wait, so the fetch starts FIRST — it used to
+        // start only after the line finished, which added the line's length to the wait.
+        // The same clips serve every city (voiced once per voice + language, never per city).
         const playConv = function () {
           if (stale()) return;
-          const idc = self._identCity; self._identCity = null;
-          const isSwitch = !!idc;
-          if (idc && self.getIdent) {
-            self.getIdent(idc).then(function (id) {
-              if (stale()) return;
-              if (id && id.url) self._audioSpeak(id.url, id.text, function () { fetchAndPlay(isSwitch); }, true, { text: id.text, kind: 'greeting', lang: 'en-US' });
-              else fetchAndPlay(isSwitch);
-            }).catch(function () { fetchAndPlay(isSwitch); });
-          } else fetchAndPlay(isSwitch);
+          const switched = !!self._identCity, bridge = switched || self._bridgeNext;
+          self._identCity = null; self._bridgeNext = false;
+          const pending = load(switched);                     // a mid-listen switch gets the fast headline tier
+          if (!bridge) { playBriefing(pending); return; }
+          self._nextTransition().then(function (t) {
+            if (stale()) return;
+            if (t && t.url) {
+              self._setBuffering(false);
+              self._audioSpeak(t.url, t.text, function () { playBriefing(pending); }, true, { text: t.text, kind: 'greeting', lang: 'en-US' });
+            } else playBriefing(pending);
+          });
         };
         // The name-free brand welcome ("Welcome to Eventually…"), unless the splash
         // already spoke it this session. Runs AFTER the one-time host intro.
@@ -611,12 +641,18 @@
         this._openerDone = true;
         this._setBuffering(true);
         this._pendingBriefing = this.getBriefing ? this.getBriefing() : Promise.resolve(null);   // Plus fetch (parallel)
+        // A city was just picked (mid-listen switch, or chosen while stopped) → open with the
+        // generic cached transition instead of the stinger. Both are holding lines; playing
+        // both back to back would be one too many.
+        const bridge = !!(this._identCity || this._bridgeNext);
+        this._identCity = null; this._bridgeNext = false;
         // The show proper: PLUS = stinger → briefing; FREE = one brief greeting → stop.
-        const proceed = function () {
+        const proceed = function (bridged) {
           (self.getStinger ? self.getStinger() : Promise.resolve(null)).then(function (s) {
             if (!self.speaking || self.briefingPlaying) return;
             if (s && s.url) {                                   // PLUS: stinger → briefing (+ personalization)
               self._setBuffering(false);
+              if (bridged) { self._playPendingBriefing(); return; }   // the transition already covered the wait
               self._audioSpeak(s.url, s.text, function () { self._playPendingBriefing(); },
                 false, { text: s.text, kind: 'greeting', lang: 'en-US' });   // stinger read-along, shown on play
             } else {                                            // FREE: one brief greeting, then STOP
@@ -625,6 +661,16 @@
             }
           }).catch(function () { self._pendingBriefing = null; self._playFreeGreeting(); });
         };
+        const bridgeThenProceed = function () {
+          self._nextTransition().then(function (t) {
+            if (!self.speaking || self.briefingPlaying) return;
+            if (t && t.url) {
+              self._setBuffering(false);
+              self._audioSpeak(t.url, t.text, function () { proceed(true); }, true, { text: t.text, kind: 'greeting', lang: 'en-US' });
+            } else proceed(false);
+          });
+        };
+        const next = bridge ? bridgeThenProceed : function () { proceed(false); };
         // OFFICIAL GREETING: the Host opens with "Welcome to Eventually…" — but ONLY if
         // the launch splash didn't already speak it this session (otherwise the user
         // would hear the same welcome twice within seconds). Applies to Plus, free
@@ -638,10 +684,10 @@
               // noFallback=true: if the cached clip can't play, SKIP the welcome silently
               // and go straight to the show. The brand greeting must never be read by the
               // robotic device voice (and free tier never uses browser voice at all).
-              self._audioSpeak(w.url, w.text, proceed, true, { text: w.text, kind: 'greeting', lang: 'en-US' });
-            } else proceed();                                   // no clip → don't block the show
-          }).catch(proceed);
-        } else proceed();
+              self._audioSpeak(w.url, w.text, next, true, { text: w.text, kind: 'greeting', lang: 'en-US' });
+            } else next();                                      // no clip → don't block the show
+          }).catch(next);
+        } else next();
         return;
       }
       // TWO-HOST is a PLAY-ONCE-then-music model — it must NOT loop. If a stray rotation
@@ -949,8 +995,10 @@
     this._openerDone = false;              // premium stinger plays once per Play session
     this._openingDone = false;             // replay the show opening (intro → briefing) on each Play
     this._switchPending = false;
-    this._identCity = null;                // a fresh Play is not a city switch → no "heading to…" ident
+    this._identCity = null;                // a fresh Play is not a mid-listen switch…
+    this._bridgeNext = !!this._cuePending; // …but if a city was picked while stopped, open with the transition
     this.setNewBriefingCue(false);         // pressing Play consumes any "new briefing" cue
+    if (this.getTransitions) this.getTransitions();   // fetch + pre-download the transitions now, so a switch is instant
     this.icPlay.style.display = 'none';
     this.icPause.style.display = '';
     this._unlockSpeech();                   // MUST run inside the tap to enable mobile TTS
@@ -1033,6 +1081,7 @@
     this._musicHold = false;
     this._pendingBriefing = null;
     this._identCity = null;
+    this._bridgeNext = false;
     this._setBuffering(false);
     this.icPlay.style.display = '';
     this.icPause.style.display = 'none';

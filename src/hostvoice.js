@@ -32,6 +32,9 @@
     }).catch(function () { return null; });
   }
 
+  // City-switch transitions, fetched once per language per page load (see getTransitions).
+  var _transitions = {};
+
   global.EventuallyHostVoice = {
     enabled: ENABLED,
     // Premium briefing from the UNIFIED provider (rich Claude script → ElevenLabs,
@@ -136,18 +139,30 @@
           return { changed: !!j.changed, sig: j.sig || null, segments: (j.segments && j.segments.length) ? j.segments : null };
         }).catch(function () { return null; });
     },
-    // SWITCH IDENT — a short cached per-city line ("let's head over to Toronto") played
-    // INSTANTLY on a city switch to mask the briefing's generation latency. Cached per city.
-    // -> Promise<{url,text}|null>
-    getIdent: function (city, lang) {
-      if (!ENABLED || !city) return Promise.resolve(null);
-      return fetch(BASE + '/functions/v1/briefing', {
+    // CITY-SWITCH TRANSITIONS — the generic bridge lines ("Let me pull up what's happening
+    // right there.") played the instant a city is picked, while its briefing loads. The SAME
+    // cached clips serve every city, so they're fetched once per language per page load and
+    // their mp3s are pre-downloaded — a switch then plays with no server round trip.
+    // A failed fetch isn't remembered, so the next switch tries again.
+    // -> Promise<[{url,text,speaker}]|null>
+    getTransitions: function (lang) {
+      if (!ENABLED) return Promise.resolve(null);
+      var l = (lang || 'en').slice(0, 2);
+      if (_transitions[l]) return _transitions[l];
+      var p = fetch(BASE + '/functions/v1/briefing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': ANON, 'Authorization': 'Bearer ' + ANON },
-        body: JSON.stringify({ ident: true, city: city, lang: (lang || 'en').slice(0, 2) })
+        body: JSON.stringify({ ident: true, lang: l })
       }).then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (j) { return (j && j.url) ? { url: j.url, text: j.text || '' } : null; })
-        .catch(function () { return null; });
+        .then(function (j) {
+          var list = (j && j.segments && j.segments.length) ? j.segments : ((j && j.url) ? [{ url: j.url, text: j.text || '' }] : null);
+          if (!list) { delete _transitions[l]; return null; }
+          // Warm the browser's HTTP cache so the <audio> element starts instantly (mobile too).
+          list.forEach(function (s) { try { fetch(s.url, { mode: 'no-cors' }).catch(function () {}); } catch (e) {} });
+          return list;
+        }).catch(function () { delete _transitions[l]; return null; });
+      _transitions[l] = p;
+      return p;
     },
     // FREE tier intro: cached ElevenLabs clips reused by ALL free users → near-zero
     // marginal cost. Assembled [count]+[upsell] on the first play (`full`), else a

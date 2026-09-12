@@ -399,11 +399,11 @@
       if (!window.EventuallyHostVoice || !window.EventuallyHostVoice.getIntro) return Promise.resolve(null);
       return window.EventuallyHostVoice.getIntro({ have: (opts && opts.have) || '', lang: P.get().language || 'en' });
     },
-    // Short cached "heading over to <city>" ident played instantly on a city switch to
-    // mask the new briefing's generation latency (esp. a cold city, ~15–60s).
-    getIdent: function (city) {
-      if (!window.EventuallyHostVoice || !window.EventuallyHostVoice.getIdent) return Promise.resolve(null);
-      return window.EventuallyHostVoice.getIdent(city, P.get().language || 'en');
+    // Generic cached transition lines, played the instant a city is picked while its
+    // briefing loads — the same clips for every city (see hostvoice.getTransitions).
+    getTransitions: function () {
+      if (!window.EventuallyHostVoice || !window.EventuallyHostVoice.getTransitions) return Promise.resolve(null);
+      return window.EventuallyHostVoice.getTransitions(P.get().language || 'en');
     },
     // CITY RADIO FILLER for the CURRENT city — cached modular segments (facts/history/
     // culture/typical events) played after events run out to keep the station going.
