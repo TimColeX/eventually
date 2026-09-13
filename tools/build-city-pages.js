@@ -138,6 +138,13 @@ async function fetchAll(select, filter) {
   return out;
 }
 
+// `performers` arrives with backend/80_event_performers.sql. Until that has run the column
+// doesn't exist and asking for it is a 400, so fall back rather than fail the rebuild.
+async function fetchWithPerformers(select, filter) {
+  try { return await fetchAll(select + ',performers', filter); }
+  catch (e) { return fetchAll(select, filter); }
+}
+
 async function cityProse() {
   // Reuses the AI-written city segments the radio host already caches. This is what turns
   // a bare event list into a page with actual substance — the difference between a real
@@ -160,9 +167,10 @@ async function cityProse() {
 async function analyse() {
   const now = new Date().toISOString();
   const to = new Date(Date.now() + DAYS_AHEAD * 86400000).toISOString();
-  const rows = await fetchAll(
-    // `timezone` is what makes the printed times correct — see fmt() below.
-    'event_id,title,city,country,start_time,end_time,category,lat,lon,is_native,timezone,venue',
+  const rows = await fetchWithPerformers(
+    // `timezone` is what makes the printed times correct — see fmt() below. description,
+    // image_url, address and event_sources feed the Event structured data (ldEvent).
+    'event_id,title,city,country,start_time,end_time,category,lat,lon,is_native,timezone,venue,address,description,image_url,event_sources(url,price,currency)',
     `moderation=eq.approved&published=not.is.false&start_time=gte.${now}&start_time=lte.${to}&order=start_time.asc`
   );
 
@@ -304,15 +312,53 @@ function page(c, prose, adsOn) {
   const anchor = c.events.find((e) => e.lat != null && e.lon != null);
   const geo = anchor ? `&lat=${anchor.lat}&lon=${anchor.lon}` : '';
 
-  // JSON-LD so Google can show these as rich event results.
+  /* JSON-LD so Google can show these as rich event results.
+   *
+   * Search Console flagged the Event data (2026-09-13) as missing performer, endDate,
+   * offers, image and description — it carried only name, start and place. Each field
+   * is now filled from what we actually hold, and LEFT OUT when we don't: a guessed end
+   * time or a stand-in photo would be worse than a non-critical warning.
+   *   description — the event's own text, trimmed; else a plain factual line
+   *   image       — the provider's image (≈91% of events)
+   *   offers      — the ticket link (every provider listing has one) + price if known
+   *   endDate     — only a real end time (≈20% of events)
+   *   performer   — the provider's performer names (after 80_event_performers.sql)
+   * eventStatus / eventAttendanceMode are Google-recommended and true for every listing
+   * here (scheduled, in person). */
+  const ldEvent = (e) => {
+    const placeName = e.venue || c.city;
+    const text = cleanTitle(String(e.description || '').replace(/<[^>]+>/g, ' '));
+    const description = text.length >= 20
+      ? (text.length > 280 ? text.slice(0, 277).replace(/\s+\S*$/, '') + '…' : text)
+      : (placeName !== c.city ? `${e.title} at ${placeName}, ${c.city}.` : `${e.title} in ${c.city}.`);
+    const o = {
+      '@type': 'Event', name: e.title, startDate: e.start_time, description,
+      eventStatus: 'https://schema.org/EventScheduled',
+      eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+      location: { '@type': 'Place', name: placeName, address: Object.assign({ '@type': 'PostalAddress' },
+        e.address ? { streetAddress: e.address } : {}, { addressLocality: c.city, addressCountry: c.country }) },
+    };
+    if (e.end_time && Date.parse(e.end_time) > Date.parse(e.start_time)) o.endDate = e.end_time;
+    if (e.image_url) o.image = [e.image_url];
+    const srcs = Array.isArray(e.event_sources) ? e.event_sources : [];
+    const link = srcs.find((s) => s && s.url);
+    const priced = srcs.find((s) => s && s.price != null && Number.isFinite(Number(s.price)));
+    if (link) {
+      o.offers = Object.assign({ '@type': 'Offer', url: link.url },
+        priced ? { price: String(Number(priced.price)), priceCurrency: priced.currency || 'USD' } : {});
+    }
+    if (Array.isArray(e.performers) && e.performers.length) {
+      o.performer = e.performers.map((name) => ({ '@type': 'PerformingGroup', name }));
+    }
+    return o;
+  };
   const ld = {
     '@context': 'https://schema.org', '@type': 'ItemList',
     itemListElement: events.slice(0, 20).map((e, i) => ({
       '@type': 'ListItem', position: i + 1,
       // Built from the DEDUPED list, so the structured data no longer repeats the
       // same event twenty times — which Google reads as duplicate content too.
-      item: { '@type': 'Event', name: e.title, startDate: e.start_time,
-        location: { '@type': 'Place', name: e.venue || c.city, address: { '@type': 'PostalAddress', addressLocality: c.city, addressCountry: c.country } } },
+      item: ldEvent(e),
     })),
   };
 
