@@ -574,8 +574,12 @@
               // events → then city filler. afterEvents=true so the filler opens with the
               // "bridge" line, NOT "it's quiet in <city>" (which would contradict the briefing).
               else self._playSegmentsThen(b.segments, 0, function () { self._continueWithFiller(myGen, true); });
-            } else self._continueWithFiller(myGen);          // no event audio → try city filler, else music
-          }).catch(function () { self._setBuffering(false); if (stale()) return; self._continueWithFiller(myGen); });
+            // No briefing came back (a timeout or error). We don't know the city is quiet —
+            // the map may be full of events — so the filler opens with the neutral line,
+            // never "it's a little quiet in <city>". A genuinely quiet city never lands
+            // here: the server answers that case with `filler` segments (handled above).
+            } else self._continueWithFiller(myGen, true);
+          }).catch(function () { self._setBuffering(false); if (stale()) return; self._continueWithFiller(myGen, true); });
         };
         const load = function (quick) {                        // quick → short "headline" (fast synth) on a switch
           const pending = { p: self.getBriefing(quick), ready: false };
