@@ -35,6 +35,18 @@
   // City-switch transitions, fetched once per language per page load (see getTransitions).
   var _transitions = {};
 
+  // Two-host conversations already fetched on this visit, kept for 10 minutes. A hover
+  // pre-warm, or going back to a city heard a minute ago, then makes the next switch
+  // INSTANT — which is what lets the host open with "here's what's on" instead of "give me
+  // a moment". Keyed by the request minus the date (a visit doesn't straddle days in
+  // practice, and entries expire anyway). Failed fetches aren't kept.
+  var _conv = {};
+  var CONV_TTL = 600000;
+  function convKey(o) {
+    var r = function (v) { return (v != null && isFinite(+v)) ? (+v).toFixed(3) : ''; };
+    return [(o.city || '').toLowerCase(), r(o.lat), r(o.lon), (o.lang || 'en').slice(0, 2), o.quick ? 'q' : 'f', r(o.homeLat), r(o.homeLon)].join('|');
+  }
+
   global.EventuallyHostVoice = {
     enabled: ENABLED,
     // Premium briefing from the UNIFIED provider (rich Claude script → ElevenLabs,
@@ -76,7 +88,9 @@
     getConversation: function (opts) {
       if (!ENABLED) return Promise.resolve(null);
       var o = opts || {};
-      return fetch(BASE + '/functions/v1/briefing', {
+      var key = convKey(o), hit = _conv[key];
+      if (hit && Date.now() - hit.t < CONV_TTL) return hit.p;     // fetched earlier this visit
+      var p = fetch(BASE + '/functions/v1/briefing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': ANON, 'Authorization': 'Bearer ' + ANON },
         body: JSON.stringify({ audio: true, city: o.city || null, lat: (o.lat != null ? o.lat : null), lon: (o.lon != null ? o.lon : null),
@@ -87,6 +101,9 @@
           if (j && j.segments && j.segments.length) return { segments: j.segments, text: j.text || '', twoHost: !!j.twoHost };
           return null;
         }).catch(function () { return null; });
+      _conv[key] = { p: p, t: Date.now() };
+      p.then(function (res) { if (!res && _conv[key] && _conv[key].p === p) delete _conv[key]; });
+      return p;
     },
     // CITY RADIO FILLER — the city's cached modular segments (facts/history/culture/typical
     // events) played when events run out, to keep the station going. All cached + reused
@@ -109,16 +126,14 @@
     // Fire-and-forget PRE-WARM: generate + cache a city's briefing in the background so a
     // later tap is a ~2s cache hit instead of a 15-60s cold generation. Uses the SAME
     // params as the switch fetch (quick:true) so the cache key matches. Result ignored.
+    // The answer is now KEPT (see _conv): a click on the same spike moments later gets it
+    // instantly instead of asking the server again.
     prewarm: function (opts) {
       if (!ENABLED) return;
       var o = opts || {};
       try {
-        fetch(BASE + '/functions/v1/briefing', {
-          method: 'POST', keepalive: true,
-          headers: { 'Content-Type': 'application/json', 'apikey': ANON, 'Authorization': 'Bearer ' + ANON },
-          body: JSON.stringify({ audio: true, city: o.city || null, lat: (o.lat != null ? o.lat : null), lon: (o.lon != null ? o.lon : null),
-            lang: (o.lang || 'en').slice(0, 2), home_lat: (o.homeLat != null ? o.homeLat : null), home_lon: (o.homeLon != null ? o.homeLon : null), quick: true })
-        }).catch(function () {});
+        global.EventuallyHostVoice.getConversation({ city: o.city, lat: o.lat, lon: o.lon, lang: o.lang,
+          homeLat: o.homeLat, homeLon: o.homeLon, quick: true });
       } catch (e) {}
     },
     // ONE-TIME HOST INTRODUCTION — the hosts say their names ONCE per device, then every
@@ -144,7 +159,9 @@
     // cached clips serve every city, so they're fetched once per language per page load and
     // their mp3s are pre-downloaded — a switch then plays with no server round trip.
     // A failed fetch isn't remembered, so the next switch tries again.
-    // -> Promise<[{url,text,speaker}]|null>
+    // -> Promise<{ wait:[{url,text,speaker}], nearly:[…], ready:[…] }|null>
+    //    wait = the patience lines; nearly = one follow-up for a slow load; ready = a quick
+    //    lead-in when the briefing is already there (see aihost playConv).
     getTransitions: function (lang) {
       if (!ENABLED) return Promise.resolve(null);
       var l = (lang || 'en').slice(0, 2);
@@ -155,11 +172,12 @@
         body: JSON.stringify({ ident: true, lang: l })
       }).then(function (r) { return r.ok ? r.json() : null; })
         .then(function (j) {
-          var list = (j && j.segments && j.segments.length) ? j.segments : ((j && j.url) ? [{ url: j.url, text: j.text || '' }] : null);
-          if (!list) { delete _transitions[l]; return null; }
+          var wait = (j && j.segments && j.segments.length) ? j.segments : ((j && j.url) ? [{ url: j.url, text: j.text || '' }] : null);
+          if (!wait) { delete _transitions[l]; return null; }
+          var set = { wait: wait, nearly: (j && j.nearly) || [], ready: (j && j.ready) || [] };
           // Warm the browser's HTTP cache so the <audio> element starts instantly (mobile too).
-          list.forEach(function (s) { try { fetch(s.url, { mode: 'no-cors' }).catch(function () {}); } catch (e) {} });
-          return list;
+          wait.concat(set.nearly, set.ready).forEach(function (s) { try { fetch(s.url, { mode: 'no-cors' }).catch(function () {}); } catch (e) {} });
+          return set;
         }).catch(function () { delete _transitions[l]; return null; });
       _transitions[l] = p;
       return p;

@@ -199,6 +199,10 @@
     clearTimeout(this._replayTimer); this._replayTimer = null;   // cancel any pending continuous-radio replay
     this._identCity = city || this._focusCity || null;   // → the generic transition plays while the new city loads
     this._primeAudio();                          // iOS: keep the audio element alive within THIS tap gesture
+    // Still in the music lead-in after Play (nothing spoken yet) → switch NOW. Waiting for
+    // the lead-in to finish delayed the "give me a moment" line by several seconds, which
+    // is exactly the gap it exists to cover.
+    if (this._introTimer && !this._premiumPlaying) { clearTimeout(this._introTimer); this._introTimer = null; this._applySwitch(); return; }
     const self = this;
     // Two-host conversation already finished (music bed playing) → start the NEW city's
     // conversation. Without this, a city switch after the convo ended did nothing.
@@ -239,19 +243,25 @@
     if (this.speaking) this._rotate();
   };
 
-  // Next generic city-switch transition ({url,text}) in rotation, or null. The list is
-  // fetched once and pre-downloaded (hostvoice.getTransitions), so this is instant after
-  // the first time. Never rejects.
-  AIHost.prototype._nextTransition = function () {
+  // Next line of a transition set ('wait' | 'nearly' | 'ready') in rotation, or null. Each
+  // set rotates on its own, so a line is never heard twice in a row; `avoidSpeaker` skips a
+  // line in that host's voice (the "nearly there" follow-up comes from the OTHER host). The
+  // sets are fetched once and pre-downloaded (hostvoice.getTransitions). Never rejects.
+  AIHost.prototype._pickLine = function (kind, avoidSpeaker) {
     if (!this.getTransitions) return Promise.resolve(null);
     const self = this;
-    return this.getTransitions().then(function (list) {
-      if (!list || !list.length) return null;
-      const t = list[self._transIdx % list.length];
-      self._transIdx++;
-      return t;
+    return this.getTransitions().then(function (set) {
+      if (!set) return null;
+      const list = Array.isArray(set) ? (kind === 'wait' ? set : []) : (set[kind] || []);
+      if (!list.length) return null;
+      self._lineIdx = self._lineIdx || {};
+      let i = self._lineIdx[kind] || 0;
+      if (avoidSpeaker != null && list.length > 1 && list[i % list.length].speaker === avoidSpeaker) i++;
+      self._lineIdx[kind] = i + 1;
+      return list[i % list.length];
     }).catch(function () { return null; });
   };
+  AIHost.prototype._nextTransition = function () { return this._pickLine('wait'); };
 
   // True while the Host is "on" — actively narrating OR holding on the music bed after a
   // show has settled (speaking:false, _musicHold:true). A city switch in EITHER state
@@ -301,9 +311,11 @@
     if (!t) return;
     if (on) {
       if (!this._preBufferCaption) this._preBufferCaption = t.textContent || '';
-      t.textContent = 'Preparing your briefing…';
+      // After a city pick, name it — people who have the sound off get the same "hold on".
+      this._bufMsg = this._loadingCity ? 'Getting ' + this._loadingCity + '…' : 'Preparing your briefing…';
+      t.textContent = this._bufMsg;
     } else if (this._preBufferCaption != null) {
-      if (t.textContent === 'Preparing your briefing…') t.textContent = this._preBufferCaption;
+      if (t.textContent === this._bufMsg) t.textContent = this._preBufferCaption;
       this._preBufferCaption = null;
     }
   };
@@ -557,17 +569,45 @@
       // (never the browser voice). Reuses _playFreeIntro (play segments → stop → music).
       if (this.twoHost && !this._openerDone) {
         this._openerDone = true;
+        // Name the city in the loading caption from the very first moment of a switch.
+        this._loadingCity = this._identCity || (this._bridgeNext ? this._focusCity : null) || null;
         this._setBuffering(true);
         const myGen = this._gen;                             // tie this show to the CURRENT city
         const stale = function () { return myGen !== self._gen || !self.speaking; };
         // Play a briefing once its fetch resolves. `pending` = { p, ready }: a briefing that
-        // finished loading while the transition played starts at once, with no
-        // "Preparing your briefing…" flash in between.
-        const playBriefing = function (pending) {
+        // finished loading while the transition played starts at once, with no loading
+        // caption flash in between.
+        // After a wait line (`afterLine`), a city still loading NUDGE_MS later gets ONE
+        // "nearly there" from the other host — long silence is when people click away. A
+        // briefing that lands mid-nudge waits for the line to finish (the gate) rather than
+        // cutting it off.
+        const NUDGE_MS = 5000;
+        const playBriefing = function (pending, afterLine, lastSpeaker) {
           if (stale()) { self._setBuffering(false); return; }   // superseded → abandon (never leave buffering stuck)
-          if (!pending.ready) self._setBuffering(true);
-          pending.p.then(function (b) {
+          const gate = { busy: false, after: null };
+          if (!pending.ready) {
+            self._setBuffering(true);
+            if (afterLine) {
+              clearTimeout(self._nudgeTimer);
+              self._nudgeTimer = setTimeout(function () {
+                if (stale() || pending.ready) return;
+                self._pickLine('nearly', lastSpeaker).then(function (t) {
+                  if (stale() || pending.ready || !t || !t.url) return;
+                  gate.busy = true;
+                  self._setBuffering(false);
+                  self._audioSpeak(t.url, t.text, function () {
+                    gate.busy = false;
+                    if (gate.after) { const f = gate.after; gate.after = null; f(); }
+                    else if (!pending.ready) self._setBuffering(true);
+                  }, true, { text: t.text, kind: 'greeting', lang: 'en-US' });
+                });
+              }, NUDGE_MS);
+            }
+          }
+          const whenFree = function (f) { clearTimeout(self._nudgeTimer); if (gate.busy) gate.after = f; else f(); };
+          pending.p.then(function (b) { whenFree(function () {
             if (stale()) { self._setBuffering(false); return; } // a newer city started → ignore this result (#4/#5)
+            self._loadingCity = null;
             self._setBuffering(false);
             if (b && b.segments && b.segments.length) {
               if (b.filler) self._playFillerSegs(b.segments, 0, myGen);   // quiet city → already the cached radio filler
@@ -579,7 +619,7 @@
             // never "it's a little quiet in <city>". A genuinely quiet city never lands
             // here: the server answers that case with `filler` segments (handled above).
             } else self._continueWithFiller(myGen, true);
-          }).catch(function () { self._setBuffering(false); if (stale()) return; self._continueWithFiller(myGen, true); });
+          }); }).catch(function () { whenFree(function () { self._loadingCity = null; self._setBuffering(false); if (stale()) return; self._continueWithFiller(myGen, true); }); });
         };
         const load = function (quick) {                        // quick → short "headline" (fast synth) on a switch
           const pending = { p: self.getBriefing(quick), ready: false };
@@ -591,18 +631,29 @@
         // loads. The line exists to cover the wait, so the fetch starts FIRST — it used to
         // start only after the line finished, which added the line's length to the wait.
         // The same clips serve every city (voiced once per voice + language, never per city).
+        // A city whose briefing is already cached answers in well under a second; give the
+        // fetch this head start first. If it's in, "give me a moment" would ask people to
+        // wait for something already here, so the quick "here's what's on" line plays.
+        const READY_WINDOW_MS = 350;
         const playConv = function () {
           if (stale()) return;
           const switched = !!self._identCity, bridge = switched || self._bridgeNext;
+          const city = self._identCity || self._focusCity || null;
           self._identCity = null; self._bridgeNext = false;
           const pending = load(switched);                     // a mid-listen switch gets the fast headline tier
           if (!bridge) { playBriefing(pending); return; }
-          self._nextTransition().then(function (t) {
+          self._loadingCity = city;                           // loading caption: "Getting <city>…"
+          const cap = function (t) { return { text: t.text, kind: 'greeting', lang: 'en-US' }; };
+          const headStart = new Promise(function (r) { setTimeout(r, READY_WINDOW_MS); });
+          Promise.race([pending.p.then(function () {}, function () {}), headStart]).then(function () {
             if (stale()) return;
-            if (t && t.url) {
+            const kind = pending.ready ? 'ready' : 'wait';
+            self._pickLine(kind).then(function (t) {
+              if (stale()) return;
+              if (!t || !t.url) { playBriefing(pending, kind === 'wait'); return; }
               self._setBuffering(false);
-              self._audioSpeak(t.url, t.text, function () { playBriefing(pending); }, true, { text: t.text, kind: 'greeting', lang: 'en-US' });
-            } else playBriefing(pending);
+              self._audioSpeak(t.url, t.text, function () { playBriefing(pending, kind === 'wait', t.speaker); }, true, cap(t));
+            });
           });
         };
         // The name-free brand welcome ("Welcome to Eventually…"), unless the splash
@@ -1056,7 +1107,7 @@
     const lead = short ? this._jitter(this.SHORT_INTRO, 800) : this._jitter(this.INTRO, 1200);
     this._everPlayed = true;
     clearTimeout(this._introTimer);
-    this._introTimer = setTimeout(function () { if (self.speaking) self._rotate(); }, lead);
+    this._introTimer = setTimeout(function () { self._introTimer = null; if (self.speaking) self._rotate(); }, lead);
   };
 
   AIHost.prototype._jitter = function (base, spread) {
