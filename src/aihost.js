@@ -965,7 +965,48 @@
     return out.length ? out : [t];
   };
 
+  // AUTO-START (returning visitors). A visible, cancellable "Host starting in 5…" note in
+  // the caption, then the normal show. Refuses if the Host is already on. If `canStart()`
+  // is false when the count reaches zero (a dialog is open), the start waits until it's
+  // clear. Pressing Play/pause during the count cancels it (see toggle). `onStart` fires
+  // only if it really starts.
+  AIHost.prototype.autoStart = function (secs, canStart, onStart) {
+    if (this.isActive() || this._auto) return false;
+    const self = this, cap = this.el.querySelector('.ah-caption');
+    if (!cap) return false;
+    let n = Math.max(1, secs || 5);
+    const note = document.createElement('span');
+    note.className = 'ah-auto'; note.setAttribute('role', 'status');
+    note.innerHTML = '<span class="ah-auto-t"></span><button class="ah-auto-x" type="button">Cancel</button>';
+    note.addEventListener('click', function (e) { e.stopPropagation(); });   // not the transcript tap
+    const txt = note.querySelector('.ah-auto-t');
+    const show = function () { txt.textContent = n > 0 ? 'Host starting in ' + n + '…' : 'Host starting in a moment…'; };
+    const end = function (start) {
+      clearInterval(self._autoTimer); self._autoTimer = null; self._auto = null;
+      if (note.parentNode) note.parentNode.removeChild(note);
+      self.textEl.style.display = '';
+      // Short lead-in: the welcome that just played already did the intro's job.
+      if (start && !self.isActive()) { self.play({ shortLead: true }); if (onStart) onStart(); }
+    };
+    note.querySelector('.ah-auto-x').addEventListener('click', function () { end(false); });
+    this._auto = { cancel: function () { end(false); } };
+    this.textEl.style.display = 'none';
+    cap.appendChild(note);
+    show();
+    this._autoTimer = setInterval(function () {
+      if (self.isActive()) { end(false); return; }          // started some other way
+      if (n > 0) n--;
+      show();
+      if (n === 0 && (!canStart || canStart())) end(true);
+    }, 1000);
+    return true;
+  };
+  // Unlock the voice element inside a tap so a later auto-start can play on mobile.
+  // Never while the Host is on — it would cut off whatever is playing.
+  AIHost.prototype.primeAudio = function () { if (!this.isActive()) this._primeAudio(); };
+
   AIHost.prototype.toggle = function () {
+    if (this._auto) this._auto.cancel();                 // Play/pause during the countdown takes over
     if (this.speaking) return this.stop();               // narration playing → stop everything
     if (this._musicHold) return this._musicPause();      // free: music bed playing → stop the music
     // Fully stopped. Free with the intro already played this session → just resume the
@@ -988,7 +1029,7 @@
     if (this.twoHost && this.REPLAY_MS > 0) { const self = this; this._replayTimer = setTimeout(function () { self._radioReplay(); }, this.REPLAY_MS); }
   };
 
-  AIHost.prototype.play = function () {
+  AIHost.prototype.play = function (opts) {
     this.speaking = true;
     this._gen++;                           // new session → invalidate any older in-flight fetch
     this._musicHold = false; this._freeMode = false;
@@ -1005,8 +1046,10 @@
     this.onPlay();                          // music starts and plays alone first
     if (this._timer) { clearInterval(this._timer); this._timer = null; }   // pause silent ticker
     const self = this;
-    // full ~10s intro on the first play; a short lead-in on later resumes
-    const lead = this._everPlayed ? this._jitter(this.SHORT_INTRO, 800) : this._jitter(this.INTRO, 1200);
+    // full ~10s intro on the first play; a short lead-in on later resumes, and on an
+    // auto-start (opts.shortLead), which follows the spoken welcome
+    const short = this._everPlayed || !!(opts && opts.shortLead);
+    const lead = short ? this._jitter(this.SHORT_INTRO, 800) : this._jitter(this.INTRO, 1200);
     this._everPlayed = true;
     clearTimeout(this._introTimer);
     this._introTimer = setTimeout(function () { if (self.speaking) self._rotate(); }, lead);

@@ -350,6 +350,13 @@ body {
 .ah-text { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; transition: opacity .18s; }
 .ah-run { display: inline-block; white-space: nowrap; will-change: transform; }
 .ah-text .ah-w.active { color: var(--clay); }
+/* Auto-start countdown ("Host starting in 5…  Cancel"), shown in place of the caption. */
+.ah-auto { display: inline-flex; align-items: center; gap: 10px; min-width: 0; font-size: 13px; font-weight: 600;
+  color: var(--ink); white-space: nowrap; font-variant-numeric: tabular-nums; cursor: default; }
+.ah-auto-t { overflow: hidden; text-overflow: ellipsis; }
+.ah-auto-x { flex: none; padding: 5px 11px; border-radius: 999px; cursor: pointer; border: 1px solid var(--line-2);
+  background: var(--paper); color: var(--clay); font: 700 11.5px/1 var(--font); }
+.ah-auto-x:hover { border-color: var(--clay); }
 .ah-caption.is-sponsor .ah-text { color: var(--ember); }
 /* Read-along transcript panel (tap the caption to open) */
 .ah-expand { position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-end; justify-content: center;

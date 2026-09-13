@@ -2930,18 +2930,65 @@
       },
       // The splash greets, then the tour teaches — one continuous introduction with no
       // moment where a first-timer is left staring at an unexplained globe.
-      onDone: function () { startTourIfNew(); }
+      onDone: function () { autoHost.splashDone = true; autoHost.tour = startTourIfNew(); introFinished(); },
+      onVoiceDone: function () { autoHost.voiceDone = true; introFinished(); }
     });
   }
   // FIRST-RUN TOUR. Four coach marks over the real UI (see src/tour.js). Its final button
   // starts the Host: that click is a genuine user gesture, which is the only way browsers
   // will let audio play — so onboarding ends by playing the thing it just described.
+  // Returns true if the tour started.
   function startTourIfNew() {
-    if (!window.EventuallyTour) return;
-    window.EventuallyTour.maybeStart({
+    if (!window.EventuallyTour) return false;
+    return !!window.EventuallyTour.maybeStart({
       onFinish: function () { track('tour_done'); if (aiHost && aiHost.toggle) aiHost.toggle(); }
     });
   }
+
+  /* ---------- Host auto-start (returning visitors) ----------
+     After the welcome, the Host starts by itself behind a visible, cancellable
+     "Host starting in 5…" note. Browsers only allow sound after a tap, so it hangs off
+     one: the intro's "Tap to enter" (the count starts once the welcome has finished), or,
+     when the intro is off or already seen this session, the visitor's first tap anywhere.
+     First-timers are left to the tour, which ends by starting the Host itself. At most
+     once per visit; it waits out the intro, the tour and any open dialog; never if the
+     Host is already on. Pausing only affects the current visit (owner's choice). */
+  const autoHost = { armed: true, primed: false, splashDone: false, voiceDone: false, tour: false };
+  function overlayOpen() {
+    const coord = document.getElementById('coordinator');
+    return !!(document.getElementById('signature') || document.querySelector('.tour') ||
+      (modal && modal.classList.contains('open')) || (authEl && authEl.classList.contains('open')) ||
+      (coord && coord.classList.contains('open')));
+  }
+  function primeHostAudio() {                      // MUST run inside a tap (mobile autoplay rules)
+    if (autoHost.primed) return;
+    autoHost.primed = true;
+    try { if (aiHost.primeAudio) aiHost.primeAudio(); } catch (e) {}
+    try { if (music.prime) music.prime(); } catch (e) {}
+  }
+  function scheduleAutoStart() {
+    if (!autoHost.armed) return;
+    autoHost.armed = false;
+    if (!aiHost.autoStart || (aiHost.isActive && aiHost.isActive())) return;
+    aiHost.autoStart(5, function () { return !overlayOpen(); }, function () {
+      const pr = P.get();
+      track('host_autostart', (pr.location && pr.location.city) || null);   // kept apart from 'host_play' (a pressed Play)
+    });
+  }
+  function introFinished() {
+    if (autoHost.splashDone && autoHost.voiceDone && !autoHost.tour) scheduleAutoStart();
+  }
+  document.addEventListener('pointerdown', function onFirstTaps(e) {
+    if (!autoHost.armed) { document.removeEventListener('pointerdown', onFirstTaps, true); return; }
+    primeHostAudio();                              // every path needs audio unlocked in a tap
+    const t = e.target;
+    // The intro, the tour and the Play button each handle themselves.
+    if (t && t.closest && (t.closest('#signature') || t.closest('.tour') || t.closest('#ai-host'))) return;
+    if (document.getElementById('signature') || document.querySelector('.tour')) return;
+    const S = window.EventuallySignature;
+    if (S && S.isVoicePlaying && S.isVoicePlaying()) return;   // welcome still speaking → introFinished starts it
+    scheduleAutoStart();
+  }, true);
   // Let the tour hold the globe still while it points at it — a target that drifts away
   // mid-sentence is worse than no highlight. `spin` is a plain property on the instance.
   window.EventuallyTourHooks = {

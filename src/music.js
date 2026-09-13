@@ -138,6 +138,22 @@
     this._level(this.muted ? 0 : BED, 1.6);      // swell in (silent if muted)
   };
 
+  // Unlock audio INSIDE a user gesture without making a sound, so a later start() that
+  // isn't tied to a tap (the Host's auto-start countdown) isn't blocked by mobile autoplay
+  // rules. The bed's gain is still 0, and the track is paused again straight away. Skipped
+  // in direct mode (no Web Audio): there the element's volume can't be relied on to be 0.
+  Music.prototype.prime = function () {
+    if (this.on || !this._build()) return;
+    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume().catch(function () {});
+    const el = this.audioEl, self = this;
+    if (el && el.paused && !this._direct) {
+      try {
+        const p = el.play();
+        if (p && p.then) p.then(function () { if (!self.on) { try { el.pause(); } catch (e) {} } }).catch(function () {});
+      } catch (e) {}
+    }
+  };
+
   Music.prototype.stop = function () {
     this.on = false;
     const self = this, el = this.audioEl;

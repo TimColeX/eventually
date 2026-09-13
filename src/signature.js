@@ -71,14 +71,19 @@
   const STING_MS = 1750;                 // let the sonic logo finish first
   let voiceEl = null;
   let voicePromise = null;               // PREFETCHED while the splash is on screen
+  // "The welcome is over" — fired once, whether the voice finished, failed, was stopped,
+  // or there was none. The Host's auto-start countdown waits for it (app.js).
+  let voiceDoneCb = null;
+  function voiceFinished() { const f = voiceDoneCb; voiceDoneCb = null; if (f) setTimeout(f, 0); }
   function stopVoice() {
     if (voiceEl) { try { voiceEl.pause(); voiceEl.src = ''; } catch (e) {} voiceEl = null; }
+    voiceFinished();
   }
   function playVoice(p) {
-    if (!p || typeof p.then !== 'function') return;
+    if (!p || typeof p.then !== 'function') { voiceFinished(); return; }
     p.then(function (res) {
       const segs = (res && res.segments) || res;
-      if (!segs || !segs.length) return;                 // no audio → the sting alone carries it
+      if (!segs || !segs.length) { voiceFinished(); return; }   // no audio → the sting alone carries it
       let i = 0;
       voiceEl = new Audio();
       voiceEl.preload = 'auto';
@@ -99,7 +104,7 @@
       el2.addEventListener('ended', next);
       el2.addEventListener('error', next);
       next();
-    }).catch(function () {});
+    }).catch(function () { voiceFinished(); });
   }
   // If the user starts the AI Host, drop the opening voice so they never overlap.
   document.addEventListener('click', function (e) {
@@ -117,7 +122,7 @@
     playSting();
     setTimeout(function () {
       dismiss();
-      if (voicePromise) playVoice(voicePromise);
+      if (voicePromise) playVoice(voicePromise); else voiceFinished();
     }, STING_MS);
   }
 
@@ -132,11 +137,12 @@
     })(start);
   }
 
-  // opts: { nearCount, totalCount, isPlus, onUpgrade, getVoice, onDone }
+  // opts: { nearCount, totalCount, isPlus, onUpgrade, getVoice, onDone, onVoiceDone }
   function play(opts) {
     opts = opts || {};
     onDone = typeof opts.onDone === "function" ? opts.onDone : null;
     if (!isEnabled()) return false;
+    if (typeof opts.onVoiceDone === 'function' && !shownThisLoad && !document.getElementById('signature')) voiceDoneCb = opts.onVoiceDone;
     // Re-entrancy guard. `onData` can fire more than once during startup, which used
     // to re-enter play() and TEAR DOWN the splash that was already on screen (it looked
     // like the intro auto-skipped after ~1s). An in-memory flag + a live-element check
@@ -183,8 +189,9 @@
     countUp(el.querySelector('.sg-num'), target);
 
     el.addEventListener('click', function (e) {
-      if (e.target.closest('.sg-off')) { e.stopPropagation(); setEnabled(false); dismiss(); return; }
-      if (e.target.closest('.sg-plus')) { e.stopPropagation(); dismiss(); if (opts.onUpgrade) opts.onUpgrade(); return; }
+      // Both are taps with no spoken welcome, so the welcome is "over" straight away.
+      if (e.target.closest('.sg-off')) { e.stopPropagation(); setEnabled(false); dismiss(); voiceFinished(); return; }
+      if (e.target.closest('.sg-plus')) { e.stopPropagation(); dismiss(); voiceFinished(); if (opts.onUpgrade) opts.onUpgrade(); return; }
       enter(opts);   // tap anywhere else = enter (plays the sonic logo)
     });
     // The intro waits for the user ("Tap to enter", the Plus invitation, or "Go straight
@@ -195,5 +202,6 @@
     return true;
   }
 
-  global.EventuallySignature = { play: play, dismiss: dismiss, stopVoice: stopVoice, isEnabled: isEnabled, setEnabled: setEnabled };
+  global.EventuallySignature = { play: play, dismiss: dismiss, stopVoice: stopVoice, isEnabled: isEnabled, setEnabled: setEnabled,
+    isVoicePlaying: function () { return !!voiceEl; } };
 })(window);
