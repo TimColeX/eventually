@@ -106,6 +106,24 @@
       if (!ENABLED || !currentUser) return Promise.resolve(null);
       return sb.rpc('publishing_quota').then(function (r) { return (r && r.data) || null; }, function () { return null; });
     },
+    /* Upload an event poster and hand back its public URL.
+       The file is already downscaled and re-encoded by the caller — canvas
+       re-encoding also strips EXIF, so a phone photo's GPS coordinates and
+       camera serial never leave the publisher's device.
+       The path's FIRST segment is the user id, which is what the storage
+       policies in 85_event_images.sql check: you may write in your own folder
+       and nobody else's. */
+    uploadEventImage: function (blob, eventId) {
+      if (!ENABLED || !currentUser) return Promise.resolve({ error: { message: 'Not signed in' } });
+      const path = currentUser.id + '/' + String(eventId).replace(/[^\w.-]/g, '') + '-' + Date.now() + '.jpg';
+      return sb.storage.from('event-images')
+        .upload(path, blob, { contentType: 'image/jpeg', cacheControl: '2592000', upsert: false })
+        .then(function (r) {
+          if (r && r.error) { console.warn('[EventuallyAuth] image upload failed: ' + r.error.message); return { error: r.error }; }
+          const pub = sb.storage.from('event-images').getPublicUrl(path);
+          return { url: (pub && pub.data && pub.data.publicUrl) || null, path: path };
+        }, function (e) { return { error: e }; });
+    },
     publishEvent: function (evt) {
       if (!currentUser) return Promise.resolve({ error: { message: 'Not signed in' } });
       const srcId = 'natsrc_' + evt.id;
@@ -125,7 +143,10 @@
         feature_requested: !!evt.sponsored,
         collect_registrations: !!evt.collectRegistrations,
         capacity: evt.capacity || null,
-        popularity: 0.4, image_url: null, source_count: 1,
+        // The picture waits for review before it goes live (85_event_images.sql);
+        // for a NEW event that is the same approval the event itself is waiting
+        // for, so approving the event takes its poster live in one decision.
+        popularity: 0.4, image_url: null, image_pending: evt.imagePending || null, source_count: 1,
         cheapest_source_id: null, created_by: currentUser.id
       };
       return sb.from('events').insert(row).then(logErr('publishEvent')).then(function (r) {
@@ -145,14 +166,21 @@
     // ---- creator tools: edit / unpublish / delete + per-event stats ----
     updateEvent: function (evt) {
       if (!currentUser) return Promise.resolve({ error: { message: 'Not signed in' } });
-      return sb.from('events').update({
+      const patch = {
         title: evt.name, description: evt.description || null, category: evt.category,
         start_time: evt.date.toISOString(),
         end_time: evt.endsAt ? evt.endsAt.toISOString() : null,
         city: evt.city || null, lat: evt.lat, lon: evt.lon,
         timezone: evt.timezone || null, venue: evt.venue || null, address: evt.address || null,
         collect_registrations: !!evt.collectRegistrations, capacity: evt.capacity || null
-      }).eq('event_id', evt.id).eq('created_by', currentUser.id).then(logErr('updateEvent')).then(function (r) {
+      };
+      // The image columns are only touched when the publisher actually changed the
+      // picture. Taking one DOWN needs no review (removing content can't be abused
+      // the way adding it can); putting one up waits for the Review queue.
+      if (evt.imageRemoved) { patch.image_url = null; patch.image_pending = null; }
+      else if (evt.imagePending) { patch.image_pending = evt.imagePending; }
+      return sb.from('events').update(patch)
+        .eq('event_id', evt.id).eq('created_by', currentUser.id).then(logErr('updateEvent')).then(function (r) {
         if (r && r.error) return r;
         return sb.from('event_sources').update({ url: evt.ticketUrl || null, last_updated: new Date().toISOString() })
           .eq('event_id', evt.id).then(logErr('updateEvent source'));

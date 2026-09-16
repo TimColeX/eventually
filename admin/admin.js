@@ -537,7 +537,9 @@
       if (!rows.length) { body.innerHTML = '<div class="ad-sec"><h2>Review Events</h2><p class="ad-hint">Nothing pending — all caught up. ✓</p></div>'; return; }
       let html = '<div class="ad-sec"><h2>Review (' + rows.length + ')</h2>' +
         '<p class="ad-hint">New events wait here for your approval before they appear on the globe; editing an approved event sends it back. ' +
-        'Featuring requests are decided here too — the organiser is emailed your decision.</p>';
+        'Featuring requests are decided here too — the organiser is emailed your decision. ' +
+        'A picture added to an event that is already live waits here as well: the event keeps running, ' +
+        'showing whatever it shows now, until you approve the new one.</p>';
       // One decision per card. A new event that asked to be featured gets three choices;
       // an event that is already live with an open request gets Feature / Decline.
       const tag = function (text, feat) {
@@ -552,18 +554,37 @@
         const btn = function (cls, decision, label, ask) {
           return '<button class="' + cls + ' rv-act" data-id="' + id + '" data-d="' + decision + '"' + (ask ? ' data-ask="' + ask + '"' : '') + '>' + label + '</button>';
         };
+        // A picture waiting on an event that is ALREADY LIVE is its own decision:
+        // the event keeps running with whatever it shows now, and only the new
+        // picture is approved or dropped.
+        const imgWaiting = !!e.image_pending;
         const tags = tag(isNew ? 'New event' : 'Already live', false) +
           (wantsFeature ? tag('✦ Featuring requested', true) : '') +
+          (imgWaiting ? tag('🖼 Picture waiting', true) : '') +
           (e.sponsored ? tag('★ Featured', true) : '');
         const actions = isNew
           ? (wantsFeature ? btn('ad-save', 'approve_feature', 'Approve &amp; feature') + btn('an-act', 'approve', 'Approve', 'feature')
                           : btn('ad-save', 'approve', 'Approve')) +
             btn('an-act an-danger', 'reject', 'Reject', 'reject')
-          : btn('ad-save', 'feature', 'Feature') + btn('an-act', 'decline_feature', 'Decline featuring', 'feature');
+          : (imgWaiting ? btn('ad-save', 'approve_image', 'Approve picture') + btn('an-act an-danger', 'reject_image', 'Reject picture') : '') +
+            (wantsFeature ? btn(imgWaiting ? 'an-act' : 'ad-save', 'feature', 'Feature') + btn('an-act', 'decline_feature', 'Decline featuring', 'feature') : '');
+        // Both pictures side by side when one is replacing another, so the choice
+        // is "instead of what?" rather than "is this alright on its own?".
+        const shot = function (src, label) {
+          return '<figure style="margin:0"><img src="' + esc(src) + '" alt="" ' +
+            'style="display:block;width:132px;height:88px;object-fit:cover;border-radius:8px;border:1px solid #E3DAcc">' +
+            '<figcaption style="font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#8A7F6E;margin-top:4px">' + label + '</figcaption></figure>';
+        };
+        const images = (imgWaiting || e.image_url)
+          ? '<div style="display:flex;gap:10px;margin-top:9px;flex-wrap:wrap">' +
+              (e.image_url ? shot(e.image_url, isNew ? 'Picture' : 'On the event now') : '') +
+              (imgWaiting ? shot(e.image_pending, e.image_url ? 'Proposed' : 'Waiting for review') : '') +
+            '</div>'
+          : '';
         html += '<div class="rv-row" data-id="' + id + '">' +
           '<div class="rv-main"><div>' + tags + '</div><strong>' + esc(e.title) + '</strong>' +
           '<small>' + esc(e.category || '') + ' · ' + esc(e.city || '') + ' · ' + (e.start_time ? new Date(e.start_time).toLocaleDateString() : '') + '</small>' +
-          (e.description ? '<p class="rv-desc">' + esc(e.description) + '</p>' : '') + '</div>' +
+          (e.description ? '<p class="rv-desc">' + esc(e.description) + '</p>' : '') + images + '</div>' +
           // .rv-actions is flex:none in admin.css — fine for two buttons, but three would
           // crowd out the event text, so let them wrap inside a fixed width.
           '<div class="rv-actions" style="flex:0 1 auto;flex-wrap:wrap;justify-content:flex-end;max-width:290px">' + actions + '</div></div>';

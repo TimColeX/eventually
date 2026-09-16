@@ -513,6 +513,35 @@ body {
   min-height: 40px; line-height: 1.25;
 }
 .co-body input:focus, .co-body select:focus, .co-body textarea:focus { border-color: var(--clay); background: #fff; }
+/* Event poster picker.
+   ⚠️ The rule above gives every input in .co-body display:block, which BEATS the
+   `hidden` attribute (a UA-stylesheet rule). Without this the file input would
+   sit there as a naked "Choose file" button next to the drop area. */
+.co-body input[type="file"] { display: none !important; }
+.co-img { margin: 4px 0 14px; padding-top: 13px; border-top: 1px solid var(--line); }
+.co-img-drop {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  min-height: 116px; padding: 14px; cursor: pointer; overflow: hidden;
+  border: 1px dashed var(--line-2); border-radius: 12px; background: var(--paper);
+  transition: border-color .15s ease, background .15s ease;
+}
+.co-img-drop:hover, .co-img-drop:focus-visible, .co-img-drop.is-over { border-color: var(--clay); background: #fff; outline: none; }
+.co-img-drop.is-over { border-style: solid; }
+.co-img-empty { text-align: center; }
+.co-img-empty b { display: block; font-size: 13px; color: var(--ink); margin-bottom: 3px; }
+.co-img-empty small { display: block; font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+/* The preview is shown the way the CARD will show it — cover, not letterboxed —
+   so nobody is surprised later by how their poster is cropped. */
+.co-img-prev { display: block; width: 100%; height: 148px; object-fit: cover; border-radius: 8px; }
+.co-img-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; }
+.co-img-info { font-family: var(--mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
+.co-img-x {
+  flex: none; padding: 5px 11px; border-radius: 8px; cursor: pointer;
+  background: none; border: 1px solid var(--line-2); color: var(--muted);
+  font-family: var(--font); font-size: 12px;
+}
+.co-img-x:hover { border-color: var(--clay); color: var(--clay); }
+.co-img-note { margin: 9px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--faint); }
 /* Auto event-colour preview (derived from category — no manual picker) */
 .co-catcolor { display: flex; align-items: center; gap: 10px; margin: 2px 0 16px; padding: 11px 13px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line); }
 .co-catdot { width: 22px; height: 22px; border-radius: 7px; flex: none; box-shadow: 0 1px 3px rgba(0,0,0,.18); }

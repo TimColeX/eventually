@@ -625,6 +625,13 @@
       });
   }
   const coordinator = new window.EventuallyCoordinator(document.getElementById('coordinator'), {
+    // The poster, already shrunk in the browser, uploaded to the publisher's own
+    // folder in Storage. Signed out (demo) there is nowhere to put it, so the
+    // form keeps the local preview and simply saves no picture.
+    onUploadImage: function (blob, eventId) {
+      if (!acctEnabled() || !A.uploadEventImage) return Promise.resolve({ error: 'offline' });
+      return A.uploadEventImage(blob, eventId);
+    },
     // Returns a Promise<boolean>: true = published. When signed in we write the
     // native event to Supabase (attributed to the user); otherwise demo/local only.
     onPublish: function (evt) {

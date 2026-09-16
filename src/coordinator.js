@@ -35,7 +35,11 @@
     this.getCreatorStats = opts.getCreatorStats; // () -> Promise<[{event_id,title,...,saves,likes,attends,published}]>
     this.getDefaultLocation = opts.getDefaultLocation; // () -> {lat,lon,city}|null (user's set location)
     this.onFlyTo = opts.onFlyTo;           // (lat, lon) -> void
+    this.onUploadImage = opts.onUploadImage;   // (blob, eventId) -> Promise<{url}|{error}>
     this.getMyEvents = opts.getMyEvents;   // () -> [events]  (demo fallback)
+    this._imageBlob = null;                 // a newly chosen poster, already shrunk
+    this._imageExisting = null;             // the picture the event already has
+    this._imageRemoved = false;             // they took the existing one off
     this.pin = { lat: 48.85, lon: 2.35 };  // default Paris
     this.city = null;                       // resolved place name (geocoded)
     this.editId = null;                     // set when editing an existing event
@@ -147,6 +151,24 @@
                 '<div class="latlon">lat <strong class="ll-lat"></strong> · lon <strong class="ll-lon"></strong></div>' +
               '</div>' +
             '</div>' +
+            // The poster. Optional — an event with no picture still gets the
+            // category-colour block, which is what every native event had until now.
+            '<div class="co-img">' +
+              '<div class="co-card-h">Picture <span class="co-opt">(optional)</span></div>' +
+              '<div class="co-img-drop" tabindex="0" role="button" aria-label="Add a picture">' +
+                '<input type="file" class="f-image" accept="image/*" hidden>' +
+                '<div class="co-img-empty"><b>Add a poster or photo</b>' +
+                  '<small>Shown on the event card and across the top of the event. ' +
+                  'Any size — we shrink it for you.</small></div>' +
+                '<img class="co-img-prev" alt="" hidden>' +
+              '</div>' +
+              '<div class="co-img-bar" hidden>' +
+                '<span class="co-img-info"></span>' +
+                '<button type="button" class="co-img-x">Remove</button>' +
+              '</div>' +
+              '<p class="co-img-note">We check pictures by hand before they go live. ' +
+                'Use your own artwork or a photo you have the right to use.</p>' +
+            '</div>' +
             '<div class="co-catcolor"><span class="co-catdot"></span>' +
               '<span class="co-catcolor-t">Shows in the <b class="co-catname">Music</b> colour on the globe &amp; card — set automatically by category.</span></div>' +
             '<label class="co-feature"><input type="checkbox" class="f-feature">' +
@@ -187,6 +209,7 @@
       r.addEventListener('change', function () { self._syncRegMode(); });
     });
     this._syncRegMode();
+    this._wireImage();
 
     // Time zone: default to the organiser's own until a place says otherwise.
     const TZ = global.EventuallyTZ;
@@ -444,14 +467,38 @@
     };
     const btn = this.el.querySelector('.co-publish');
     btn.disabled = true; btn.textContent = editing ? 'Saving…' : 'Publishing…';
-    const action = editing && this.onUpdate ? this.onUpdate(evt) : this.onPublish(evt);
-    Promise.resolve(action).then(function (res) {
-      const r = (res && typeof res === 'object') ? res : { ok: !!res, live: true };
-      btn.disabled = false;
-      if (!r.ok) { btn.textContent = editing ? 'Update event' : 'Publish event ✦'; return; }
-      self._toast(r.message || (editing ? 'Changes saved.' : 'Published!'));
-      if (r.live && self.onFlyTo) self.onFlyTo(evt.lat, evt.lon);   // only fly if it's actually on the globe
-      self._resetForm();
+
+    // The picture is uploaded BEFORE the event row is written, so the row is
+    // never saved claiming a poster that isn't there. If the upload fails we
+    // save nothing at all and say so — publishing an event that silently lost
+    // its poster is worse than asking someone to press the button again.
+    evt.imageRemoved = !!this._imageRemoved;
+    const upload = (this._imageBlob && this.onUploadImage)
+      ? Promise.resolve(this.onUploadImage(this._imageBlob, id))
+          .then(function (r) { if (r && r.url) { evt.imagePending = r.url; return true; } return false; },
+                function () { return false; })
+      : Promise.resolve(true);
+
+    upload.then(function (uploaded) {
+      if (!uploaded) {
+        btn.disabled = false; btn.textContent = editing ? 'Update event' : 'Publish event ✦';
+        self._toast('The picture could not be uploaded — nothing was saved. Please try again.');
+        return;
+      }
+      if (evt.imagePending) btn.textContent = editing ? 'Saving…' : 'Publishing…';
+      const action = editing && self.onUpdate ? self.onUpdate(evt) : self.onPublish(evt);
+      return Promise.resolve(action).then(function (res) {
+        const r = (res && typeof res === 'object') ? res : { ok: !!res, live: true };
+        btn.disabled = false;
+        if (!r.ok) { btn.textContent = editing ? 'Update event' : 'Publish event ✦'; return; }
+        let msg = r.message || (editing ? 'Changes saved.' : 'Published!');
+        // Only say this when there is genuinely a picture waiting on a live event —
+        // for a new event the picture rides along with the event's own approval.
+        if (evt.imagePending && editing) msg += ' Your picture goes up once we\'ve checked it.';
+        self._toast(msg);
+        if (r.live && self.onFlyTo) self.onFlyTo(evt.lat, evt.lon);   // only fly if it's actually on the globe
+        self._resetForm();
+      });
     }).catch(function () {
       btn.disabled = false; btn.textContent = editing ? 'Update event' : 'Publish event ✦';
       self._toast((editing ? 'Save' : 'Publish') + ' failed — please try again.');
@@ -533,6 +580,137 @@
   };
 
   // Reset the form to "create" mode.
+  /* ---------- the poster ----------
+     Pictures are shrunk HERE, in the publisher's browser, before anything is
+     uploaded. A phone photo is 3-8 MB and perhaps 4000px wide; the card shows it
+     at 78px and the banner at a few hundred, so uploading the original would
+     spend storage, the publisher's data and the reader's download on detail
+     nobody can see. Re-encoding at 1600px / quality 0.85 lands at roughly
+     150-400 KB (measured: a 2400x1600 poster 389 KB -> 168 KB; pure noise, the
+     worst case a JPEG can be given, 10 MB -> 760 KB), and it also strips EXIF —
+     the photo's GPS location and camera serial never leave the device.
+     Nothing here refuses a big photo. Being told "your picture is too large" is
+     a dead end for someone who only has the camera roll in front of them. */
+  const IMG_MAX_DIM = 1600;      // longest edge kept, aspect ratio preserved
+  const IMG_QUALITY = 0.85;
+  const IMG_ABSURD  = 24 * 1024 * 1024;   // only to stop an old phone choking on a RAW file
+
+  Coordinator.prototype._wireImage = function () {
+    const self = this;
+    const drop = this.el.querySelector('.co-img-drop');
+    const input = this.el.querySelector('.f-image');
+    if (!drop || !input) return;
+    const open = function () { input.click(); };
+    drop.addEventListener('click', open);
+    drop.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+    });
+    input.addEventListener('change', function () {
+      const f = input.files && input.files[0];
+      input.value = '';                       // so picking the same file twice still fires
+      if (f) self._takeImage(f);
+    });
+    // Dragging a poster straight in from the desktop.
+    ['dragenter', 'dragover'].forEach(function (t) {
+      drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.add('is-over'); });
+    });
+    ['dragleave', 'drop'].forEach(function (t) {
+      drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.remove('is-over'); });
+    });
+    drop.addEventListener('drop', function (e) {
+      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f) self._takeImage(f);
+    });
+    this.el.querySelector('.co-img-x').addEventListener('click', function (e) {
+      e.stopPropagation();
+      self._clearImage(true);
+    });
+  };
+
+  Coordinator.prototype._takeImage = function (file) {
+    const self = this;
+    if (!/^image\//.test(file.type || '')) { this._toast('That file is not a picture — try a JPG or PNG.'); return; }
+    if (file.size > IMG_ABSURD) { this._toast('That file is enormous. Try a normal photo or an exported JPG.'); return; }
+    const info = this.el.querySelector('.co-img-info');
+    const bar = this.el.querySelector('.co-img-bar');
+    if (bar) bar.hidden = false;
+    if (info) info.textContent = 'Preparing…';
+    shrinkImage(file).then(function (out) {
+      self._imageBlob = out.blob;
+      self._imageRemoved = false;
+      const prev = self.el.querySelector('.co-img-prev');
+      if (self._imagePrevUrl) URL.revokeObjectURL(self._imagePrevUrl);
+      self._imagePrevUrl = URL.createObjectURL(out.blob);
+      prev.src = self._imagePrevUrl; prev.hidden = false;
+      self.el.querySelector('.co-img-empty').hidden = true;
+      if (info) info.textContent = out.w + '×' + out.h + ' · ' + Math.max(1, Math.round(out.blob.size / 1024)) + ' KB';
+    }, function () {
+      if (bar) bar.hidden = true;
+      self._toast("That picture couldn't be read. Try a JPG or PNG.");
+    });
+  };
+
+  // `andExisting` also clears a picture that is already live on the event, which
+  // is a real change to save — not just dropping the file you just picked.
+  Coordinator.prototype._clearImage = function (andExisting) {
+    if (this._imagePrevUrl) { URL.revokeObjectURL(this._imagePrevUrl); this._imagePrevUrl = null; }
+    this._imageBlob = null;
+    if (andExisting && this._imageExisting) this._imageRemoved = true;
+    if (!andExisting) this._imageRemoved = false;
+    this._imageExisting = andExisting ? null : this._imageExisting;
+    const prev = this.el.querySelector('.co-img-prev');
+    if (prev) { prev.hidden = true; prev.removeAttribute('src'); }
+    const empty = this.el.querySelector('.co-img-empty'); if (empty) empty.hidden = false;
+    const bar = this.el.querySelector('.co-img-bar'); if (bar) bar.hidden = true;
+  };
+
+  // Show a picture the event already has (live, or waiting for review).
+  Coordinator.prototype._showExistingImage = function (url, pendingReview) {
+    this._imageExisting = url || null;
+    this._imageBlob = null; this._imageRemoved = false;
+    const prev = this.el.querySelector('.co-img-prev');
+    const empty = this.el.querySelector('.co-img-empty');
+    const bar = this.el.querySelector('.co-img-bar');
+    const info = this.el.querySelector('.co-img-info');
+    if (!url) { if (prev) { prev.hidden = true; prev.removeAttribute('src'); } if (empty) empty.hidden = false; if (bar) bar.hidden = true; return; }
+    if (prev) { prev.src = url; prev.hidden = false; }
+    if (empty) empty.hidden = true;
+    if (bar) bar.hidden = false;
+    if (info) info.textContent = pendingReview ? 'Waiting for review' : 'On the event now';
+  };
+
+  function shrinkImage(file) {
+    return new Promise(function (resolve, reject) {
+      const finish = function (src, w0, h0) {
+        const scale = Math.min(1, IMG_MAX_DIM / Math.max(w0, h0));
+        const w = Math.max(1, Math.round(w0 * scale)), h = Math.max(1, Math.round(h0 * scale));
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        const ctx = c.getContext('2d');
+        // Posters are often portrait and photos landscape; both are covered by
+        // object-fit in the card, so never crop — just fit the whole thing.
+        ctx.drawImage(src, 0, 0, w, h);
+        c.toBlob(function (blob) {
+          if (blob) resolve({ blob: blob, w: w, h: h }); else reject(new Error('encode'));
+        }, 'image/jpeg', IMG_QUALITY);
+      };
+      const viaImg = function () {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = function () { URL.revokeObjectURL(url); finish(img, img.naturalWidth, img.naturalHeight); };
+        img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('decode')); };
+        img.src = url;
+      };
+      // createImageBitmap honours EXIF rotation, so a photo taken sideways on a
+      // phone is stored the way up it was taken. <img> in some browsers does not.
+      if (window.createImageBitmap) {
+        let p;
+        try { p = createImageBitmap(file, { imageOrientation: 'from-image' }); } catch (e) { viaImg(); return; }
+        p.then(function (bm) { finish(bm, bm.width, bm.height); if (bm.close) bm.close(); }, viaImg);
+      } else viaImg();
+    });
+  }
+
   Coordinator.prototype._resetForm = function () {
     const q = function (s) { return this.el.querySelector(s); }.bind(this);
     this.editId = null; this.city = null;
@@ -550,6 +728,8 @@
     if (q('.f-time')) q('.f-time').value = '19:00';
     if (q('.f-endtime')) q('.f-endtime').value = '';
     if (q('.f-feature')) q('.f-feature').checked = false;
+    this._imageExisting = null;
+    this._clearImage(false);
     q('.co-publish').textContent = 'Publish event ✦';
     const h = this.el.querySelector('.co-form-h'); if (h) h.textContent = 'Publish a new event';
     const cancel = this.el.querySelector('.co-cancel-edit'); if (cancel) cancel.style.display = 'none';
@@ -600,6 +780,9 @@
     else q('.f-reg-none').checked = true;
     this._syncRegMode();
     this.pin = { lat: +ev.lat, lon: +ev.lon }; this.city = ev.city || null;
+    // A picture waiting for review is the one to show them — it's what they last
+    // chose, even though the event is still showing the old one to everyone else.
+    this._showExistingImage(ev.image_pending || ev.image_url || null, !!ev.image_pending);
     this._syncTzNote();
     q('.co-publish').textContent = 'Update event';
     const h = this.el.querySelector('.co-form-h'); if (h) h.textContent = 'Editing: ' + (ev.title || 'event');
