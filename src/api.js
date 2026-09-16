@@ -164,6 +164,25 @@
       .catch(function () { return []; });
   }
 
+  // Event images for the cards / detail panel, by event id → url (or null when the
+  // event has none). They are deliberately NOT in the globe payload: 74 dropped
+  // image_url to cut ~40% off every visitor's download, and putting a URL on all 3,000
+  // events would add it straight back. Fetching only what's on screen keeps the globe
+  // small — one request per opened city list. Resolves {} on any failure (no images,
+  // never a broken list).
+  function fetchImages(ids) {
+    if (!REMOTE || !ids || !ids.length) return Promise.resolve({});
+    const q = ids.slice(0, 80).map(encodeURIComponent).join(',');
+    return fetch(BASE + '/rest/v1/events?select=event_id,image_url&event_id=in.(' + q + ')', { headers: headers() })
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (rows) {
+        const m = {};
+        (rows || []).forEach(function (r) { m[r.event_id] = r.image_url || null; });
+        return m;
+      })
+      .catch(function () { return {}; });
+  }
+
   // Remote app config (admin-tunable). Resolves null if unavailable → code defaults.
   // One request shared by every caller: boot() and app.js both need it at start-up.
   let configP = null;
@@ -220,6 +239,7 @@
     setWindowDays: setWindowDays,
     toEvent: toEvent,
     getConfig: getConfig,
+    fetchImages: fetchImages,
     getSponsors: getSponsors,
     search: search,
     dailyBriefing: dailyBriefing

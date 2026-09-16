@@ -806,6 +806,46 @@
   }
   setInterval(tickCountdowns, 1000);
 
+  /* EVENT IMAGES (owner's choice, 2026-09-15: a thumbnail beside the text).
+   * `ev.image` is undefined until looked up, then a URL or null. The globe payload
+   * carries no images (see api.fetchImages), so a card starts as the category colour
+   * block and the picture drops in when it arrives — the list never waits on images,
+   * and an event without one (university feeds, organiser-published) keeps the block
+   * rather than a stand-in photo. Images are loaded straight from the provider's CDN;
+   * we don't copy them (their terms, our storage, and they stay current). */
+  function thumbHTML(ev) {
+    if (ev.image) {
+      return '<div class="ev-thumb"><img src="' + esc(ev.image) + '" alt="" loading="lazy" decoding="async"></div>';
+    }
+    return '<div class="ev-thumb is-empty" data-thumb="' + esc(ev.id) + '" style="--cat:' + esc(ev.categoryColor) + '">' +
+      '<span>' + esc(ev.category) + '</span></div>';
+  }
+  // Look up images for events on screen, then fill in their thumbnails. Each event is
+  // asked about once (null is remembered too), so scrolling or re-rendering is free.
+  function ensureImages(list, after) {
+    const want = (list || []).filter(function (e) { return e && e.image === undefined; });
+    if (!want.length) { if (after) after(); return; }
+    want.forEach(function (e) { e.image = null; });       // asked — don't ask again
+    const API = window.EventuallyAPI;
+    if (!API || !API.fetchImages) { if (after) after(); return; }
+    API.fetchImages(want.map(function (e) { return e.id; })).then(function (map) {
+      let any = false;
+      want.forEach(function (e) { if (map[e.id]) { e.image = map[e.id]; any = true; } });
+      if (any) fillThumbs();
+      if (after) after();
+    });
+  }
+  // Swap the colour block for the picture, in place — no re-render, no scroll jump.
+  function fillThumbs() {
+    document.querySelectorAll('.ev-thumb.is-empty[data-thumb]').forEach(function (el) {
+      const ev = D.getById(el.getAttribute('data-thumb'));
+      if (!ev || !ev.image) return;
+      el.classList.remove('is-empty');
+      el.removeAttribute('style');
+      el.innerHTML = '<img src="' + esc(ev.image) + '" alt="" loading="lazy" decoding="async">';
+    });
+  }
+
   function eventCardHTML(ev) {
     const type = D.typeForDate(ev, selectedDate);
     // The card's date is the date AT THE VENUE — an 11 p.m. Lagos gig must not
@@ -824,6 +864,7 @@
     return '' +
       '<button class="ev' + (ev.sponsored ? ' is-featured' : '') + '" data-open="' + ev.id + '">' +
         '<div class="ev-banner" style="background:' + ev.categoryColor + '"></div>' +
+        thumbHTML(ev) +
         '<div class="ev-main">' +
           '<div class="ev-top">' +
             '<span class="ev-cat" style="color:' + ev.categoryColor + '">' + esc(ev.category) + '</span>' +
@@ -899,6 +940,7 @@
     let cardsHtml = '';
     shown.forEach(function (ev) { cardsHtml += eventCardHTML(ev); });
     placeList.innerHTML = cardsHtml + more + partnerCardHTML(c);
+    ensureImages(shown);                      // pictures drop in when they arrive
     M.mountAdSense(placeList);
     if (focusEventId) {
       const el = placeList.querySelector('.ev[data-id="' + focusEventId + '"]');
@@ -1069,7 +1111,21 @@
   function openEvent(id) {
     const ev = D.getById(id); if (!ev) return;
     activeEventId = id; ev.clicks++;
-    track('event_open', ev.city || null);
+    /* SIGNED OUT → PREVIEW + SIGN-IN (owner's choice, 2026-09-15). What the event IS
+       stays visible (picture, title, when, where); the description, the actions and the
+       ticket link are behind one friendly prompt. The event id is remembered before the
+       modal opens, because both sign-in routes (Google, emailed link) RELOAD the page —
+       see tryPendingEvent(), which reopens it afterwards. */
+    const gated = !user;
+    track(gated ? 'event_gate_view' : 'event_open', ev.city || null);
+    ensureImages([ev], function () {          // banner picture, if this event has one
+      if (activeEventId !== id || !ev.image) return;
+      const b = eventScroll.querySelector('.evd-banner');
+      if (b && !b.classList.contains('has-img')) {
+        b.classList.add('has-img');
+        b.style.background = "url('" + ev.image + "') center/cover, linear-gradient(135deg," + ev.categoryColor + ",#211A15)";
+      }
+    });
     const type = D.typeForDate(ev, selectedDate);
     // Times are shown in the VENUE's zone, not the reader's. A gig in Lagos
     // starts at 7 p.m. in Lagos whoever is looking at it from wherever.
@@ -1136,7 +1192,9 @@
         '<span class="evd-bar-title">' + esc(ev.name) + '</span>' +
         '<button class="evd-x" aria-label="Close">✕</button>' +
       '</div>' +
-      '<div class="evd-banner" style="background:linear-gradient(135deg,' + ev.categoryColor + ',#211A15)">' +
+      '<div class="evd-banner' + (ev.image ? ' has-img' : '') + '" style="background:' +
+        (ev.image ? "url('" + esc(ev.image) + "') center/cover, " : '') +
+        'linear-gradient(135deg,' + ev.categoryColor + ',#211A15)">' +
         '<span class="evd-cat">' + esc(ev.category) + '</span>' +
       '</div>' +
       '<div class="evd-body">' +
@@ -1149,27 +1207,54 @@
         (ev.address ? '<p class="evd-addr">📍 ' + esc(ev.address) + '</p>' : '') +
         (type === 'upcoming' ? '<div class="evd-cd"><span class="cd-label">Starts in</span><span class="ev-cd" data-start="' + ev.date.getTime() + '">⏳ ' + esc(fmtCountdown(ev.date.getTime() - Date.now())) + '</span></div>' : '') +
         transparency +
-        '<p class="evd-desc">' + esc(ev.description) + '</p>' +
-        '<div class="evd-actions">' +
-          // Counts are REAL (event_counts, 78) and fill in once the panel is open. Until
-          // then — or when there are none — no number is shown, never an invented one.
-          '<button class="ev-like' + (ev.userLiked ? ' on' : '') + '" data-act="like">♥ <span class="n">' + (ev.likes > 0 ? ev.likes.toLocaleString() : '') + '</span></button>' +
-          '<button class="ev-attend' + (ev.userAttending ? ' on' : '') + '" data-act="attend">✓ <span class="n">' + (ev.attending > 0 ? ev.attending.toLocaleString() : '') + '</span></button>' +
-          '<button class="ev-save' + (P.isSaved(ev.id) ? ' on' : '') + '" data-act="save">' + (P.isSaved(ev.id) ? '★' : '☆') + '</button>' +
-        '</div>' +
-        '<div class="live-updates" hidden></div>' +
-        avail +
+        (gated
+          ? '<div class="evd-gate">' +
+              '<div class="evd-gate-h">See the full details</div>' +
+              '<p class="evd-gate-p">Sign in to read the full description, get tickets, and save this event to your list.</p>' +
+              '<button class="evd-gate-cta" type="button">Sign up or log in</button>' +
+              '<p class="evd-gate-fine">It takes seconds — and you\'ll come straight back to this event.</p>' +
+            '</div>'
+          : '<p class="evd-desc">' + esc(ev.description) + '</p>' +
+            '<div class="evd-actions">' +
+              // Counts are REAL (event_counts, 78) and fill in once the panel is open. Until
+              // then — or when there are none — no number is shown, never an invented one.
+              '<button class="ev-like' + (ev.userLiked ? ' on' : '') + '" data-act="like">♥ <span class="n">' + (ev.likes > 0 ? ev.likes.toLocaleString() : '') + '</span></button>' +
+              '<button class="ev-attend' + (ev.userAttending ? ' on' : '') + '" data-act="attend">✓ <span class="n">' + (ev.attending > 0 ? ev.attending.toLocaleString() : '') + '</span></button>' +
+              '<button class="ev-save' + (P.isSaved(ev.id) ? ' on' : '') + '" data-act="save">' + (P.isSaved(ev.id) ? '★' : '☆') + '</button>' +
+            '</div>' +
+            '<div class="live-updates" hidden></div>' +
+            avail) +
       '</div>';
-    // Live updates from the organiser. Hidden unless the server says the window
-    // is open, so a closed or disabled event shows nothing at all.
-    if (window.EventuallyUpdates) window.EventuallyUpdates.mount(eventScroll.querySelector('.live-updates'), ev.id);
-    mountRegistration(eventScroll.querySelector('.reg-box'));
-    mountCounts(ev);
+    // Signed out: none of the below belongs on a preview (live updates, places left and
+    // the viewer's own ♥/✓ are all "full details"), and each is a request we needn't make.
+    if (!gated) {
+      // Live updates from the organiser. Hidden unless the server says the window
+      // is open, so a closed or disabled event shows nothing at all.
+      if (window.EventuallyUpdates) window.EventuallyUpdates.mount(eventScroll.querySelector('.live-updates'), ev.id);
+      mountRegistration(eventScroll.querySelector('.reg-box'));
+      mountCounts(ev);
+    }
     M.mountAdSense(eventScroll);
     eventScroll.scrollTop = 0; syncEventShade();
     eventEl.classList.add('open');
   }
   function closeEvent() { eventEl.classList.remove('open'); activeEventId = null; if (window.EventuallyUpdates) window.EventuallyUpdates.unmount(); }
+
+  /* "Take them straight back to the event they picked." Both sign-in routes leave the
+     page (Google redirects; an emailed link opens a new tab), so the event is kept in
+     sessionStorage — this visit only, this tab only — and reopened once the visitor is
+     signed in AND the events have loaded, whichever happens last. */
+  const PENDING_EVENT_KEY = 'eventually.pendingEvent';
+  function rememberPendingEvent(id) { try { sessionStorage.setItem(PENDING_EVENT_KEY, id); } catch (e) {} }
+  function tryPendingEvent() {
+    if (!user) return;
+    let id = null;
+    try { id = sessionStorage.getItem(PENDING_EVENT_KEY); } catch (e) {}
+    if (!id) return;
+    if (!D.getById(id)) return;                        // events not loaded yet → try again later
+    try { sessionStorage.removeItem(PENDING_EVENT_KEY); } catch (e) {}
+    openEvent(id);
+  }
   // Pinned bar fills in once the 120px banner has scrolled up under it (styles: .evd-bar).
   function syncEventShade() { eventEl.classList.toggle('is-scrolled', eventScroll.scrollTop > 66); }
   eventScroll.addEventListener('scroll', syncEventShade, { passive: true });
@@ -1281,6 +1366,16 @@
   }
 
   eventEl.addEventListener('click', function (e) {
+    // Signed-out preview → the one prompt. Remember the event first: signing in reloads.
+    if (e.target.closest('.evd-gate-cta')) {
+      const ev0 = D.getById(activeEventId);
+      if (activeEventId) rememberPendingEvent(activeEventId);
+      track('event_gate_signin', (ev0 && ev0.city) || null);
+      const back = activeEventId;
+      requireLogin(function () { if (back) openEvent(back); },
+        'Sign in to see the full details, get tickets, and save events to your list.');
+      return;
+    }
     if (e.target.closest('.evd-back')) { closeEvent(); return; }                 // back to the list
     if (e.target.closest('.evd-x')) { closeEvent(); place.classList.remove('open'); activeClusterId = null; return; }
     const tix = e.target.closest('[data-tickets]');
@@ -2797,6 +2892,7 @@
         syncReminders();                  // saved list changed after sign-in
         refreshSubscription();            // authoritative Plus/trial state (overrides the is_plus mirror)
         if (eventEl.classList.contains('open') && activeEventId) openEvent(activeEventId);
+        else tryPendingEvent();                 // signed in on another page → back to their event
         if (place.classList.contains('open')) rerenderPlace();
         window.EventuallyToast('Signed in' + (user.name ? ' — welcome, ' + user.name + '.' : '.'));
         if (pendingAction) { const a = pendingAction; pendingAction = null; a(); }
@@ -2895,6 +2991,7 @@
       syncReminders();                  // saved events are now resolvable → (re)schedule
       launchSignature();                // real data in → accurate "near you" count
       openDeepLink();                   // ?city= / ?publish= from a city page
+      tryPendingEvent();                // signed in on the way back → reopen their event
     });
     window.EventuallyAPI.boot().then(function (ok) {
       if (ok || _liveLoaded) { setGlobeLoading(false); return; }
