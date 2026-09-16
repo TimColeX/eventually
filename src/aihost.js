@@ -61,6 +61,11 @@
     this.current = null;
     this.INTRO = 10000;   // music alone before the Host first speaks (first play)
     this.SHORT_INTRO = 3000;  // shorter lead-in when resuming later
+    // The auto-start's own lead-in. It used SHORT_INTRO, and with the bed's 1.6s
+    // fade-in that left barely a second of audible music before the voice arrived —
+    // too little for the listener to register that music is playing at all, so the
+    // duck that follows reads as silence rather than as music underneath.
+    this.AUTO_INTRO = 6000;
     this.GAP = 30000;     // ~30s of music between spoken segments (jittered for a live feel)
     this.IDLE = 6500;     // silent caption ticker pace when not playing
     this._everPlayed = false;
@@ -1101,10 +1106,13 @@
     this.onPlay();                          // music starts and plays alone first
     if (this._timer) { clearInterval(this._timer); this._timer = null; }   // pause silent ticker
     const self = this;
-    // full ~10s intro on the first play; a short lead-in on later resumes, and on an
-    // auto-start (opts.shortLead), which follows the spoken welcome
-    const short = this._everPlayed || !!(opts && opts.shortLead);
-    const lead = short ? this._jitter(this.SHORT_INTRO, 800) : this._jitter(this.INTRO, 1200);
+    // full ~10s intro on the first play; ~6s on an auto-start (opts.shortLead, which
+    // follows the spoken welcome); ~3s on a later resume, where the listener already
+    // knows what the bed sounds like.
+    const auto = !!(opts && opts.shortLead);
+    const lead = auto ? this._jitter(this.AUTO_INTRO, 800)
+      : this._everPlayed ? this._jitter(this.SHORT_INTRO, 800)
+      : this._jitter(this.INTRO, 1200);
     this._everPlayed = true;
     clearTimeout(this._introTimer);
     this._introTimer = setTimeout(function () { self._introTimer = null; if (self.speaking) self._rotate(); }, lead);

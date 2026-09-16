@@ -20,7 +20,15 @@
   'use strict';
 
   const BED = 0.18;     // normal bed level (music "swells" up to here)
-  const DUCK = 0.036;   // ~20% of the bed — soft presence under the Host's voice
+  // ~39% of the bed, about 8 dB below it — a normal radio duck. It was 0.036 (20%,
+  // roughly -29 dB), which measured as present but was inaudible in practice: under a
+  // voice at full volume, on a phone speaker, it read as "the music never started".
+  // The giveaway was that Pause then Play "fixed" it — that path plays the bed at 0.18
+  // with nothing over it. ⚠️ The opposite complaint (music too loud under speech) is
+  // what produced 0.036 in v78, so this is the balance point between the two; the clips
+  // play back-to-back with no swell between them, so whatever is set here is the level
+  // for the WHOLE briefing, not just one sentence.
+  const DUCK = 0.07;
   const DOWN = 0.22;    // duck-in time (fast, so speech is clear promptly)
   const UP = 1.2;       // swell-out time (smooth, natural)
 
