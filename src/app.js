@@ -1808,8 +1808,11 @@
     const comms = p.comms || {};
     const on = function (k, dflt) { return comms[k] === undefined ? !!dflt : !!comms[k]; };
     const TOGGLES = [
-      ['reminders', 'Event reminders', 'Before an event you saved or registered for.', true],
-      ['digest', "Weekly what's on near you", 'One email a week. Nothing else.', false]
+      ['reminders', 'Event reminders', 'Three days before, and again two hours before.', true],
+      // Also a service message about their own saved event, so also default ON —
+      // and kept separate so turning off the weekly email can't silence a cancellation.
+      ['changes', 'Changes to saved events', 'If one is cancelled, postponed or moved.', true],
+      ['digest', "Weekly what's on near you", 'One email a week, matched to your interests.', false]
     ];
     h += '<div class="pf-acct-comms"><div class="pf-acct-k">Emails</div>' +
       TOGGLES.map(function (d) {
@@ -1953,12 +1956,14 @@
       // Reminders default to ON, so an undefined value means on — flipping it has
       // to read that default, not treat undefined as off and "turn on" what is
       // already on.
-      const dflt = (k === 'reminders');
+      const dflt = (k !== 'digest');        // reminders + change alerts are on unless turned off
       const now = (c[k] === undefined) ? dflt : !!c[k];
       c[k] = !now;
       P.set({ comms: c }); renderAccount(); syncProfile();
       window.EventuallyToast(c[k]
-        ? (k === 'digest' ? "You'll get one email a week." : "Reminders on — we'll email you before saved events.")
+        ? (k === 'digest' ? "You'll get one email a week."
+          : k === 'changes' ? "We'll tell you if a saved event is cancelled or moved."
+          : "Reminders on — three days before, and again two hours before.")
         : 'Turned off. No more of those emails.');
       // Reminders are sent server-side now, so no Notification permission prompt.
       // The local in-session reminders still honour the same flag.

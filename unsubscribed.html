@@ -22,6 +22,8 @@
   .cta { display: inline-block; margin-top: 6px; padding: 11px 18px; border-radius: 10px;
          background: #CB5A3C; color: #fff; text-decoration: none; font-weight: 600; }
   .cta:hover { background: #b94e32; }
+  .cta-ghost { background: none; border: 1px solid #3a322a; color: #d9cfc2; font-weight: 500; }
+  .cta-ghost:hover { background: #241d17; }
   .muted { color: #9a8f80; font-size: 0.9rem; margin-top: 26px; }
 </style>
 </head>
@@ -31,6 +33,9 @@
   <h1 id="head">You're unsubscribed.</h1>
   <p id="body">Loading…</p>
   <a class="cta" href="/">Open Eventually</a>
+  <p id="all-wrap" style="display:none;margin-top:18px">
+    <a class="cta cta-ghost" id="all-link" href="#">Stop all Eventually emails</a>
+  </p>
   <p class="muted">Changed your mind? Turn it back on any time under <b>Profile → Account details</b>.</p>
 </div>
 <script>
@@ -42,9 +47,11 @@
 (function () {
   var q = new URLSearchParams(location.search);
   var ok = q.get('ok') === '1';
-  var kind = q.get('kind') === 'digest' ? 'digest' : 'reminders';
-  var what = kind === 'digest'
-    ? "the weekly what's-on email"
+  var asked = (q.get('kind') || '').toLowerCase();
+  var kind = ['digest', 'changes', 'all'].indexOf(asked) > -1 ? asked : 'reminders';
+  var what = kind === 'digest' ? "the weekly what's-on email"
+    : kind === 'changes' ? 'alerts about changes to events you saved'
+    : kind === 'all' ? 'any more email from Eventually'
     : 'event reminders';
 
   var head = document.getElementById('head');
@@ -53,9 +60,27 @@
 
   if (ok) {
     head.textContent = "Done — you're unsubscribed.";
-    body.innerHTML = "You won't get " + what + " again. " +
-      "Nothing else about your account has changed, and you'll still get messages " +
-      "you asked for directly — sign-in links, and confirmations for events you register for.";
+    // What they KEEP has to match what they just stopped — telling someone who turned
+    // off change alerts that they'll "still hear if an event is cancelled" is nonsense.
+    var keeps = kind === 'changes'
+      ? "You'll still get reminders for events you save, sign-in links, and registration confirmations."
+      : kind === 'digest'
+        ? "Nothing else has changed: you'll still get reminders for events you save, and we'll still tell you if one is cancelled or moved."
+        : "You'll still hear if an event you saved is cancelled or moved, and you'll still get sign-in links and registration confirmations.";
+    body.innerHTML = kind === 'all'
+      ? "You won't get " + what + ", apart from messages you ask for directly — sign-in " +
+        "links, and confirmations for events you register for."
+      : "You won't get " + what + " again. " + keeps;
+    // One click to stop the rest, for someone who wants out entirely. The token came
+    // with the redirect, so this needs no sign-in either.
+    var token = q.get('t');
+    if (token && kind !== 'all') {
+      var wrap = document.getElementById('all-wrap');
+      var link = document.getElementById('all-link');
+      link.href = 'https://gpsetmqivzchlvyrcgld.supabase.co/functions/v1/send-emails?unsub=' +
+        encodeURIComponent(token) + '&kind=all';
+      wrap.style.display = '';
+    }
   } else {
     mark.textContent = '!'; mark.className = 'tick bad';
     head.textContent = "That link didn't work.";
