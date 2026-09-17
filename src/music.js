@@ -37,6 +37,8 @@
     this.ctx = null; this.master = null;
     this.on = false; this._built = false; this._direct = false; this._tween = null;
     this._ducked = false; this.muted = false;
+    this._primedSilent = false;      // playing muted purely to hold the autoplay unlock
+    this._primeTimer = null;
   }
 
   Music.prototype._build = function () {
@@ -142,28 +144,74 @@
     if (!this._build()) return;
     this.on = true;
     if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume().catch(function () {});
-    if (this.audioEl) { try { this.audioEl.play().catch(function () {}); } catch (e) {} this._mediaSession(); }
+    const el = this.audioEl;
+    if (el) {
+      // Coming off the silent primer: unmute and rewind, so the bed opens at the top of
+      // the track rather than wherever the muted keep-alive had reached.
+      if (this._primedSilent) { this._primedSilent = false; el.muted = false; try { el.currentTime = 0; } catch (e) {} }
+      try {
+        const p = el.play();
+        // A REJECTION HERE IS THE "no music until you press pause then play" BUG. It was
+        // swallowed silently, so there was nothing to find. Say so.
+        if (p && p.catch) p.catch(function (err) {
+          try { console.warn('[Music] bed refused to play (' + ((err && (err.name || err.message)) || 'unknown') + ') — autoplay unlock lost'); } catch (e) {}
+        });
+      } catch (e) {}
+      this._mediaSession();
+    }
     this._level(this.muted ? 0 : BED, 1.6);      // swell in (silent if muted)
   };
 
-  // Unlock audio INSIDE a user gesture without making a sound, so a later start() that
-  // isn't tied to a tap (the Host's auto-start countdown) isn't blocked by mobile autoplay
-  // rules. The bed's gain is still 0, and the track is paused again straight away. Skipped
-  // in direct mode (no Web Audio): there the element's volume can't be relied on to be 0.
+  // Unlock audio INSIDE a user gesture so a later start() that is NOT tied to a tap (the
+  // Host's auto-start countdown, ~11s after the tap) is allowed to play.
+  //
+  // ⚠️ This used to play the element and then PAUSE it again. On iOS that gives the unlock
+  // back: an element that has been left paused can have a later programmatic play()
+  // refused, which is silent — the promise rejection was swallowed — so the bed simply
+  // never arrived and only pressing pause/play (a real gesture) brought it back. The
+  // Host's own voice element never had this problem because _primeAudio in aihost.js keeps
+  // it ALIVE on a looping silent clip instead of pausing it. This now does the same: the
+  // track keeps playing, MUTED, until start() unmutes it. Two reasons it is inaudible
+  // meanwhile — muted, and the master gain is still 0 — so it is safe in direct mode too,
+  // which is why that exclusion is gone.
   Music.prototype.prime = function () {
     if (this.on || !this._build()) return;
     if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume().catch(function () {});
-    const el = this.audioEl, self = this;
-    if (el && el.paused && !this._direct) {
-      try {
-        const p = el.play();
-        if (p && p.then) p.then(function () { if (!self.on) { try { el.pause(); } catch (e) {} } }).catch(function () {});
-      } catch (e) {}
+    const el = this.audioEl;
+    if (!el) return;
+    const self = this;
+    try {
+      el.muted = true;                            // belt and braces: gain is 0 as well
+      this._primedSilent = true;
+      const p = el.play();
+      if (p && p.catch) p.catch(function () {});
+    } catch (e) {}
+    // Don't decode a looping track forever on a phone if the Host is never started. The
+    // auto-start fires about 11s after the tap, so this is far past it; any start after
+    // this point comes from a real tap on Play, which needs no unlock.
+    clearTimeout(this._primeTimer);
+    this._primeTimer = setTimeout(function () {
+      if (self.on) return;
+      self._primedSilent = false;
+      try { el.pause(); el.muted = false; } catch (e) {}
+    }, 45000);
+  };
+
+  // The bed should be playing but isn't — recover it. Called whenever the Host starts or
+  // stops speaking, because that is when a phone is most likely to have taken the audio
+  // session away from a second element, or suspended a backgrounded context.
+  Music.prototype._ensure = function () {
+    if (!this.on) return;
+    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume().catch(function () {});
+    const el = this.audioEl;
+    if (el && el.paused) {
+      try { const p = el.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
     }
   };
 
   Music.prototype.stop = function () {
     this.on = false;
+    clearTimeout(this._primeTimer);
     const self = this, el = this.audioEl;
     this._level(0, 0.9);
     if (el) setTimeout(function () { if (!self.on) { try { el.pause(); } catch (e) {} } }, 1000);
@@ -172,7 +220,9 @@
   // duck(true) → soft presence under speech; duck(false) → swell back between segments.
   Music.prototype.duck = function (d) {
     this._ducked = d;
-    if (!this.on || this.muted) return;
+    if (!this.on) return;
+    this._ensure();                       // the Host just started/stopped: make sure the bed survived it
+    if (this.muted) return;
     this._level(d ? DUCK : BED, d ? DOWN : UP);
   };
 
