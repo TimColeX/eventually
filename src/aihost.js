@@ -200,7 +200,8 @@
   // into the new city's opening (station ident → fresh briefing → live). Checked
   // between sentences in _browserSpeak; if we're in a music gap, bring it forward.
   AIHost.prototype.switchLocation = function (city) {
-    if (!this.speaking && !this._musicHold) return;
+    ealog('switch → ' + city + ' (speaking=' + this.speaking + ' hold=' + this._musicHold + ' clip=' + this._premiumPlaying + ')');
+    if (!this.speaking && !this._musicHold) { ealog('  ignored: host is stopped'); return; }
     this._gen++;                                 // invalidate ANY in-flight generation for the old city (#4)
     clearTimeout(this._replayTimer); this._replayTimer = null;   // cancel any pending continuous-radio replay
     this._identCity = city || this._focusCity || null;   // → the generic transition plays while the new city loads
@@ -292,6 +293,16 @@
 
   // Fade the premium <audio> clip's volume (crossfades in/out). No-op ducking on iOS
   // (volume is read-only there) — playback still switches promptly.
+  // Read-only snapshot for the ?audiodebug=1 panel. Changes nothing.
+  AIHost.prototype.audioState = function () {
+    return {
+      voiceCtx: _vctx ? _vctx.state : 'not created',
+      voiceUnlocked: !!this._audioUnlocked,
+      bufferMode: !!this._vMode,
+      speaking: !!this.speaking, musicHold: !!this._musicHold, clipPlaying: !!this._premiumPlaying
+    };
+  };
+
   // Stop whatever buffer is playing, and make sure its onended can't fire afterwards.
   AIHost.prototype._vStop = function () {
     this._vToken = (this._vToken || 0) + 1;      // invalidate anything still decoding
@@ -326,9 +337,10 @@
         };
         self._vSrc = s; self._vGain = g; self._vDur = buf.duration; self._vStartAt = ctx.currentTime;
         s.start(0);
+        ealog('▶ clip started (ctx ' + ctx.state + ')');
         cbs.start();                              // buffer playback starts deterministically
       } catch (e) { if (token === self._vToken) cbs.fail(e); }
-    }, function (err) { if (token === self._vToken) cbs.fail(err); });
+    }, function (err) { ealog('✖ clip fetch/decode failed: ' + ((err && (err.message || err.name)) || err)); if (token === self._vToken) cbs.fail(err); });
   };
 
   AIHost.prototype._voiceVol = function (to, secs) {
@@ -478,7 +490,8 @@
       // flag unconditionally, so one refused attempt (a timer-driven auto-start, with no
       // gesture behind it) permanently convinced the app it was unlocked and it never
       // tried again for the rest of the session.
-      if (p && p.then) p.then(function () { self._audioUnlocked = true; }, function () {});
+      if (p && p.then) p.then(function () { if (!self._audioUnlocked) ealog('voice element unlocked'); self._audioUnlocked = true; },
+        function (err) { ealog('voice prime refused: ' + ((err && err.name) || err)); });
       else self._audioUnlocked = true;
     } catch (e) {}
   };
@@ -1389,6 +1402,9 @@
 
      Bonus: the gain node gives iOS a real crossfade. HTMLMediaElement.volume is
      READ-ONLY on iOS, so _voiceVol had never faded anything there. */
+  // On-screen audio diagnostics (?audiodebug=1). A no-op unless app.js installed the panel.
+  function ealog(msg) { try { if (window.__eaLog) window.__eaLog('[host] ' + msg); } catch (e) {} }
+
   let _vctx = null, _vBuf = {}, _vOrder = [];
   const V_CACHE_MAX = 24;                       // clips are seconds long; the transitions repeat constantly
   function voiceCtx() {
@@ -1400,7 +1416,8 @@
   }
   // Call inside a gesture. Resuming is not enough on iOS — a source has to actually start.
   function voiceUnlock() {
-    const ctx = voiceCtx(); if (!ctx) return null;
+    const ctx = voiceCtx(); if (!ctx) { ealog('no AudioContext available'); return null; }
+    ealog('voice ctx before unlock: ' + ctx.state);
     if (ctx.state === 'suspended') { try { ctx.resume(); } catch (e) {} }
     try {
       const s = ctx.createBufferSource();

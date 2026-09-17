@@ -3069,12 +3069,86 @@
       (modal && modal.classList.contains('open')) || (authEl && authEl.classList.contains('open')) ||
       (coord && coord.classList.contains('open')));
   }
-  function primeHostAudio() {                      // MUST run inside a tap (mobile autoplay rules)
-    if (autoHost.primed) return;
-    autoHost.primed = true;
+  /* AUDIO UNLOCK — the root cause of the Safari failures since the auto-start (v189).
+     ⚠️ This used to run ONCE, on `pointerdown`. iPhone Safari does NOT treat pointerdown
+     (or touchstart) as a user gesture for audio — WebKit honours only touchend and click.
+     Chrome does accept pointerdown, which is exactly why Android worked and iPhone did not.
+     So on Safari the single attempt ran inside an event Safari rejects, was marked done,
+     and never ran again; the countdown then started the music from a TIMER and Safari
+     refused it. Pause → Play "fixed" it only because that button is a click.
+     Before the auto-start, audio only ever began from that click, so this never showed.
+
+     Now: tried on pointerdown (Chrome), touchend and click (Safari), on EVERY gesture,
+     until both the voice and the music bed report that a play genuinely resolved. The
+     listeners then remove themselves. Each prime guards itself against interrupting
+     anything already playing, so repeating it is harmless. */
+  /* ON-SCREEN AUDIO DIAGNOSTICS — turn on with ?audiodebug=1, off with ?audiodebug=0.
+     Audio problems that only happen on a real iPhone can't be seen from a desktop, and
+     reading Safari's console needs a Mac. This shows, on the phone itself, what the unlock
+     and playback actually did, so a screenshot answers the question.
+     ⚠️ pointer-events: none — it must never intercept a tap, or it would change the very
+     behaviour it is there to observe. Remembered on the device until turned off. */
+  (function installAudioDebug() {
+    let on = false;
+    try {
+      const q = new URLSearchParams(location.search).get('audiodebug');
+      if (q === '1') localStorage.setItem('eventually.audiodebug', '1');
+      if (q === '0') localStorage.removeItem('eventually.audiodebug');
+      on = localStorage.getItem('eventually.audiodebug') === '1';
+    } catch (e) {}
+    if (!on) return;
+    const box = document.createElement('div');
+    box.setAttribute('aria-hidden', 'true');
+    box.style.cssText = 'position:fixed;left:6px;right:6px;top:calc(env(safe-area-inset-top,0px) + 64px);z-index:2147483647;' +
+      'pointer-events:none;background:rgba(20,16,12,.86);color:#f3ead9;font:10.5px/1.35 ui-monospace,Menlo,Consolas,monospace;' +
+      'padding:7px 8px;border-radius:8px;white-space:pre-wrap;word-break:break-word;max-height:46vh;overflow:hidden';
+    const status = document.createElement('div');
+    status.style.cssText = 'color:#f0a24a;margin-bottom:4px';
+    const lines = document.createElement('div');
+    box.appendChild(status); box.appendChild(lines);
+    const log = [];
+    const t0 = Date.now();
+    window.__eaLog = function (msg) {
+      log.push(((Date.now() - t0) / 1000).toFixed(1) + 's ' + msg);
+      while (log.length > 16) log.shift();
+      lines.textContent = log.join('\n');
+    };
+    function paint() {
+      let h = {}, m = {};
+      try { h = aiHost.audioState ? aiHost.audioState() : {}; } catch (e) {}
+      try { m = { ctx: music.ctx ? music.ctx.state : 'none', on: !!music.on, unlocked: !!music._unlocked,
+                  el: music.audioEl ? (music.audioEl.paused ? 'paused' : 'playing') : 'none' }; } catch (e) {}
+      status.textContent = 'AUDIO ' + (window.EVENTUALLY_BUILD || '?') + ' · ' +
+        (/iPhone|iPad|iPod/.test(navigator.userAgent) ? 'iOS' : /Android/.test(navigator.userAgent) ? 'Android' : 'desktop') + '\n' +
+        'voice ctx=' + h.voiceCtx + ' unlocked=' + h.voiceUnlocked + ' buffer=' + h.bufferMode + '\n' +
+        'music ctx=' + m.ctx + ' unlocked=' + m.unlocked + ' on=' + m.on + ' el=' + m.el + '\n' +
+        'host speaking=' + h.speaking + ' hold=' + h.musicHold + ' clip=' + h.clipPlaying;
+    }
+    const mount = function () { if (document.body && !box.parentNode) document.body.appendChild(box); paint(); };
+    if (document.body) mount(); else document.addEventListener('DOMContentLoaded', mount);
+    setInterval(paint, 500);
+    window.__eaLog('diagnostics on — tap anywhere, then watch');
+  })();
+
+  function audioReady() {
+    return !!(aiHost && aiHost._audioUnlocked && music && music._unlocked);
+  }
+  function primeHostAudio(evType) {
+    if (audioReady()) return;
+    try { if (window.__eaLog) window.__eaLog('prime attempt on ' + (evType || '?')); } catch (e) {}
     try { if (aiHost.primeAudio) aiHost.primeAudio(); } catch (e) {}
     try { if (music.prime) music.prime(); } catch (e) {}
   }
+  const UNLOCK_EVENTS = ['pointerdown', 'touchend', 'click'];
+  function onUnlockGesture(e) {
+    if (audioReady()) {
+      UNLOCK_EVENTS.forEach(function (t) { document.removeEventListener(t, onUnlockGesture, true); });
+      try { if (window.__eaLog) window.__eaLog('audio unlocked — gesture listeners removed'); } catch (e2) {}
+      return;
+    }
+    primeHostAudio(e && e.type);
+  }
+  UNLOCK_EVENTS.forEach(function (t) { document.addEventListener(t, onUnlockGesture, true); });
   function scheduleAutoStart() {
     if (!autoHost.armed) return;
     autoHost.armed = false;
@@ -3089,7 +3163,8 @@
   }
   document.addEventListener('pointerdown', function onFirstTaps(e) {
     if (!autoHost.armed) { document.removeEventListener('pointerdown', onFirstTaps, true); return; }
-    primeHostAudio();                              // every path needs audio unlocked in a tap
+    // (Unlocking is no longer done here — see onUnlockGesture above. This listener only
+    // decides WHEN to schedule the auto-start.)
     const t = e.target;
     // The intro, the tour and the Play button each handle themselves.
     if (t && t.closest && (t.closest('#signature') || t.closest('.tour') || t.closest('#ai-host'))) return;

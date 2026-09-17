@@ -19,6 +19,9 @@
 (function (global) {
   'use strict';
 
+  // On-screen audio diagnostics (?audiodebug=1). A no-op unless app.js installed the panel.
+  function ealog(msg) { try { if (global.__eaLog) global.__eaLog('[music] ' + msg); } catch (e) {} }
+
   const BED = 0.18;     // normal bed level (music "swells" up to here)
   // ~39% of the bed, about 8 dB below it — a normal radio duck. It was 0.036 (20%,
   // roughly -29 dB), which measured as present but was inaudible in practice: under a
@@ -37,7 +40,8 @@
     this.ctx = null; this.master = null;
     this.on = false; this._built = false; this._direct = false; this._tween = null;
     this._ducked = false; this.muted = false;
-    this._primedSilent = false;      // playing muted purely to hold the autoplay unlock
+    this._primedSilent = false;      // playing (inaudibly) purely to hold the autoplay unlock
+    this._unlocked = false;          // true only once a play() has genuinely RESOLVED
     this._primeTimer = null;
   }
 
@@ -151,12 +155,14 @@
       // deliberately plays UNMUTED so that it counts as an unlock on Safari; it is
       // inaudible because the master gain is still 0.)
       if (this._primedSilent) { this._primedSilent = false; el.muted = false; try { el.currentTime = 0; } catch (e) {} }
+      const self = this;
       try {
         const p = el.play();
         // A REJECTION HERE IS THE "no music until you press pause then play" BUG. It was
         // swallowed silently, so there was nothing to find. Say so.
-        if (p && p.catch) p.catch(function (err) {
+        if (p && p.then) p.then(function () { self._unlocked = true; ealog('music bed playing'); }, function (err) {
           try { console.warn('[Music] bed refused to play (' + ((err && (err.name || err.message)) || 'unknown') + ') — autoplay unlock lost'); } catch (e) {}
+          ealog('✖ MUSIC BED REFUSED: ' + ((err && err.name) || err));
         });
       } catch (e) {}
       this._mediaSession();
@@ -177,7 +183,9 @@
   // meanwhile — muted, and the master gain is still 0 — so it is safe in direct mode too,
   // which is why that exclusion is gone.
   Music.prototype.prime = function () {
-    if (this.on || !this._build()) return;
+    if (!this._build()) return;
+    // Already playing (started by a tap on Play) — that IS a resolved unlock.
+    if (this.on) { if (this.audioEl && !this.audioEl.paused) this._unlocked = true; return; }
     if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume().catch(function () {});
     const el = this.audioEl;
     if (!el) return;
@@ -191,7 +199,11 @@
       el.muted = false;
       this._primedSilent = true;
       const p = el.play();
-      if (p && p.catch) p.catch(function () {});
+      // Only a play that RESOLVED is an unlock. app.js keeps re-priming on every gesture
+      // until this is true — which is what lets a failed first attempt be retried.
+      if (p && p.then) p.then(function () { self._unlocked = true; ealog('music unlocked'); },
+        function (err) { ealog('music prime refused: ' + ((err && err.name) || err)); });
+      else self._unlocked = true;
     } catch (e) {}
     // Don't decode a looping track forever on a phone if the Host is never started. The
     // auto-start fires about 11s after the tap, so this is far past it; any start after
