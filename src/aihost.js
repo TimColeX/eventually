@@ -390,18 +390,38 @@
       true, { text: seg.text || '', kind: 'greeting', lang: 'en-US' });
   };
 
-  // iOS SAFARI SAFEGUARD: once the voice <audio> element has sat idle (e.g. during the
-  // music bed after a show), iOS can refuse a programmatic play() that fires seconds later
-  // when the async briefing finally arrives — even though the element was unlocked earlier.
-  // Called SYNCHRONOUSLY inside the city-select tap, this keeps the element "user-activated"
-  // by looping the silent clip, so the real briefing clip is allowed to play. Harmless on
-  // other platforms. _audioSpeak clears loop/mute before playing the real clip.
+  // THE UNLOCK. Safari (and iOS especially) will only let an <audio> element play
+  // off-gesture later if it has already played UNMUTED from inside a user gesture.
+  //
+  // ⚠️ This used to play it MUTED — which unlocks nothing at all. Muted playback is
+  // always permitted, so Safari grants no permission for it, and the element stayed
+  // locked. That is why tapping a spike (a real gesture, which calls this) still left
+  // the "hold on…" clip unable to play, and why only pressing Play by hand helped.
+  // Silence here comes from the CONTENT — a 50ms silent WAV on loop — so an unmuted
+  // play is completely inaudible and is a genuine unlock.
+  //
+  // Called on every real gesture (first tap, spike tap, Play) and cheap to repeat: it
+  // stops as soon as a clip is actually playing, so it can never cut one off.
   AIHost.prototype._primeAudio = function () {
     const a = this._audio; if (!a) return;
+    // A real clip already playing IS the permission — never stomp its src. (Compared
+    // against silentClip() itself, which is a memoised blob: URL, so the primer's own
+    // looping silence doesn't count as "something is playing".)
+    if (this._premiumPlaying) return;
+    if (!a.paused && a.src && a.src !== silentClip()) return;
+    const self = this;
     try {
       a.onended = null; a.onerror = null;                        // don't let the primer fire stale handlers
-      a.loop = true; a.muted = true; a.src = silentClip();
-      const p = a.play(); if (p && p.catch) p.catch(function () {});
+      a.loop = true; a.muted = false;                            // silent by content, NOT by mute
+      a.src = silentClip();
+      try { a.volume = 1; } catch (e) {}                         // _audioSpeak fades from here
+      const p = a.play();
+      // Only count it as unlocked when the play actually RESOLVED. The old code set the
+      // flag unconditionally, so one refused attempt (a timer-driven auto-start, with no
+      // gesture behind it) permanently convinced the app it was unlocked and it never
+      // tried again for the rest of the session.
+      if (p && p.then) p.then(function () { self._audioUnlocked = true; }, function () {});
+      else self._audioUnlocked = true;
     } catch (e) {}
   };
 
@@ -949,8 +969,14 @@
       a.onended = function () { self._premiumPlaying = false; self._stopAudioSync(); afterSegment(); };
       a.onerror = fail;
       a.loop = false; a.muted = false;                     // clear any iOS keep-alive primer state
-      a.src = url; a.currentTime = 0;
-      try { a.volume = 0; } catch (e) {}                   // start silent → fade the clip in
+      a.src = url;
+      // ⚠️ `a.currentTime = 0` on a src that hasn't loaded its metadata yet throws
+      // InvalidStateError on Safari. It sat inside the outer try, so the throw landed in
+      // fail() — which, with noFallback, silently skips to the next segment. Every segment
+      // in turn, and the show ends in music with nothing spoken. Assigning src already
+      // resets the position, so this only ever needed to be defensive.
+      try { if (a.currentTime) a.currentTime = 0; } catch (e) {}
+      try { a.volume = 0; } catch (e) {}                   // start silent → fade the clip in (iOS ignores: volume is read-only there)
       const p = a.play();
       const begin = function () {
         self._premiumPlaying = true;
@@ -1072,7 +1098,11 @@
   };
   // Unlock the voice element inside a tap so a later auto-start can play on mobile.
   // Never while the Host is on — it would cut off whatever is playing.
-  AIHost.prototype.primeAudio = function () { if (!this.isActive()) this._primeAudio(); };
+  // Public: called from the app's first-tap handler. The isActive() gate that used to be
+  // here skipped the unlock during the music hold — exactly the state a spike tap arrives
+  // in, and exactly when the next clip needs permission. _primeAudio guards itself against
+  // interrupting a clip, so the gate was only ever losing us unlocks.
+  AIHost.prototype.primeAudio = function () { this._primeAudio(); };
 
   AIHost.prototype.toggle = function () {
     if (this._auto) this._auto.cancel();                 // Play/pause during the countdown takes over
@@ -1167,15 +1197,10 @@
   // or after one has "unlocked" the engine. Our first real line is on a timer, so
   // we prime the engine here with a silent micro-utterance while still in the tap.
   AIHost.prototype._unlockSpeech = function () {
-    // Unlock the premium-voice <audio> element so it can play later off-gesture.
-    if (!this._audioUnlocked && this._audio) {
-      try {
-        this._audio.src = silentClip();
-        const p = this._audio.play();
-        if (p && p.then) p.then(function () {}).catch(function () {});
-        this._audioUnlocked = true;
-      } catch (e) {}
-    }
+    // One implementation of the unlock, not two that disagreed: _primeAudio does the
+    // unmuted silent play, guards a clip that is already playing, and only records
+    // success when the play resolves. Safe to call whether or not we're in a gesture.
+    this._primeAudio();
     if (this._unlocked || !('speechSynthesis' in window)) return;
     try {
       window.speechSynthesis.resume();
