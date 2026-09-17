@@ -1810,9 +1810,32 @@
             '</div>' +
             '<div class="aff-test-out"></div>' +
           '</div>' +
+          '<div class="aff-warn"></div>' +
           '<label class="ad-toggle"><input type="checkbox" class="aff-enabled"' + (p.enabled ? ' checked' : '') + '> Enabled</label> ' +
           '<button class="an-act an-danger aff-del" type="button">Remove</button>';
         d.querySelector('.aff-del').onclick = function () { d.remove(); };
+        // "Enabled" on its own earns nothing, and nothing used to say so — the owner
+        // ticked it, saw clicks reach the right page, and had no way to tell they
+        // were unwrapped. Spell out what is still missing, live.
+        const warn = d.querySelector('.aff-warn');
+        function syncWarn() {
+          const on = d.querySelector('.aff-enabled').checked;
+          const pat = d.querySelector('.aff-pattern').value.trim();
+          const hs = parseHosts(d.querySelector('.aff-hosts').value);
+          const missing = [];
+          if (!pat) missing.push('no URL pattern');
+          else if (pat.indexOf('{url}') === -1 && pat.indexOf('{raw}') === -1) missing.push('the pattern has no {url} placeholder');
+          if (!hs.length) missing.push('no covered domains');
+          warn.innerHTML = (on && missing.length)
+            ? '<div class="aff-test-out is-warn">⚠ Enabled, but every click still goes out <b>unwrapped</b> — ' +
+              missing.join(' and ') + '. Nothing is being tracked or earned.</div>'
+            : '';
+        }
+        ['.aff-enabled', '.aff-pattern', '.aff-hosts'].forEach(function (s) {
+          d.querySelector(s).addEventListener('input', syncWarn);
+          d.querySelector(s).addEventListener('change', syncWarn);
+        });
+        syncWarn();
         d.querySelector('.aff-test').onclick = function () {
           const pattern = d.querySelector('.aff-pattern').value.trim();
           const sample = d.querySelector('.aff-sample').value.trim();
@@ -1851,14 +1874,18 @@
         list.querySelectorAll('.aff-row').forEach(function (d) {
           const key = d.querySelector('.aff-key').value.trim().toLowerCase();
           if (!key) return;
-          out[key] = {
+          // Merge onto what was loaded rather than replacing it. A save used to write
+          // ONLY the fields this page knows about, so an older cached copy of the admin
+          // silently DELETED any newer field — which is exactly how `hosts` (seeded by
+          // 87_affiliate_hosts.sql) vanished the first time the owner ticked Enabled.
+          out[key] = Object.assign({}, providers[key] || {}, {
             name:       d.querySelector('.aff-name').value.trim() || key,
             enabled:    d.querySelector('.aff-enabled').checked,
             urlPattern: d.querySelector('.aff-pattern').value.trim(),
             hosts:      parseHosts(d.querySelector('.aff-hosts').value),
             notes:      d.querySelector('.aff-notes').value.trim(),
             status:     d.querySelector('.aff-status').value.trim()
-          };
+          });
         });
         const btn = document.getElementById('aff-save'); btn.disabled = true;
         patchConfig({ affiliateProviders: out }).then(function (r) {
