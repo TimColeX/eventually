@@ -1769,6 +1769,21 @@
         if (!pattern || (pattern.indexOf('{url}') === -1 && pattern.indexOf('{raw}') === -1)) return null;
         return pattern.replace(/\{url\}/g, encodeURIComponent(url)).replace(/\{raw\}/g, url);
       }
+      // Same normalising the `go` function does, so what you Test here is what a
+      // real click gets: a pasted URL collapses to its host, "www." and a leading
+      // dot are dropped, and an entry covers its own subdomains.
+      function hostsToText(h) { return (Array.isArray(h) ? h : String(h || '').split(/[\s,;]+/)).filter(Boolean).join(', '); }
+      function parseHosts(raw) {
+        return (Array.isArray(raw) ? raw.map(String) : String(raw || '').split(/[\s,;]+/))
+          .map(function (h) { return h.trim().toLowerCase().replace(/^[a-z]+:\/\//, '').split('/')[0].replace(/^\.+/, '').replace(/^www\./, ''); })
+          .filter(Boolean);
+      }
+      function hostAllowed(url, hosts) {
+        if (!hosts.length) return false;
+        let host;
+        try { host = new URL(url).hostname.toLowerCase().replace(/^www\./, ''); } catch (e) { return false; }
+        return hosts.some(function (h) { return host === h || host.endsWith('.' + h); });
+      }
       function row(key, p) {
         p = p || {};
         const d = document.createElement('div');
@@ -1780,6 +1795,13 @@
             '<div class="ad-field"><label>Status</label><input class="aff-status" value="' + esc(p.status || '') + '" placeholder="e.g. Live / Pending"></div>' +
           '</div>' +
           '<div class="ad-field"><label>Affiliate URL pattern</label><input class="aff-pattern" value="' + esc(p.urlPattern || '') + '" placeholder="https://track.net/deep?url={url}&aid=123"></div>' +
+          // The domains the programme is actually approved for. "Provider" is where
+          // the EVENT came from, not where the TICKET is sold: only 21.9% of our
+          // Ticketmaster-sourced events link to ticketmaster.com.
+          '<div class="ad-field"><label>Covered domains ' +
+            '<span class="ad-muted">— comma separated. The pattern is applied ONLY to these. ' +
+            'Subdomains are included. Leave empty and the pattern applies to nothing.</span></label>' +
+            '<input class="aff-hosts" value="' + esc(hostsToText(p.hosts)) + '" placeholder="ticketmaster.com, ticketmaster.ca"></div>' +
           '<div class="ad-field"><label>Notes</label><input class="aff-notes" value="' + esc(p.notes || '') + '" placeholder="Network, account id, terms…"></div>' +
           '<div class="ad-field"><label>Test the pattern <span class="ad-muted">— paste a sample ticket link, then Test</span></label>' +
             '<div class="ad-row" style="align-items:flex-end;gap:8px">' +
@@ -1795,8 +1817,19 @@
           const pattern = d.querySelector('.aff-pattern').value.trim();
           const sample = d.querySelector('.aff-sample').value.trim();
           const enabled = d.querySelector('.aff-enabled').checked;
+          const hosts = parseHosts(d.querySelector('.aff-hosts').value);
           const out = d.querySelector('.aff-test-out');
           if (!sample) { out.className = 'aff-test-out is-warn'; out.textContent = 'Enter a sample ticket link first.'; return; }
+          // Check coverage BEFORE the pattern: a link to a domain the programme
+          // doesn't cover never reaches the pattern on a live click either.
+          if (!hostAllowed(sample, hosts)) {
+            out.className = 'aff-test-out is-plain';
+            out.innerHTML = 'Not a covered domain — the user goes straight to:<br><b>' + esc(sample) + '</b>' +
+              (hosts.length
+                ? '<br><span class="ad-muted">Covered: ' + esc(hosts.join(', ')) + '</span>'
+                : '<br><span class="is-warn">⚠ No covered domains listed, so this pattern applies to nothing.</span>');
+            return;
+          }
           const applied = applyPattern(pattern, sample);
           if (applied === null) {
             out.className = 'aff-test-out is-plain';
@@ -1822,6 +1855,7 @@
             name:       d.querySelector('.aff-name').value.trim() || key,
             enabled:    d.querySelector('.aff-enabled').checked,
             urlPattern: d.querySelector('.aff-pattern').value.trim(),
+            hosts:      parseHosts(d.querySelector('.aff-hosts').value),
             notes:      d.querySelector('.aff-notes').value.trim(),
             status:     d.querySelector('.aff-status').value.trim()
           };
