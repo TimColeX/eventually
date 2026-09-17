@@ -935,7 +935,16 @@
     if (this.briefingPlaying) return;                                  // never play premium over the briefing
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();  // enforce one voice: silence browser TTS
     this.onSpeakStart();                                               // duck the music now
-    const fail = function () { self._premiumPlaying = false; self._stopAudioSync(); if (noFallback) { if (afterSegment) afterSegment(); } else self._browserSpeak(text, afterSegment); };
+    // A clip that can't play is SILENT by design — we degrade to the music bed, never the
+    // device voice. But it was silent to us too: a browser refusing play() (blocked
+    // autoplay on a phone) skipped every segment in turn, so the show ended in music with
+    // no briefing spoken and nothing anywhere to say why. One warning line makes that
+    // diagnosable on a real device without changing the behaviour.
+    const fail = function (err) {
+      try { console.warn('[AIHost] clip did not play (' + ((err && (err.name || err.message)) || 'unknown') + '): ' + url); } catch (e) {}
+      self._premiumPlaying = false; self._stopAudioSync();
+      if (noFallback) { if (afterSegment) afterSegment(); } else self._browserSpeak(text, afterSegment);
+    };
     try {
       a.onended = function () { self._premiumPlaying = false; self._stopAudioSync(); afterSegment(); };
       a.onerror = fail;

@@ -187,12 +187,14 @@
     let lastX = 0, lastY = 0, moved = 0;
 
     function down(e) {
+      const p = point(e); if (!p) return;
       self.dragging = true; moved = 0;
-      const p = point(e); lastX = p.x; lastY = p.y;
+      lastX = p.x; lastY = p.y;
       cv.classList.add('grabbing');
     }
     function move(e) {
       const p = point(e);
+      if (!p) return;
       if (self.dragging) {
         const dx = p.x - lastX, dy = p.y - lastY;
         self.rotY += dx * 0.005;
@@ -204,13 +206,25 @@
       }
     }
     function up(e) {
-      if (self.dragging && moved < 6) { const p = point(e); self._clickTest(p.x, p.y); }
-      self.dragging = false;
-      cv.classList.remove('grabbing');
+      // try/finally: a throw in here used to leave `dragging` true forever, so every
+      // later pointer move was treated as a drag of the globe.
+      try {
+        if (self.dragging && moved < 6) { const p = point(e); if (p) self._clickTest(p.x, p.y); }
+      } finally {
+        self.dragging = false;
+        cv.classList.remove('grabbing');
+      }
     }
+    // ⚠️ On a TOUCHEND the `touches` list is EMPTY — the finger has gone. It is still a
+    // TouchList, so it is truthy, and `e.touches[0]` is undefined: reading `.clientX` off
+    // it threw, which meant a tap on a spike never reached _clickTest at all. Taps only
+    // worked when the browser happened to follow up with emulated mouse events, which is
+    // why selecting a city on a phone worked sometimes and did nothing the rest of the
+    // time. The lifted finger is in `changedTouches`.
     function point(e) {
       const r = cv.getBoundingClientRect();
-      const t = e.touches ? e.touches[0] : e;
+      const t = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || e;
+      if (!t || t.clientX == null) return null;
       return { x: t.clientX - r.left, y: t.clientY - r.top };
     }
 
@@ -219,7 +233,16 @@
     window.addEventListener('mouseup', up);
     cv.addEventListener('touchstart', function (e) { down(e); }, { passive: true });
     cv.addEventListener('touchmove', function (e) { move(e); }, { passive: true });
-    cv.addEventListener('touchend', up);
+    // Now that touchend resolves the tap itself, stop the browser ALSO delivering it as
+    // an emulated mouse sequence — that would open the spike twice and bump the host's
+    // generation counter twice, cancelling the briefing it had just started fetching.
+    // touchend is a user-activation event in its own right, so the synchronous
+    // _primeAudio() inside switchLocation still counts as happening "inside the tap".
+    cv.addEventListener('touchend', function (e) {
+      if (e.cancelable) e.preventDefault();
+      up(e);
+    });
+    cv.addEventListener('touchcancel', function () { self.dragging = false; cv.classList.remove('grabbing'); });
     cv.addEventListener('wheel', function (e) {
       e.preventDefault();
       self.zoomBy(e.deltaY < 0 ? 1.12 : 0.89);
