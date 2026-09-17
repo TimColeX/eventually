@@ -146,8 +146,10 @@
     if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume().catch(function () {});
     const el = this.audioEl;
     if (el) {
-      // Coming off the silent primer: unmute and rewind, so the bed opens at the top of
-      // the track rather than wherever the muted keep-alive had reached.
+      // Coming off the primer: rewind so the bed opens at the top of the track rather
+      // than wherever the silent keep-alive had reached. (Nothing to unmute — the primer
+      // deliberately plays UNMUTED so that it counts as an unlock on Safari; it is
+      // inaudible because the master gain is still 0.)
       if (this._primedSilent) { this._primedSilent = false; el.muted = false; try { el.currentTime = 0; } catch (e) {} }
       try {
         const p = el.play();
@@ -181,7 +183,12 @@
     if (!el) return;
     const self = this;
     try {
-      el.muted = true;                            // belt and braces: gain is 0 as well
+      // ⚠️ NOT muted. The same lesson as the Host's voice element: Safari grants an
+      // element no permission for a MUTED play, because muted playback needed none. It
+      // has to be an UNMUTED play inside the gesture to count. This is inaudible anyway —
+      // the master gain is 0 until start() ramps it up, and in direct mode (no Web Audio)
+      // the element's own volume is 0 from _build.
+      el.muted = false;
       this._primedSilent = true;
       const p = el.play();
       if (p && p.catch) p.catch(function () {});
@@ -193,7 +200,7 @@
     this._primeTimer = setTimeout(function () {
       if (self.on) return;
       self._primedSilent = false;
-      try { el.pause(); el.muted = false; } catch (e) {}
+      try { el.pause(); } catch (e) {}
     }, 45000);
   };
 

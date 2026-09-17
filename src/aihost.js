@@ -162,6 +162,7 @@
     // Generation token: a mid-play location switch supersedes this fetch/speech.
     const gen = (this._briefingGen = (this._briefingGen || 0) + 1);
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();   // exclusive audio
+    this._vStop();
     try { this._audio.pause(); } catch (e) {}
     clearInterval(this._ampTimer);
     this.briefingPlaying = true;
@@ -229,6 +230,7 @@
       this._voiceVol(0, 0.5);
       clearTimeout(this._switchFade);
       this._switchFade = setTimeout(function () {
+        self._vStop();                                   // buffer path: pausing the element won't stop it
         try { self._audio.pause(); } catch (e) {}
         self._premiumPlaying = false; self._applySwitch();
       }, 520);
@@ -290,7 +292,56 @@
 
   // Fade the premium <audio> clip's volume (crossfades in/out). No-op ducking on iOS
   // (volume is read-only there) — playback still switches promptly.
+  // Stop whatever buffer is playing, and make sure its onended can't fire afterwards.
+  AIHost.prototype._vStop = function () {
+    this._vToken = (this._vToken || 0) + 1;      // invalidate anything still decoding
+    const s = this._vSrc; this._vSrc = null;
+    if (s) {
+      try { s.onended = null; } catch (e) {}
+      try { s.stop(0); } catch (e) {}
+      try { s.disconnect(); } catch (e) {}
+    }
+    if (this._vGain) { try { this._vGain.disconnect(); } catch (e) {} this._vGain = null; }
+    this._vDur = 0;
+  };
+
+  // Play one clip as a decoded buffer. cbs: { start, end, fail }.
+  AIHost.prototype._vPlay = function (url, cbs) {
+    const ctx = voiceCtx();
+    if (!ctx) { cbs.fail(new Error('no-audio-context')); return; }
+    if (ctx.state === 'suspended') { try { ctx.resume(); } catch (e) {} }
+    const self = this;
+    this._vStop();                                // also bumps the token
+    const token = this._vToken;
+    voiceBuffer(url).then(function (buf) {
+      if (token !== self._vToken) return;         // a newer clip (or a stop) superseded this
+      try {
+        const g = ctx.createGain(); g.gain.value = 0;      // start silent → _voiceVol fades in
+        const s = ctx.createBufferSource();
+        s.buffer = buf; s.connect(g); g.connect(ctx.destination);
+        s.onended = function () {
+          if (token !== self._vToken) return;
+          self._vSrc = null;
+          cbs.end();
+        };
+        self._vSrc = s; self._vGain = g; self._vDur = buf.duration; self._vStartAt = ctx.currentTime;
+        s.start(0);
+        cbs.start();                              // buffer playback starts deterministically
+      } catch (e) { if (token === self._vToken) cbs.fail(e); }
+    }, function (err) { if (token === self._vToken) cbs.fail(err); });
+  };
+
   AIHost.prototype._voiceVol = function (to, secs) {
+    // Web Audio mode: ramp the gain node. This is the only path that fades on iOS.
+    if (this._vMode && this._vGain) {
+      const ctx = voiceCtx();
+      try {
+        const g = this._vGain.gain, n = ctx.currentTime;
+        g.cancelScheduledValues(n); g.setValueAtTime(g.value, n);
+        g.linearRampToValueAtTime(to, n + Math.max(0.01, secs));
+      } catch (e) {}
+      return;
+    }
     const a = this._audio; if (!a) return;
     clearInterval(this._voiceTween);
     const from = (typeof a.volume === 'number') ? a.volume : 1;
@@ -403,6 +454,13 @@
   // Called on every real gesture (first tap, spike tap, Play) and cheap to repeat: it
   // stops as soon as a clip is actually playing, so it can never cut one off.
   AIHost.prototype._primeAudio = function () {
+    // THE IMPORTANT ONE, and it runs FIRST and unconditionally: bring the AudioContext up
+    // inside this gesture. Every clip after this plays as a buffer through it, needing no
+    // gesture of its own — which is what finally makes the timer-driven auto-start and the
+    // promise-driven city transition work on Safari. Unconditional because iOS can suspend
+    // a context at any time (backgrounding, a phone call), and every gesture is a chance
+    // to bring it back.
+    voiceUnlock();
     const a = this._audio; if (!a) return;
     // A real clip already playing IS the permission — never stomp its src. (Compared
     // against silentClip() itself, which is a memoised blob: URL, so the primer's own
@@ -529,6 +587,7 @@
   // Approximate (assumes an even speaking rate) but always forward and always tied to
   // what is actually being spoken.
   AIHost.prototype._stopAudioSync = function () {
+    clearInterval(this._vSyncTimer); this._vSyncTimer = null;
     if (this._audio && this._audioSyncFn) {
       try { this._audio.removeEventListener('timeupdate', this._audioSyncFn); } catch (e) {}
     }
@@ -537,6 +596,18 @@
   AIHost.prototype._startAudioSync = function () {
     this._stopAudioSync();
     const self = this, a = this._audio;
+    // Web Audio mode has no timeupdate event — the context clock is the source of truth,
+    // and it is steadier than timeupdate ever was.
+    if (this._vMode) {
+      const ctx = voiceCtx(); if (!ctx) return;
+      this._vSyncTimer = setInterval(function () {
+        if (!self._words || !self._words.length || !self._runEl || !self._vDur) return;
+        self._synced = true; self._stopMarquee();
+        const p = Math.max(0, Math.min(1, (ctx.currentTime - self._vStartAt) / self._vDur));
+        self._setActiveWord(Math.min(self._words.length - 1, Math.floor(p * self._words.length)));
+      }, 120);
+      return;
+    }
     if (!a) return;
     this._audioSyncFn = function () {
       if (!self._words || !self._words.length || !self._runEl) return;
@@ -965,8 +1036,47 @@
       self._premiumPlaying = false; self._stopAudioSync();
       if (noFallback) { if (afterSegment) afterSegment(); } else self._browserSpeak(text, afterSegment);
     };
+    const begin = function () {
+      self._premiumPlaying = true;
+      // Show this clip's caption AT PLAYBACK START. Setting it before play() meant
+      // the text swapped while the previous clip was still audible (and while this
+      // one was still buffering) — the caption led the audio by up to seconds.
+      if (caption) self._showCaption(caption, true);
+      self._startAudioSync();                            // read-along paced by the audio clock
+      self._voiceVol(1, 0.35);                           // crossfade the clip in
+      self.onSpeakStart();                               // duck music under voice
+      clearInterval(self._ampTimer);
+      self._ampTimer = setInterval(function () { self.amp = 0.5 + Math.random() * 0.4; }, 180);
+    };
+    const done = function () { self._premiumPlaying = false; self._stopAudioSync(); afterSegment(); };
+
+    // PREFERRED PATH: a decoded buffer through the AudioContext. No per-clip permission,
+    // so it plays from a timer or a promise — which is every path the Host actually uses.
+    // Falls back to the element if there is no AudioContext, or if the fetch/decode fails
+    // (a cross-origin or codec problem), so nothing is worse off than before.
+    if (voiceCtx()) {
+      this._vMode = true;
+      this._vPlay(url, {
+        start: begin,
+        end: done,
+        fail: function (err) {
+          try { console.warn('[AIHost] buffer path failed, falling back to <audio>: ' + ((err && (err.name || err.message)) || 'unknown')); } catch (e) {}
+          self._vMode = false;
+          self._elementSpeak(url, begin, done, fail);
+        }
+      });
+      return;
+    }
+    this._vMode = false;
+    this._elementSpeak(url, begin, done, fail);
+  };
+
+  // The original <audio>-element playback, kept as the fallback.
+  AIHost.prototype._elementSpeak = function (url, begin, done, fail) {
+    const self = this, a = this._audio;
+    if (!a) { fail(new Error('no-audio-element')); return; }
     try {
-      a.onended = function () { self._premiumPlaying = false; self._stopAudioSync(); afterSegment(); };
+      a.onended = function () { done(); };
       a.onerror = fail;
       a.loop = false; a.muted = false;                     // clear any iOS keep-alive primer state
       a.src = url;
@@ -978,21 +1088,9 @@
       try { if (a.currentTime) a.currentTime = 0; } catch (e) {}
       try { a.volume = 0; } catch (e) {}                   // start silent → fade the clip in (iOS ignores: volume is read-only there)
       const p = a.play();
-      const begin = function () {
-        self._premiumPlaying = true;
-        // Show this clip's caption AT PLAYBACK START. Setting it before play() meant
-        // the text swapped while the previous clip was still audible (and while this
-        // one was still buffering) — the caption led the audio by up to seconds.
-        if (caption) self._showCaption(caption, true);
-        self._startAudioSync();                            // read-along paced by the audio clock
-        self._voiceVol(1, 0.35);                           // crossfade the clip in
-        self.onSpeakStart();                               // duck music under voice
-        clearInterval(self._ampTimer);
-        self._ampTimer = setInterval(function () { self.amp = 0.5 + Math.random() * 0.4; }, 180);
-      };
       if (p && p.then) p.then(begin).catch(fail);
       else begin();
-    } catch (e) { fail(); }
+    } catch (e) { fail(e); }
   };
 
   // Free voice: browser SpeechSynthesis (or a timed simulation if unavailable).
@@ -1006,6 +1104,7 @@
     // so guarding it here guarantees the device voice can't surface anywhere. (Set
     // this._allowBrowserVoice = true to restore the legacy behaviour.)
     if (!this._allowBrowserVoice) { this._endFreeIntro(); return; }
+    this._vStop();
     try { this._audio.pause(); } catch (e) {}   // enforce one voice: silence the premium element first
     this.onSpeakStart();                         // duck the music NOW (don't wait for onstart, which is flaky)
     if (!('speechSynthesis' in window)) {
@@ -1226,6 +1325,7 @@
     this.icPlay.style.display = '';
     this.icPause.style.display = 'none';
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    this._vStop();
     try { this._audio.pause(); } catch (e) {}
     clearInterval(this._ampTimer); clearInterval(this._voiceTween);
     clearTimeout(this._introTimer); clearTimeout(this._gapTimer); clearTimeout(this._readTimer); clearTimeout(this._switchFade);
@@ -1267,6 +1367,67 @@
       ctx.fill();
     }
   };
+
+  /* ---------- VOICE OUTPUT THROUGH WEB AUDIO ----------
+     WHY THIS EXISTS (the root cause of three rounds of Safari patching).
+     Safari/iOS grants permission to play PER ELEMENT AND PER LOADED RESOURCE, earned
+     inside a user gesture. The Host swaps `src` on one <audio> element for every clip and
+     plays it off-gesture — the auto-start countdown fires from a TIMER, and a city's
+     transition line plays from inside a promise. On iOS that is refused no matter how
+     carefully the element was primed beforehand: priming unlocks the silent clip's load,
+     then we replace it. Chrome's policy is page-level (any interaction permits media),
+     which is exactly why Android worked and iPhone did not.
+
+     A running AudioContext has no such rule. Resume it once inside any gesture and every
+     AudioBufferSourceNode afterwards plays with no gesture and no per-clip permission.
+     So clips are fetched, decoded once, cached, and played as buffers.
+
+     ⚠️ The looping silent <audio> element in _primeAudio MUST STAY. On iOS, Web Audio
+     alone is silenced by the physical ringer switch; an <audio> element holds the
+     "playback" audio session that ignores it. The element is now the audio session, and
+     Web Audio is the output.
+
+     Bonus: the gain node gives iOS a real crossfade. HTMLMediaElement.volume is
+     READ-ONLY on iOS, so _voiceVol had never faded anything there. */
+  let _vctx = null, _vBuf = {}, _vOrder = [];
+  const V_CACHE_MAX = 24;                       // clips are seconds long; the transitions repeat constantly
+  function voiceCtx() {
+    if (_vctx) return _vctx;
+    const C = window.AudioContext || window.webkitAudioContext;
+    if (!C) return null;
+    try { _vctx = new C(); } catch (e) { _vctx = null; }
+    return _vctx;
+  }
+  // Call inside a gesture. Resuming is not enough on iOS — a source has to actually start.
+  function voiceUnlock() {
+    const ctx = voiceCtx(); if (!ctx) return null;
+    if (ctx.state === 'suspended') { try { ctx.resume(); } catch (e) {} }
+    try {
+      const s = ctx.createBufferSource();
+      s.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
+      s.connect(ctx.destination); s.start(0);
+    } catch (e) {}
+    return ctx;
+  }
+  function voiceBuffer(url) {
+    if (_vBuf[url]) return _vBuf[url];
+    const ctx = voiceCtx();
+    if (!ctx) return Promise.reject(new Error('no-audio-context'));
+    const p = fetch(url).then(function (r) {
+      if (!r.ok) throw new Error('clip http ' + r.status);
+      return r.arrayBuffer();
+    }).then(function (ab) {
+      return new Promise(function (res, rej) {
+        // Older Safari only has the callback form; newer returns a promise. Support both.
+        const d = ctx.decodeAudioData(ab, res, rej);
+        if (d && d.then) d.then(res, rej);
+      });
+    });
+    _vBuf[url] = p; _vOrder.push(url);
+    while (_vOrder.length > V_CACHE_MAX) { delete _vBuf[_vOrder.shift()]; }
+    p.catch(function () { delete _vBuf[url]; });      // never cache a failure
+    return p;
+  }
 
   // A tiny silent WAV (object URL) used once inside the play gesture to unlock the
   // premium-voice <audio> element for later off-gesture playback on mobile.
