@@ -400,6 +400,7 @@ body {
   font-size: 11.5px; padding: 7px 12px; white-space: nowrap;
 }
 .ah-home:hover { border-color: var(--clay); color: var(--clay); }
+.ah-home-svg { display: none; }                   /* the icon is the phone's version only */
 /* Music mute toggle (music only — narration keeps playing).
    Sized to match .ah-play exactly (42px) so the bar reads as a pair of equal controls. */
 .ah-mute { flex: none; width: 42px; height: 42px; padding: 0; display: grid; place-items: center; cursor: pointer;
@@ -415,6 +416,20 @@ body {
   .ah-briefing, .ah-home { font-size: 11px; padding: 6px 10px; }
   /* .ah-mute keeps 42px here on purpose — .ah-play has no mobile override, so shrinking
      one of the pair is what made them mismatched. */
+
+  /* PHONE: ONE TIDY ROW (owner's choice, 2026-09-18). On a 375px screen the play and
+     speaker buttons plus a text "↩ My area" took ~170px, so "EVENTUALLY HOST ● LIVE ·
+     ATLANTIC CITY" wrapped onto two lines and squeezed the transcript to a sliver.
+       • the label drops "eventually Host" — "● LIVE · City" says enough here;
+       • a long city ends in "…" on one line instead of wrapping (owner's choice);
+       • "My area" becomes a round home icon the size of the speaker button.
+     The transcript line gets everything that frees up. Desktop is untouched. */
+  .ai-host { gap: 10px; }
+  .ah-brand { display: none; }
+  .ah-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ah-home { width: 42px; height: 42px; padding: 0; border-radius: 50%; display: grid; place-items: center; }
+  .ah-home-arrow, .ah-home-txt { display: none; }
+  .ah-home-svg { display: block; width: 19px; height: 19px; fill: currentColor; }
 }
 
 /* ---------- auth modal ---------- */

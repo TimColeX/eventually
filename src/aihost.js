@@ -84,11 +84,19 @@
         '<span class="ah-cue" style="display:none" aria-hidden="true"></span>' +
       '</button>' +
       '<div class="ah-body">' +
-        '<div class="ah-label">eventually Host <span class="ah-live">● LIVE</span><span class="ah-focus"></span></div>' +
+        // .ah-brand is its own span so a phone can drop it (styles: max-width 560px) —
+        // "● LIVE · City" is all a narrow bar has room for. Desktop renders exactly as before.
+        '<div class="ah-label"><span class="ah-brand">eventually Host </span><span class="ah-live">● LIVE</span><span class="ah-focus"></span></div>' +
         '<div class="ah-caption"><span class="ah-spon" style="display:none">SPONSORED</span>' +
         '<span class="ah-text"></span></div>' +
       '</div>' +
-      '<button class="ah-home" style="display:none" aria-label="Back to my area">↩ My area</button>' +
+      // Desktop shows "↩ My area" as before; a phone shows only the home icon in a round
+      // button the size of the speaker button, which frees the width the label needs.
+      '<button class="ah-home" style="display:none" aria-label="Back to my area" title="Back to my area">' +
+        '<span class="ah-home-arrow" aria-hidden="true">↩</span>' +
+        '<svg class="ah-home-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2 2.8 11a1 1 0 0 0 1.3 1.5L5 11.8V20a1 1 0 0 0 1 1h4.2a.8.8 0 0 0 .8-.8v-4.4h2v4.4a.8.8 0 0 0 .8.8H18a1 1 0 0 0 1-1v-8.2l.9.7A1 1 0 0 0 21.2 11z"/></svg>' +
+        '<span class="ah-home-txt"> My area</span>' +
+      '</button>' +
       '<button class="ah-mute" aria-label="Mute music" title="Mute music">' +
         '<svg viewBox="0 0 24 24" class="ic-vol"><path d="M3 10v4h4l5 4V6L7 10H3z"/><path d="M15.5 8.5a4.5 4.5 0 010 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>' +
         '<svg viewBox="0 0 24 24" class="ic-mute" style="display:none"><path d="M3 10v4h4l5 4V6L7 10H3z"/><path d="M15 9.5l5 5M20 9.5l-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>' +
@@ -129,8 +137,8 @@
     const b = this.el.querySelector('.ah-home');
     if (!b) return;
     b.style.display = exploring ? '' : 'none';
-    b.textContent = '↩ My area';
-    if (homeCity) b.title = 'Back to ' + homeCity;
+    // (This used to reset b.textContent to '↩ My area' — which would now wipe the icon.)
+    if (homeCity) { b.title = 'Back to ' + homeCity; b.setAttribute('aria-label', 'Back to ' + homeCity); }
   };
 
   // The free show's OPENING: a short spoken intro (the narrator's greeting — or, on
