@@ -199,7 +199,10 @@
   // The focus city changed WHILE LISTENING. Finish the current sentence, then flow
   // into the new city's opening (station ident → fresh briefing → live). Checked
   // between sentences in _browserSpeak; if we're in a music gap, bring it forward.
-  AIHost.prototype.switchLocation = function (city) {
+  // opts.dwell — the switch came from tapping a spike on the globe (see loadDwell).
+  AIHost.prototype.switchLocation = function (city, opts) {
+    this._switchDwell = !!(opts && opts.dwell);
+    this._switchAt = Date.now();                   // the dwell is measured from the tap itself
     ealog('switch → ' + city + ' (speaking=' + this.speaking + ' hold=' + this._musicHold + ' clip=' + this._premiumPlaying + ')');
     if (!this.speaking && !this._musicHold) { ealog('  ignored: host is stopped'); return; }
     this._gen++;                                 // invalidate ANY in-flight generation for the old city (#4)
@@ -237,6 +240,18 @@
       }, 520);
       return;
     }
+    // ⚠️ NOTHING AUDIBLE IS PLAYING → SWITCH NOW. This is the gap between one switch and its
+    // "hold on" clip actually starting — the head start, choosing the line, decoding it:
+    // half a second to a second and a half. A second spike tapped inside that gap matched
+    // none of the cases above and fell through to `_switchPending`, which only the DEVICE
+    // voice ever consumes (between its sentences) — and the device voice is disabled by
+    // design. So nothing released it: no transition line, no briefing, the host silent until
+    // someone pressed Pause → Play. Found 2026-09-18 tapping two spikes 0.8s apart; earlier
+    // tests had spaced taps 3–4s apart and never landed in the gap.
+    // Switching straight away is safe: `_gen` has already moved on, so the previous city's
+    // in-flight fetch and line are abandoned at their next stale() check, and its clip, if it
+    // starts at all, is stopped by the new line's _vStop.
+    if (!this._allowBrowserVoice) { this._applySwitch(); return; }
     this._switchPending = true;                 // device: finish the current sentence, then switch
     if (this._gapTimer) {                        // in a music gap → apply soon
       clearTimeout(this._gapTimer);
@@ -661,6 +676,13 @@
     this._gapTimer = setTimeout(function () { if (self.speaking) self._rotate(); }, this._jitter(this.GAP, 2500));
   };
 
+  // How long someone must stay on a tapped city before we pay to WRITE its briefing.
+  // Long enough to let a burst of taps across the globe go by without buying anything
+  // (people hopping tap about once a second), short enough that a listener who has
+  // settled barely notices it. The cached "hold on…" line plays through it.
+  // A city that already has a briefing ignores this entirely and plays at once.
+  const DWELL_MS = 2000;
+
   AIHost.prototype._rotate = function () {
     if (!this.getLine) return;
     if (this.briefingPlaying) return;          // the browser-voice briefing owns the audio right now
@@ -735,6 +757,39 @@
           pending.p.then(function () { pending.ready = true; }, function () { pending.ready = true; });
           return pending;
         };
+        /* A SPIKE TAP: serve a briefing that already exists at once, but only WRITE one if
+           the listener stays on this city. People hop across the globe — tap, tap, tap — and
+           every one of those taps used to buy a Claude script and a Fish synthesis that nobody
+           heard, because cancelling only happened on the phone and the server finished anyway.
+           Two things run from the moment of the tap, independently:
+             • a PEEK (server: `peek:true`) that returns the briefing only if it is already
+               made, and never makes one;
+             • a DWELL_MS timer. If no briefing has arrived when it fires and the listener is
+               still here, the real request goes out.
+           They race on purpose. A first peek of a city can take several seconds, and waiting
+           for it to answer "not yet" before asking for real would make cold cities slower.
+           A real request that overlaps a late peek costs nothing: it finds the same cache.
+           The cached "hold on…" line covers the wait, as it always has. */
+        const loadDwell = function (tapAt) {
+          const pending = { p: null, ready: false };
+          let settled = false, realStarted = false, resolveP;
+          pending.p = new Promise(function (res) { resolveP = res; });
+          const finish = function (v) {
+            if (settled) return;
+            settled = true; clearTimeout(timer);
+            pending.ready = true; resolveP(v);
+          };
+          const startReal = function () {
+            if (settled || realStarted || stale()) return;       // hit already in, or they moved on → spend nothing
+            realStarted = true;
+            Promise.resolve(self.getBriefing(true)).then(finish, function () { finish(null); });
+          };
+          const timer = setTimeout(startReal, Math.max(0, tapAt + DWELL_MS - Date.now()));
+          Promise.resolve(self.getBriefing(true, { peek: true })).then(function (hit) {
+            if (hit) finish(hit);                                // already made → play it now
+          }, function () {});
+          return pending;
+        };
         // CITY TRANSITION: when a city was just picked, play one of the generic cached bridge
         // lines ("Let me pull up what's happening right there.") WHILE that city's briefing
         // loads. The line exists to cover the wait, so the fetch starts FIRST — it used to
@@ -748,8 +803,12 @@
           if (stale()) return;
           const switched = !!self._identCity, bridge = switched || self._bridgeNext;
           const city = self._identCity || self._focusCity || null;
-          self._identCity = null; self._bridgeNext = false;
-          const pending = load(switched);                     // a mid-listen switch gets the fast headline tier
+          // Only a SPIKE TAP dwells. A search, "My area", or a city button in the panel is a
+          // deliberate choice, so those ask for the briefing straight away as before.
+          const dwell = switched && self._switchDwell;
+          self._identCity = null; self._bridgeNext = false; self._switchDwell = false;
+          const pending = dwell ? loadDwell(self._switchAt || Date.now())
+            : load(switched);                                 // a mid-listen switch gets the fast headline tier
           if (!bridge) { playBriefing(pending); return; }
           self._loadingCity = city;                           // loading caption: "Getting <city>…"
           const cap = function (t) { return { text: t.text, kind: 'greeting', lang: 'en-US' }; };

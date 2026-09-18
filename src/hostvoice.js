@@ -35,16 +35,19 @@
   // City-switch transitions, fetched once per language per page load (see getTransitions).
   var _transitions = {};
 
-  // Two-host conversations already fetched on this visit, kept for 10 minutes. A hover
-  // pre-warm, or going back to a city heard a minute ago, then makes the next switch
-  // INSTANT — which is what lets the host open with "here's what's on" instead of "give me
-  // a moment". Keyed by the request minus the date (a visit doesn't straddle days in
-  // practice, and entries expire anyway). Failed fetches aren't kept.
+  // Two-host conversations already fetched on this visit, kept for 10 minutes. Going back
+  // to a city heard a minute ago then makes the next switch INSTANT — which is what lets
+  // the host open with "here's what's on" instead of "give me a moment". Keyed by the
+  // request minus the date (a visit doesn't straddle days in practice, and entries expire
+  // anyway). Failed fetches aren't kept.
+  // ⚠️ A PEEK is keyed SEPARATELY. A peek can legitimately answer "not made yet"; sharing
+  // the key would hand that still-pending peek to the real request that follows it, and
+  // the briefing would never be generated.
   var _conv = {};
   var CONV_TTL = 600000;
   function convKey(o) {
     var r = function (v) { return (v != null && isFinite(+v)) ? (+v).toFixed(3) : ''; };
-    return [(o.city || '').toLowerCase(), r(o.lat), r(o.lon), (o.lang || 'en').slice(0, 2), o.quick ? 'q' : 'f', r(o.homeLat), r(o.homeLon)].join('|');
+    return [(o.city || '').toLowerCase(), r(o.lat), r(o.lon), (o.lang || 'en').slice(0, 2), o.quick ? 'q' : 'f', r(o.homeLat), r(o.homeLon), o.peek ? 'peek' : ''].join('|');
   }
 
   global.EventuallyHostVoice = {
@@ -95,11 +98,21 @@
         headers: { 'Content-Type': 'application/json', 'apikey': ANON, 'Authorization': 'Bearer ' + ANON },
         body: JSON.stringify({ audio: true, city: o.city || null, lat: (o.lat != null ? o.lat : null), lon: (o.lon != null ? o.lon : null),
           lang: (o.lang || 'en').slice(0, 2), day: o.day || null, home_lat: (o.homeLat != null ? o.homeLat : null), home_lon: (o.homeLon != null ? o.homeLon : null),
-          quick: !!o.quick })   // switch / pre-warm → short "headline" tier (fast synth)
+          quick: !!o.quick,     // a switch → short "headline" tier (fast synth)
+          peek: !!o.peek })     // only if it's already made — the server never creates one for a peek
       }).then(function (r) { return r.ok ? r.json() : null; })
         .then(function (j) {
-          if (j && j.segments && j.segments.length) return { segments: j.segments, text: j.text || '', twoHost: !!j.twoHost };
-          return null;
+          if (j && j.segments && j.segments.length) {
+            var res = { segments: j.segments, text: j.text || '', twoHost: !!j.twoHost };
+            // A peek HIT is the real briefing, so remember it under the real key too; a
+            // later deliberate request for the same city is then instant as well.
+            if (o.peek) {
+              var realKey = convKey(Object.assign({}, o, { peek: false }));
+              if (!_conv[realKey]) _conv[realKey] = { p: Promise.resolve(res), t: Date.now() };
+            }
+            return res;
+          }
+          return null;                          // includes {peek:"miss"} — not made yet
         }).catch(function () { return null; });
       _conv[key] = { p: p, t: Date.now() };
       p.then(function (res) { if (!res && _conv[key] && _conv[key].p === p) delete _conv[key]; });
@@ -123,19 +136,8 @@
         .then(function (j) { return (j && j.segments && j.segments.length) ? { segments: j.segments, filler: true, music: j.music || 'between' } : null; })
         .catch(function () { return null; });
     },
-    // Fire-and-forget PRE-WARM: generate + cache a city's briefing in the background so a
-    // later tap is a ~2s cache hit instead of a 15-60s cold generation. Uses the SAME
-    // params as the switch fetch (quick:true) so the cache key matches. Result ignored.
-    // The answer is now KEPT (see _conv): a click on the same spike moments later gets it
-    // instantly instead of asking the server again.
-    prewarm: function (opts) {
-      if (!ENABLED) return;
-      var o = opts || {};
-      try {
-        global.EventuallyHostVoice.getConversation({ city: o.city, lat: o.lat, lon: o.lon, lang: o.lang,
-          homeLat: o.homeLat, homeLon: o.homeLon, quick: true });
-      } catch (e) {}
-    },
+    // (Hover PRE-WARM was removed: it generated briefings for cities the pointer merely
+    // passed over. Popular cities are now made each morning by 91_briefing_pregen.sql.)
     // ONE-TIME HOST INTRODUCTION — the hosts say their names ONCE per device, then every
     // briefing is name-free. We send the sig we last played (`have`); the server returns
     // {changed:false} (no synthesis) if the hosts/voices are unchanged, or {changed:true,
