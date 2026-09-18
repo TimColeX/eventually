@@ -292,6 +292,13 @@
       return D.getEvents().filter(function (e) { return e.dayOffset === off; }).length;
     }
   });
+  // The timeline is HIDDEN, not removed (owner's call, 2026-09-18: not enough value to
+  // justify the space). It is still built and still drives `selectedDate`, which simply
+  // stays on today. To bring it back, set this to true — the CSS under `body.no-timeline`
+  // puts the globe controls back above it, and the two pieces of copy that mention it
+  // (the empty-place message and its Help Centre question) reappear on their own.
+  const SHOW_TIMELINE = false;
+  document.body.classList.toggle('no-timeline', !SHOW_TIMELINE);
 
   /* ---------- AI host ("eventually" Host) ---------- */
   // Captions rotate continuously; pressing play speaks them. The narrator pulls
@@ -557,7 +564,7 @@
   function refreshLiveEvents() {
     if (!(window.EventuallyAPI && window.EventuallyAPI.config.remote)) return Promise.resolve();
     return window.EventuallyAPI.fetchEvents({}).then(function (evs) {
-      if (evs) { D.replaceAll(evs); markMine(); globe.setClusters(D.getClusters()); refreshMarkers(); updateStats(); rerenderPlace(); if (timeline && timeline._drawSpark) timeline._drawSpark(); pruneSaved(); }
+      if (evs) { D.replaceAll(evs); markMine(); globe.setClusters(D.getClusters()); refreshMarkers(); updateStats(); rerenderPlace(); if (timeline && timeline._drawSpark) timeline._drawSpark(); pruneSaved(); refreshSaved(); }
     }).catch(function () {});
   }
   // The publishing wall. Reached only when the server refuses, so it always tells the
@@ -973,7 +980,8 @@
     place.querySelector('.place-tools').innerHTML = '';
     let h = '<div class="place-empty"><div class="pe-icon">◌</div>' +
       '<strong>No events in ' + esc(city) + ' today</strong>' +
-      '<span>We don\'t have anything listed here yet. Try another date on the timeline, or explore somewhere else on the globe.</span>';
+      '<span>We don\'t have anything listed here yet. ' +
+        (SHOW_TIMELINE ? 'Try another date on the timeline, or explore somewhere else on the globe.' : 'Try exploring somewhere else on the globe.') + '</span>';
     if (near) {
       h += '<button class="pe-near" data-near="' + esc(near.cluster.id) + '">Explore nearest events →' +
         '<em>' + esc(near.cluster.city) + ' · ' + Math.round(near.km).toLocaleString() + ' km away</em></button>';
@@ -2054,13 +2062,16 @@
   function openSaved() {
     pruneSaved();                                     // drop finished/ghost events first
     svView = 'calendar';                              // always open on the calendar
-    const byDay = savedByDay(), keys = Object.keys(byDay).sort();
+    const byDay = savedByDay(), fyDay = forYouByDay();
     const todayK = svKey(new Date());
-    // Open on the soonest UPCOMING saved day (else the latest saved, else this month).
-    const focusK = keys.filter(function (k) { return k >= todayK; })[0] || keys[keys.length - 1] || todayK;
+    // It's a calendar now, not only a saved list: open on TODAY if anything is on (saved or
+    // near you), else the next day that has something, else this month with nothing picked.
+    const keys = Object.keys(byDay).concat(Object.keys(fyDay)).filter(function (k, i, a) { return a.indexOf(k) === i; }).sort();
+    const has = function (k) { return !!(byDay[k] || fyDay[k]); };
+    const focusK = has(todayK) ? todayK : (keys.filter(function (k) { return k >= todayK; })[0] || todayK);
     const fd = new Date(focusK + 'T00:00:00');
     svMonth = new Date(fd.getFullYear(), fd.getMonth(), 1);
-    svSelKey = byDay[focusK] ? focusK : null;
+    svSelKey = has(focusK) ? focusK : null;
     savedEl.classList.add('open');
     renderSaved();
   }
@@ -2077,7 +2088,9 @@
       return;
     }
     calView.style.display = ''; listView.style.display = 'none';
-    const byDay = savedByDay();
+    const byDay = savedByDay(), fyDay = forYouByDay();
+    const loc = forYouLoc();
+    savedEl.querySelector('.sv-where').textContent = loc ? ' · events near ' + (loc.city || 'you') : '';
     const y = svMonth.getFullYear(), m = svMonth.getMonth();
     savedEl.querySelector('.sv-month').innerHTML = svMO[m] + ' <span class="sv-yr">' + y + '</span>';
     const startBlank = (new Date(y, m, 1).getDay() + 6) % 7;   // Monday-first
@@ -2086,30 +2099,68 @@
     let cells = '';
     for (let i = 0; i < startBlank; i++) cells += '<div class="sv-cell sv-empty"></div>';
     for (let day = 1; day <= daysIn; day++) {
-      const k = svKey(new Date(y, m, day)), evs = byDay[k] || [], cls = ['sv-cell'];
-      if (!evs.length) cls.push('sv-muted');
+      const k = svKey(new Date(y, m, day)), evs = byDay[k] || [], fy = fyDay[k] || [], cls = ['sv-cell'];
+      if (!evs.length && !fy.length) cls.push('sv-muted');
       if (k === todayK) cls.push('sv-today');
       if (k === svSelKey) cls.push('sv-sel');
-      // 1–2 saved → dots; 3+ (a busy day) → a count badge.
-      const mark = evs.length >= 3 ? '<span class="sv-badge">' + evs.length + '</span>'
-        : (evs.length ? '<span class="sv-dots">' + new Array(evs.length).fill('<i></i>').join('') + '</span>' : '');
-      cells += '<div class="' + cls.join(' ') + '" data-k="' + k + '">' + day + mark + '</div>';
+      // Two separate marks, because they mean different things:
+      //   ● burnt-orange dot under the date → events near you that day
+      //   ★ (with a count past one)       → events you've saved that day
+      // Saved days used to be the dots; that meaning moved to the ★ when the dot became
+      // "what's on", so the two can't be confused.
+      const star = evs.length ? '<span class="sv-star">★' + (evs.length > 1 ? evs.length : '') + '</span>' : '';
+      const dot = fy.length ? '<span class="sv-evdot"></span>' : '';
+      const tip = [fy.length ? fy.length + ' event' + (fy.length === 1 ? '' : 's') + ' near you' : '',
+        evs.length ? evs.length + ' saved' : ''].filter(Boolean).join(' · ');
+      cells += '<div class="' + cls.join(' ') + '" data-k="' + k + '"' + (tip ? ' title="' + esc(tip) + '"' : '') + '>' + day + star + dot + '</div>';
     }
     savedEl.querySelector('.sv-grid').innerHTML = cells;
-    renderSavedDay(byDay);
+    renderSavedDay(byDay, fyDay);
     renderSavedRecs();
   }
-  // "For you" — interest-based upcoming picks near you that you HAVEN'T saved yet, so the
+  /* "FOR YOU" — ONE DEFINITION, read by BOTH the calendar's dots and the "For you" list,
+     so the two can never disagree about which events count.
+     An event is "for you" when it is still on or upcoming (relative to selectedDate), its
+     category is one of your interests (none set → every category), and it is within
+     NEAR_KM of your location: the same "near you" the location chip and the globe markers
+     already use.
+     ⚠️ Before this, "For you" had NO distance limit — it listed the four nearest matches
+     anywhere on earth. It gained the NEAR_KM limit so the calendar and the list agree. */
+  function forYouLoc() {
+    const l = P.get().location;
+    return (l && l.lat != null && l.lon != null) ? l : null;
+  }
+  function forYouEvents() {
+    const loc = forYouLoc();
+    if (!loc) return [];                       // no location → nothing is "near you"
+    const interests = P.effectiveInterests(D.getById);
+    return D.getEvents().filter(function (e) {
+      if (!e.date || isNaN(e.date.getTime())) return false;
+      if (D.typeForDate(e, selectedDate) === 'past') return false;
+      if (interests.length && interests.indexOf(e.category) < 0) return false;
+      return haversineKm(loc.lat, loc.lon, e.lat, e.lon) <= NEAR_KM;
+    });
+  }
+  function forYouByDay() {
+    const map = {};
+    forYouEvents().forEach(function (ev) { const k = svKey(ev.date); (map[k] = map[k] || []).push(ev); });
+    Object.keys(map).forEach(function (k) { map[k].sort(function (a, b) { return a.date - b.date; }); });
+    return map;
+  }
+  // "For you" list: the four nearest from that same set that you HAVEN'T saved yet, so the
   // calendar doubles as a place to discover more to save. Tapping one opens its detail.
+  // With no location set, "near you" means nothing — it keeps its old behaviour (interest
+  // matches anywhere) rather than going blank, and the calendar shows no dots.
   function savedRecs() {
     const saved = {}; (P.get().saved || []).forEach(function (id) { saved[id] = 1; });
+    const loc = forYouLoc();
     const interests = P.effectiveInterests(D.getById);
-    const loc = P.get().location;
-    return D.getEvents()
+    const pool = loc ? forYouEvents() : D.getEvents().filter(function (e) {
+      return D.typeForDate(e, selectedDate) !== 'past' && (!interests.length || interests.indexOf(e.category) > -1);
+    });
+    return pool
       .filter(function (e) { return !saved[e.id]; })
-      .filter(function (e) { return D.typeForDate(e, selectedDate) !== 'past'; })
-      .filter(function (e) { return !interests.length || interests.indexOf(e.category) > -1; })
-      .map(function (e) { return { e: e, d: loc ? ((e.lat - loc.lat) * (e.lat - loc.lat) + (e.lon - loc.lon) * (e.lon - loc.lon)) : 0 }; })
+      .map(function (e) { return { e: e, d: loc ? haversineKm(loc.lat, loc.lon, e.lat, e.lon) : 0 }; })
       .sort(function (a, b) { return a.d - b.d; })
       .slice(0, 4).map(function (x) { return x.e; });
   }
@@ -2128,31 +2179,38 @@
         (bits ? '<span class="sv-fy-sub">' + esc(bits) + '</span>' : '') + '</span></button>';
     }).join('');
   }
-  function renderSavedDay(byDay) {
-    byDay = byDay || savedByDay();
+  function renderSavedDay(byDay, fyDay) {
+    byDay = byDay || savedByDay(); fyDay = fyDay || forYouByDay();
     const titleEl = savedEl.querySelector('.sv-day-title'), countEl = savedEl.querySelector('.sv-day-count'), listEl = savedEl.querySelector('.sv-list');
-    if (!(P.get().saved || []).length) {
-      titleEl.textContent = 'No saved events yet'; countEl.textContent = '';
-      listEl.innerHTML = '<div class="sv-empty-state">Tap the <b>☆</b> on any event to save it here.<br>Your saved events appear on this calendar.</div>';
-      return;
-    }
-    const evs = (svSelKey && byDay[svSelKey]) || [];
-    if (!svSelKey || !evs.length) {
+    const loc = forYouLoc();
+    const saved = (svSelKey && byDay[svSelKey]) || [];
+    const savedIds = {}; saved.forEach(function (e) { savedIds[e.id] = 1; });
+    // "Near you" leaves out anything already listed under Saved.
+    const near = ((svSelKey && fyDay[svSelKey]) || []).filter(function (e) { return !savedIds[e.id]; });
+    if (!svSelKey || (!saved.length && !near.length)) {
       titleEl.textContent = 'Pick a day'; countEl.textContent = '';
-      listEl.innerHTML = '<div class="sv-empty-state">Select a highlighted day to see what you’ve saved.</div>';
+      listEl.innerHTML = '<div class="sv-empty-state">' + (loc
+        ? 'Days with a <b style="color:var(--clay)">●</b> have events near ' + esc(loc.city || 'you') + '. Tap one to see what’s on.' +
+          '<br>Tap the <b>☆</b> on any event to save it — saved days show a <b style="color:var(--clay)">★</b>.'
+        : 'Set your location (📍 at the top) to see which days have events near you.' +
+          '<br>Tap the <b>☆</b> on any event to save it — it will appear here.') + '</div>';
       return;
     }
     const d = new Date(svSelKey + 'T00:00:00');
+    const total = saved.length + near.length;
     titleEl.textContent = svWD[d.getDay()] + ' ' + d.getDate();
-    countEl.textContent = evs.length + ' event' + (evs.length === 1 ? '' : 's');
-    listEl.innerHTML = evs.map(function (ev) {
+    countEl.textContent = total + ' event' + (total === 1 ? '' : 's');
+    const row = function (ev, isSaved) {
       const t = ev.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
       return '<div class="sv-item" data-id="' + esc(ev.id) + '">' +
         '<span class="sv-time">' + esc(t) + '</span>' +
-        '<div class="sv-it-main"><div class="sv-it-title">' + esc(ev.name) + '</div>' +
+        '<div class="sv-it-main"><div class="sv-it-title">' + (isSaved ? '<span class="sv-it-star" aria-label="Saved">★</span>' : '') + esc(ev.name) + '</div>' +
           '<div class="sv-it-sub">' + esc(ev.city || '') + (ev.priceLabel ? '<span class="sv-dot">·</span>' + esc(ev.priceLabel) : '') + '</div>' +
         '</div></div>';
-    }).join('');
+    };
+    listEl.innerHTML =
+      (saved.length ? '<div class="sv-grp">Saved</div>' + saved.map(function (ev) { return row(ev, true); }).join('') : '') +
+      (near.length ? '<div class="sv-grp">Near ' + esc((loc && loc.city) || 'you') + '</div>' + near.map(function (ev) { return row(ev, false); }).join('') : '');
   }
   // LIST view: every saved event (soonest first), each with a ✕ to remove it straight away.
   function renderSavedListView() {
@@ -2254,6 +2312,7 @@
     adbar.innerHTML =
       '<nav class="bb-nav" aria-label="Quick links">' +
         '<button class="bb-link" data-bb="publish">Publish Event</button>' +
+        '<button class="bb-link" data-bb="calendar">Calendar</button>' +
         '<button class="bb-link" data-bb="help">Help Centre</button>' +
       '</nav>' +
       // Always-visible legal links (Google's brand review wants the Privacy Policy linked
@@ -2267,6 +2326,12 @@
       track('publish_open');
       requireLogin(function () { coordinator.open(); },
         'Sign in to publish your event — your first 10 events each year are free.');
+    } else if (b.dataset.bb === 'calendar') {
+      // Opens over whatever is on screen; close the side panels it would otherwise sit on.
+      // closeEvent() rather than just the class: it also unmounts the live-updates feed.
+      if (eventEl.classList.contains('open')) closeEvent();
+      place.classList.remove('open'); profileEl.classList.remove('open');
+      openSaved();
     } else if (b.dataset.bb === 'help') { openHelp(); }
   });
 
@@ -2312,7 +2377,7 @@
       '<div><strong>' + esc(user.name) + '</strong><small>' + (p.plus ? 'Eventually Plus' : 'Free plan') + '</small></div></div>';
     else h += '<button class="dd-item dd-primary" data-act="signin">Sign In / Sign Up</button>';
     h += '<button class="dd-item" data-act="profile">Profile</button>';
-    h += '<button class="dd-item" data-act="saved">Saved Events <span class="dd-badge">' + p.saved.length + '</span></button>';
+    h += '<button class="dd-item" data-act="saved">Calendar &amp; saved <span class="dd-badge">' + p.saved.length + '</span></button>';
     // "Publish an Event" has moved to the bottom bar, where it is the boldest thing
     // on screen and reachable from every state (verified: it stays hittable with the
     // event drawer and profile open on a 375px phone). Help Centre deliberately
@@ -2408,8 +2473,8 @@
         '<p>You need an account, because the organiser has to know who is coming: <b>your name and the email on your account are given to them</b> so they can plan and check you in at the door. Nobody else sees them — everyone else just sees how many people are registered. We\'ll email you a confirmation.</p>' +
         '<p>Registering is <b>free and it isn\'t a ticket</b> — Eventually doesn\'t take payment for these events. Changed your mind? Open the event and cancel; that frees your place for someone else.</p>' +
         '<p>Organising something? Choose <b>“Eventually collects registrations”</b> when you publish. You can set a limit on places, and you\'ll find your list — with a CSV download — under <b>My Events</b>.</p></details>' +
-      '<details><summary>How do the dates &amp; timeline work?</summary><p>The bar along the bottom is a day scrubber. Drag it, or use the ‹ › day arrows, to move between days — the globe and results update to show what\'s on for that day. Tap <b>Today</b> to jump back to now.</p></details>' +
-      '<details><summary>How do I save events &amp; use the calendar?</summary><p>Tap the ☆ on any event to save it. Open <b>⋯ menu → Saved Events</b> to see them on a month calendar: days with saved events are dotted (busy days show a count), and tapping a day lists what you saved. A <b>“For you”</b> section suggests more to save based on your interests.</p></details>' +
+      (SHOW_TIMELINE ? '<details><summary>How do the dates &amp; timeline work?</summary><p>The bar along the bottom is a day scrubber. Drag it, or use the ‹ › day arrows, to move between days — the globe and results update to show what\'s on for that day. Tap <b>Today</b> to jump back to now.</p></details>' : '') +
+      '<details><summary>How do I use the calendar &amp; save events?</summary><p>Tap <b>Calendar</b> at the bottom of the screen (or <b>⋯ menu → Calendar &amp; saved</b>). A small orange dot under a date means there are events near your location that day, matched to your interests — tap the date to see them. Tap the ☆ on any event to save it; saved days are marked with a ★ on the calendar. A <b>“For you”</b> section suggests more nearby events you might like.</p></details>' +
       '<details><summary>What do “Starts in” countdowns &amp; reminders mean?</summary><p>Upcoming events show a live <b>“Starts in”</b> countdown so you know exactly how long until they begin. Turn on <b>Event notifications</b> in your Profile to be reminded about events you\'ve saved and new ones near you.</p></details>' +
       '<details><summary>What happens when I tap the event button? Is Eventually free?</summary><p>Eventually is <b>free</b> — browsing, saving, and the AI Host cost nothing. Each event links to its official source: <b>Get Tickets</b> for ticketed events (e.g. Ticketmaster) to buy there, or <b>View event</b> for free/community listings (like a university or library) to see details and register. Either way, Eventually takes you to the official source for that event.</p></details>' +
       '<details><summary>What is the eventually Host?</summary><p>Your live AI concierge — it narrates what\'s happening worldwide and tailors picks to your location and interests. Press play to hear it, with a music bed behind it.</p></details>' +
