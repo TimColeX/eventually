@@ -975,7 +975,11 @@ body.has-ad .toast { bottom: calc(144px + env(safe-area-inset-bottom, 0px)); }
 /* Timeline HIDDEN (SHOW_TIMELINE in app.js) — the globe controls drop into the space it
    used, so they don't float over a gap. Delete nothing here to restore it: flipping the
    flag removes the body class and every rule below stops applying. */
-body.no-timeline .timeline { display: none; }
+/* Only its date line stays, as a quiet "Today · Thu, Sep 18, 2026" above the host bar
+   (the timeline keeps it current; nothing else of it shows or takes taps). */
+body.no-timeline .timeline { pointer-events: none; }
+body.no-timeline .tl-btn, body.no-timeline .tl-today, body.no-timeline .tl-track { display: none; }
+body.no-timeline .tl-head { justify-content: center; margin-bottom: 2px; }
 body.no-timeline.has-ad .globe-controls,
 body.no-timeline.has-ad .legend { bottom: calc(138px + env(safe-area-inset-bottom, 0px)); }
 
