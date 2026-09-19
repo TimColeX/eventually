@@ -1131,6 +1131,9 @@ body.no-timeline.has-ad .legend { bottom: calc(138px + env(safe-area-inset-botto
   background: var(--clay); color: var(--cream); font-family: var(--font); font-size: 15px; font-weight: 700; }
 .evd-gate-cta:hover { background: #b94e32; }
 .evd-gate-fine { margin: 0; font-size: 12px; color: var(--hint); line-height: 1.5; }
+/* Small print at the foot of every event — present, not loud. */
+.evd-disclaimer { margin: 18px 0 4px; padding-top: 12px; border-top: 1px solid var(--line-2); font-size: 11px; line-height: 1.5; color: var(--hint); }
+.evd-disclaimer a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 .evd-section { border-top: 1px solid var(--line); padding-top: 16px; }
 .evd-sec-h { font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); margin-bottom: 12px; }
 .avail-list { display: flex; flex-direction: column; gap: 8px; }

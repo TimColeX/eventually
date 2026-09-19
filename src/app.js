@@ -1228,6 +1228,11 @@
             '</div>' +
             '<div class="live-updates" hidden></div>' +
             avail) +
+        // The in-app half of the event disclaimer (full text: terms.html#event-disclaimer).
+        '<p class="evd-disclaimer">Event details come from ' +
+          (ev.is_native ? 'the organiser' : 'the organiser or ticket seller') +
+          ', not from Eventually — please check anything important with them before you go. ' +
+          '<a href="terms.html#event-disclaimer" target="_blank" rel="noopener">Event disclaimer</a></p>' +
       '</div>';
     // Signed out: none of the below belongs on a preview (live updates, places left and
     // the viewer's own ♥/✓ are all "full details"), and each is a request we needn't make.
@@ -2482,7 +2487,8 @@
       '<details><summary>What do “Starts in” countdowns &amp; reminder emails mean?</summary><p>Upcoming events show a live <b>“Starts in”</b> countdown so you know exactly how long until they begin.</p>' +
         '<p>If you\'re signed in, we\'ll email you about events you\'ve saved: a <b>reminder</b> three days before and again two hours before, and a note if one is <b>cancelled, postponed or moved</b>. Both are on unless you turn them off. There\'s also an optional <b>weekly email</b> of what\'s on near you, which is off until you turn it on. You\'ll find all three under <b>Profile → Emails</b>, and every email has an unsubscribe link.</p></details>' +
       '<details><summary>What happens when I tap the event button? Is Eventually free?</summary><p>Eventually is <b>free</b> — browsing, saving, reminders and the AI host cost nothing. Each event links to its official source: <b>Get Tickets</b> for ticketed events (e.g. Ticketmaster) to buy there, or <b>View event</b> for free and community listings (like a university or library) to see details and register. You always book directly with the seller or organiser.</p>' +
-        '<p>Some ticket links are partner links: if you buy through one, Eventually may earn a small commission. It costs you nothing extra, and it never changes which events we show.</p></details>' +
+        '<p>Some ticket links are partner links: if you buy through one, Eventually may earn a small commission. It costs you nothing extra, and it never changes which events we show.</p>' +
+        '<p>Event details come from organisers and ticket sellers, not from Eventually, and we don\'t run the events ourselves — please check anything important with them before you go. See the <a href="terms.html#event-disclaimer" target="_blank" rel="noopener">event disclaimer</a> in our Terms.</p></details>' +
       '<details><summary>How does registering for an event work?</summary>' +
         '<p>Most events send you to the organiser\'s own booking page. Some organisers instead ask us to take registrations for them — on those you\'ll see a <b>Register</b> button on the event, and one tap is all it takes.</p>' +
         '<p>You need an account, because the organiser has to know who is coming: <b>your name and the email on your account are given to them</b> so they can plan and check you in at the door. Nobody else sees them — everyone else just sees how many people are registered. We\'ll email you a confirmation.</p>' +
