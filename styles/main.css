@@ -1483,6 +1483,23 @@ body.no-timeline.has-ad .legend { bottom: calc(138px + env(safe-area-inset-botto
   overflow-wrap: anywhere; }
 .pf-comm-note { margin: 0; padding: 9px 13px 11px; font-size: 10.5px; line-height: 1.5; color: var(--hint); }
 
+/* Delete my account — a quiet text link at the very bottom, and a confirm modal. */
+.pf-acct-danger { border-top: 1px solid var(--line); padding: 11px 13px 13px; }
+.pf-acct-delete { background: none; border: 0; padding: 0; cursor: pointer; font: inherit; font-size: 12px;
+  color: var(--ember); text-decoration: underline; text-underline-offset: 2px; }
+.del-list { margin: 0 0 14px; padding-left: 18px; font-size: 13px; line-height: 1.6; color: var(--ink); }
+.del-note { margin: 0 0 16px; font-size: 12px; line-height: 1.55; color: var(--faint); }
+.del-l { display: block; margin: 0 0 6px; font-size: 12.5px; color: var(--ink); }
+.del-in { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line-2);
+  background: var(--paper); color: var(--ink); font-family: var(--mono); font-size: 14px; letter-spacing: .08em; }
+.del-in:focus { outline: 2px solid var(--clay); outline-offset: 1px; }
+.del-err { margin: 10px 0 0; font-size: 12.5px; color: var(--ember); }
+.del-btns { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; flex-wrap: wrap; }
+.del-cancel, .del-go { flex: 1 1 130px; padding: 10px 12px; border-radius: 10px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.del-cancel { background: var(--paper); border: 1px solid var(--line-2); color: var(--ink); }
+.del-go { background: var(--ember); border: 1px solid var(--ember); color: var(--cream); }
+.del-go:disabled { opacity: .4; cursor: not-allowed; }
+
 /* ---------- publish form: venue time zone ---------- */
 .co-body .f-tz { width: 100%; }
 /* The confirmation line is the safeguard against a wrong zone slipping through,

@@ -1835,6 +1835,10 @@
       // their own inbox, shown directly above under Login email.
       '<p class="pf-comm-note">Sent to your email. Unsubscribe any time.</p></div>';
 
+    // Last and quiet: nobody should hit it by accident, and the confirm step asks
+    // them to type DELETE. The Privacy Policy points here.
+    h += '<div class="pf-acct-danger"><button class="pf-acct-delete" type="button">Delete my account</button></div>';
+
     box.innerHTML = h;
     if (acctEditing && acctEditing !== 'address') {
       const inp = box.querySelector('.pf-acct-in'); if (inp) { inp.focus(); inp.select(); }
@@ -1952,6 +1956,7 @@
     }
     // ---- account details ----
     if (e.target.closest('.pf-acct-signin')) { openAuth(); return; }
+    if (e.target.closest('.pf-acct-delete')) { openDeleteAccount(); return; }
     const aEdit = e.target.closest('.pf-acct-edit');
     if (aEdit) { acctEditing = aEdit.dataset.edit; renderAccount(); return; }
     if (e.target.closest('.pf-acct-cancel')) { acctEditing = null; renderAccount(); return; }
@@ -2438,6 +2443,64 @@
   function closeModal() { modal.classList.remove('open'); }
   modal.querySelector('.modal-close').addEventListener('click', closeModal);
   modal.querySelector('.modal-backdrop').addEventListener('click', closeModal);
+
+  /* Delete my account (Profile → Account details). Says plainly what goes and what
+     stays, then asks for DELETE to be typed — a single tap is too easy to make by
+     accident for something that can't be undone. The server does the work
+     (backend/92_delete_account.ts); on success this device forgets the profile too. */
+  function openDeleteAccount() {
+    if (!user || !authReal) return;
+    const DEL_ERR = {
+      admin_account: 'Admin accounts can’t be deleted here. Remove it in the Supabase dashboard.',
+      not_signed_in: 'Your session has expired. Sign in again, then try once more.'
+    };
+    openModal('Delete your account',
+      '<div class="del-acct">' +
+        '<p class="modal-lead">This permanently deletes your Eventually account. It can’t be undone.</p>' +
+        '<ul class="del-list">' +
+          '<li>Your profile, saved events, likes and email settings</li>' +
+          '<li>Your registrations for events (organisers’ lists update straight away)</li>' +
+          '<li>Events you published, and their pictures</li>' +
+        '</ul>' +
+        '<p class="del-note">Our anonymous usage counts are kept, with nothing that links them to you. Emails already sent can’t be recalled, and an organiser keeps any list they had already downloaded.</p>' +
+        '<label class="del-l" for="del-confirm">Type <b>DELETE</b> to confirm</label>' +
+        '<input id="del-confirm" class="del-in" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false">' +
+        '<p class="del-err" hidden></p>' +
+        '<div class="del-btns"><button class="del-cancel" type="button">Keep my account</button>' +
+        '<button class="del-go" type="button" disabled>Delete my account</button></div>' +
+      '</div>',
+      function (body) {
+        const inp = body.querySelector('.del-in'), go = body.querySelector('.del-go'), err = body.querySelector('.del-err');
+        inp.addEventListener('input', function () { go.disabled = inp.value.trim().toUpperCase() !== 'DELETE'; });
+        body.querySelector('.del-cancel').addEventListener('click', closeModal);
+        go.addEventListener('click', function () {
+          if (go.disabled) return;
+          go.disabled = true; inp.disabled = true; go.textContent = 'Deleting…'; err.hidden = true;
+          A.deleteAccount().then(function (r) {
+            if (r && r.ok) {
+              // Forget this device's copy too, then start clean.
+              try { localStorage.removeItem('eventually.profile.v1'); localStorage.removeItem('eventually.sid'); } catch (e) {}
+              Promise.resolve(A.signOut()).catch(function () {}).then(function () {
+                try { sessionStorage.setItem('eventually.deleted', '1'); } catch (e) {}
+                location.replace(location.pathname);
+              });
+              return;
+            }
+            err.textContent = DEL_ERR[r && r.error] || 'Something went wrong and your account wasn’t deleted. Please try again, or email info@eventually-app.com.';
+            err.hidden = false; go.textContent = 'Delete my account'; inp.disabled = false;
+            go.disabled = inp.value.trim().toUpperCase() !== 'DELETE';
+          });
+        });
+        setTimeout(function () { inp.focus(); }, 60);
+      });
+  }
+  // After the reload that follows a deletion, say it happened.
+  try {
+    if (sessionStorage.getItem('eventually.deleted')) {
+      sessionStorage.removeItem('eventually.deleted');
+      setTimeout(function () { window.EventuallyToast('Your account has been deleted.', 5000); }, 1500);
+    }
+  } catch (e) {}
 
   function openTypes() {
     const cats = Object.keys(D.CATEGORIES);

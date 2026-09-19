@@ -45,6 +45,24 @@
     },
     signOut: function () { return sb.auth.signOut(); },
 
+    /* Permanently delete the signed-in account (backend/92_delete_account.ts).
+       The server works out WHO from the session token alone. Resolves to
+       { ok: true } or { ok: false, error: '<code>' }; never rejects. */
+    deleteAccount: function () {
+      if (!ENABLED || !currentUser) return Promise.resolve({ ok: false, error: 'not_signed_in' });
+      return sb.auth.getSession().then(function (r) {
+        const tok = r && r.data && r.data.session && r.data.session.access_token;
+        if (!tok) return { ok: false, error: 'not_signed_in' };
+        return fetch(URL + '/functions/v1/delete-account', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', apikey: KEY, Authorization: 'Bearer ' + tok },
+          body: JSON.stringify({ confirm: 'DELETE' })
+        }).then(function (res) {
+          return res.json().catch(function () { return { ok: false, error: 'http_' + res.status }; });
+        });
+      }).catch(function () { return { ok: false, error: 'network' }; });
+    },
+
     // Change the account's LOGIN email. Supabase sends a confirmation link to the
     // new (and old) address; the change only takes effect once confirmed. Fails
     // for Google-managed identities (the UI shows those read-only). Returns the
