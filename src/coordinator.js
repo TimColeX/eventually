@@ -171,7 +171,7 @@
                 '<span class="co-img-info"></span>' +
                 '<button type="button" class="co-img-x">Remove</button>' +
               '</div>' +
-              '<p class="co-img-note">We check pictures by hand before they go live. ' +
+              '<p class="co-img-note">We check pictures before they go live. ' +
                 'Use your own artwork or a photo you have the right to use.</p>' +
             '</div>' +
             '<div class="co-catcolor"><span class="co-catdot"></span>' +
@@ -181,7 +181,7 @@
               // Only what featuring actually does. It used to promise "a guaranteed spike"
               // (featured spikes are capped at 12, 3 per continent) and "top of search"
               // (search ranks by popularity only).
-              '<small>A ★ Featured badge, a taller spike on the globe, and first place in its location\'s event list. We review every request by hand and email you our decision — featuring is free while we\'re in beta.</small></span>' +
+              '<small>A ★ Featured badge, a taller spike on the globe, and first place in its location\'s event list. We review every request and email you our decision — featuring is free while we\'re in beta.</small></span>' +
             '</label>' +
           '</div>' +
         '</div></div>' +
@@ -193,7 +193,7 @@
           // HIDDEN for now (owner, 2026-09-19): not to be promoted until live updates are
           // offered. Flip LIVE_UPDATES_PROMO to bring the line back exactly as it was.
           (LIVE_UPDATES_PROMO ? '<p class="co-perk"><b>Included:</b> while your event is on, post live updates to everyone viewing it — doors, parking, running late. Opens an hour before, disappears when it ends.</p>' : '') +
-          '<p class="co-note">We check every new event by hand before it goes on the globe, and email you as soon as it\'s live.</p>' +
+          '<p class="co-note">We check every new event before it goes on the globe, and email you as soon as it\'s live.</p>' +
         '</div>' +
       '</div>';
 

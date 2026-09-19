@@ -462,7 +462,7 @@ ${LIVE_UPDATES_PROMO ? `      <li><b>Post live updates while it's running.</b> D
 ` : ''}      <li><b>You keep the relationship.</b> Booking stays with you, and the people who
           register are yours to check in.</li>
     </ul>
-    <p class="muted">New listings are checked by hand before they appear, so there's a short
+    <p class="muted">New listings are checked before they appear, so there's a short
        wait the first time. You'll get an email when it's live.</p>
     <a class="cta" href="/?publish=1">Publish an event in ${esc(c.city)} →</a>
   </section>
