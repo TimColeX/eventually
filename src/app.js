@@ -298,6 +298,10 @@
   // puts the globe controls back above it, and the two pieces of copy that mention it
   // (the empty-place message and its Help Centre question) reappear on their own.
   const SHOW_TIMELINE = false;
+  // Live updates stay WORKING (updates.js, event page + My Events) but are not promoted
+  // (owner, 2026-09-19). This hides the Help Centre question; coordinator.js and
+  // tools/build-city-pages.js carry their own flag of the same name for their mentions.
+  const LIVE_UPDATES_PROMO = false;
   document.body.classList.toggle('no-timeline', !SHOW_TIMELINE);
 
   /* ---------- AI host ("eventually" Host) ---------- */
@@ -2461,25 +2465,34 @@
     }).join('');
     openModal('Help Centre',
       '<div class="help">' +
-      '<details open><summary>What is Eventually?</summary><p>A live directory of events worldwide on an interactive globe. Spin it, tap any glowing marker, and see everything happening at that spot.</p></details>' +
-      '<details><summary>What do the glowing spikes on the globe mean?</summary><p>Each glowing marker is a place with events on. The <b>bigger, brighter and more it pulses</b>, the more (and hotter) the activity there — so the biggest markers are the busiest hotspots, and a pulsing glow means something is live right now. Its <b>colour</b> shows the main type of event at that spot. Tap a marker to see everything there, and the AI Host will focus on it.</p></details>' +
-      '<details><summary>What do the event colours mean?</summary><p>Every event is colour-coded by type — on the globe markers, on event cards, and on the banner at the top of each event:</p><div class="help-cats">' + colours + '</div></details>' +
-      '<details><summary>What are “Live updates” on an event?</summary><p>While some events are actually taking place, the organiser can post short updates straight to the event page — things like <i>doors are open</i>, <i>parking is round the back</i>, or <i>running fifteen minutes late</i>. You\'ll see them under <b>Live updates</b> when you open that event.</p>' +
+      /* Rewritten 2026-09-19 against how the app actually behaves (owner review). Each
+         answer below was checked in the code — keep it that way when features change. */
+      '<details open><summary>What is Eventually?</summary><p>A live directory of events worldwide on an interactive globe. Spin it, tap any glowing spike, and see everything happening at that spot — with an AI host who tells you what\'s on.</p></details>' +
+      '<details><summary>What do the glowing spikes on the globe mean?</summary><p>Each spike is a place with events on. The <b>taller and brighter</b> it is, the more is happening there, so the biggest spikes are the busiest hotspots. Every spike glows gently, and one pulses more strongly when something there is <b>on right now</b>. Its <b>colour</b> shows the main type of event at that spot. Tap a spike to see everything there, and the host will start talking about it.</p></details>' +
+      '<details><summary>What do the event colours mean?</summary><p>Every event is colour-coded by type — on the globe spikes, on event cards, and on the banner at the top of each event:</p><div class="help-cats">' + colours + '</div></details>' +
+      '<details><summary>How do I find events somewhere else, or only the kind I like?</summary><p>Type into the <b>search bar</b> at the top — an event, a city or a type of event. You can search any city in the world; if it has no events of its own yet, choose <b>Explore on the map</b> to fly there. The globe and the host follow you.</p>' +
+        '<p>Tap <b>Types</b> next to the search bar to show only the kinds of events you want. To set your own location, tap the <b>pin</b> button at the top and use your current location or type your city.</p></details>' +
+      (LIVE_UPDATES_PROMO ? '<details><summary>What are “Live updates” on an event?</summary><p>While some events are actually taking place, the organiser can post short updates straight to the event page — things like <i>doors are open</i>, <i>parking is round the back</i>, or <i>running fifteen minutes late</i>. You\'ll see them under <b>Live updates</b> when you open that event.</p>' +
         '<p>It opens about an hour before the start and <b>closes when the event ends</b>. The updates aren\'t saved — they disappear with the event, so there\'s nothing to scroll back through afterwards.</p>' +
         '<p>Only the organiser can post; there\'s no replying, and you don\'t need an account to read. Updates are written by organisers rather than by us, so please double-check anything important with the venue.</p>' +
-        '<p>Publishing your own event on Eventually? You get this for free — post updates from <b>My Events</b> while your event is running.</p></details>' +
+        '<p>Publishing your own event on Eventually? You get this for free — post updates from <b>My Events</b> while your event is running.</p></details>' : '') +
+      '<details><summary>What is the eventually Host?</summary><p>Your live AI radio host. Two presenters talk you through what\'s on, with music playing underneath. It starts by itself after a short countdown when you arrive — press <b>pause</b> any time, and the speaker button turns the music on or off.</p>' +
+        '<p>The host talks about <b>the place you\'re looking at</b>: your own area to begin with, then any spike you tap or city you search. When you\'re exploring somewhere else, the <b>My area</b> button (a small house on phones) brings the host and the globe back home. Tap the words under the host to read the full transcript.</p></details>' +
+      '<details><summary>How do I use the calendar &amp; save events?</summary><p>Tap <b>Calendar</b> at the bottom of the screen (or <b>⋯ menu → Calendar &amp; saved</b>). A small orange dot under a date means there are events near your location that day, matched to your interests — tap the date to see them. Tap the ☆ on any event to save it; saved days are marked with a ★ on the calendar. A <b>“For you”</b> section suggests more nearby events you might like. You can choose your interests in your <b>Profile</b>.</p></details>' +
+      '<details><summary>What do “Starts in” countdowns &amp; reminder emails mean?</summary><p>Upcoming events show a live <b>“Starts in”</b> countdown so you know exactly how long until they begin.</p>' +
+        '<p>If you\'re signed in, we\'ll email you about events you\'ve saved: a <b>reminder</b> three days before and again two hours before, and a note if one is <b>cancelled, postponed or moved</b>. Both are on unless you turn them off. There\'s also an optional <b>weekly email</b> of what\'s on near you, which is off until you turn it on. You\'ll find all three under <b>Profile → Emails</b>, and every email has an unsubscribe link.</p></details>' +
+      '<details><summary>What happens when I tap the event button? Is Eventually free?</summary><p>Eventually is <b>free</b> — browsing, saving, reminders and the AI host cost nothing. Each event links to its official source: <b>Get Tickets</b> for ticketed events (e.g. Ticketmaster) to buy there, or <b>View event</b> for free and community listings (like a university or library) to see details and register. You always book directly with the seller or organiser.</p>' +
+        '<p>Some ticket links are partner links: if you buy through one, Eventually may earn a small commission. It costs you nothing extra, and it never changes which events we show.</p></details>' +
       '<details><summary>How does registering for an event work?</summary>' +
         '<p>Most events send you to the organiser\'s own booking page. Some organisers instead ask us to take registrations for them — on those you\'ll see a <b>Register</b> button on the event, and one tap is all it takes.</p>' +
         '<p>You need an account, because the organiser has to know who is coming: <b>your name and the email on your account are given to them</b> so they can plan and check you in at the door. Nobody else sees them — everyone else just sees how many people are registered. We\'ll email you a confirmation.</p>' +
         '<p>Registering is <b>free and it isn\'t a ticket</b> — Eventually doesn\'t take payment for these events. Changed your mind? Open the event and cancel; that frees your place for someone else.</p>' +
         '<p>Organising something? Choose <b>“Eventually collects registrations”</b> when you publish. You can set a limit on places, and you\'ll find your list — with a CSV download — under <b>My Events</b>.</p></details>' +
       (SHOW_TIMELINE ? '<details><summary>How do the dates &amp; timeline work?</summary><p>The bar along the bottom is a day scrubber. Drag it, or use the ‹ › day arrows, to move between days — the globe and results update to show what\'s on for that day. Tap <b>Today</b> to jump back to now.</p></details>' : '') +
-      '<details><summary>How do I use the calendar &amp; save events?</summary><p>Tap <b>Calendar</b> at the bottom of the screen (or <b>⋯ menu → Calendar &amp; saved</b>). A small orange dot under a date means there are events near your location that day, matched to your interests — tap the date to see them. Tap the ☆ on any event to save it; saved days are marked with a ★ on the calendar. A <b>“For you”</b> section suggests more nearby events you might like.</p></details>' +
-      '<details><summary>What do “Starts in” countdowns &amp; reminders mean?</summary><p>Upcoming events show a live <b>“Starts in”</b> countdown so you know exactly how long until they begin. Turn on <b>Event notifications</b> in your Profile to be reminded about events you\'ve saved and new ones near you.</p></details>' +
-      '<details><summary>What happens when I tap the event button? Is Eventually free?</summary><p>Eventually is <b>free</b> — browsing, saving, and the AI Host cost nothing. Each event links to its official source: <b>Get Tickets</b> for ticketed events (e.g. Ticketmaster) to buy there, or <b>View event</b> for free/community listings (like a university or library) to see details and register. Either way, Eventually takes you to the official source for that event.</p></details>' +
-      '<details><summary>What is the eventually Host?</summary><p>Your live AI concierge — it narrates what\'s happening worldwide and tailors picks to your location and interests. Press play to hear it, with a music bed behind it.</p></details>' +
-      '<details><summary>How do I list my event?</summary><p>Open the ⋯ menu → Publish an Event, drop a pin on the map, and publish straight to the globe.</p></details>' +
-      '<details><summary>What is Eventually Plus?</summary><p>Your personal AI event concierge: longer personalized briefings, ad-free listening &amp; browsing, travel-aware city briefings, saved-event reminders and early access to new features.</p></details>' +
+      '<details><summary>How do I list my event?</summary><p>Tap <b>Publish Event</b> at the bottom of the screen and sign in. Add the details, find the place by searching its address or dropping a pin on the map, and add a photo if you like. Your first 10 events each year are free.</p>' +
+        '<p>We <b>check every new event by hand</b> before it appears on the globe, and we\'ll email you as soon as it\'s approved. A new or changed photo is checked the same way. You can see each event\'s status, edit it, or take it off the globe under <b>⋯ menu → My Events</b>.</p>' +
+        '<p>Want more attention for it? Tick <b>Ask us to feature this event</b> when you publish. Featured events get a ★ badge, a taller spike, and first place in their location\'s list. We review every request and email you our decision — featuring is free while we\'re in beta.</p></details>' +
+      '<details><summary>What is Eventually Plus?</summary><p>An optional membership that\'s <b>coming soon</b>: advanced AI briefings and personal event picks, ad-free listening &amp; browsing, travel-aware city briefings, and early access to new features. Open <b>⋯ menu → Eventually Plus</b> to join the waitlist and we\'ll email you when it launches.</p></details>' +
       // Re-entry point for the first-run tour — the one place people look when they're stuck.
       '<button class="help-tour" type="button">↻ Show me around again</button>' +
       '<div class="help-legal"><a href="about.html" target="_blank" rel="noopener">About</a> · <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a> · <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a></div>' +
@@ -2510,13 +2523,15 @@
     const onList = !!((P.get().comms || {}).plusWaitlist);
     let feats, statusLine, fineLine = '', btnLabel, btnAct, btnDisabled = false;
     if (RT.plusComingSoon) {
-      feats = ['Longer, personalized AI briefings', 'Ad-free listening & browsing', 'Travel-aware city briefings & reminders', 'Early access to new features'];
+      // First line chosen by the owner 2026-09-19 (option B) — Plus is meant to grow into the
+      // advanced-AI tier. "& reminders" dropped: reminder emails are free for everyone now.
+      feats = ['Advanced AI briefings & personal event picks', 'Ad-free listening & browsing', 'Travel-aware city briefings', 'Early access to new features'];
       statusLine = onList ? "We'll email you when Eventually Plus launches." : 'Eventually Plus is in the works. Join the waitlist to hear first.';
       btnLabel = onList ? "✓ You're on the waitlist" : 'Notify me at launch';
       btnAct = 'waitlist';
     } else {
       feats = RT.twoHost
-        ? ['Ad-free listening & browsing', 'Longer, personalized briefings (coming soon)', 'Priority access to new features']
+        ? ['Ad-free listening & browsing', 'Advanced AI briefings & personal event picks (coming soon)', 'Priority access to new features']
         : ['Personalized daily briefings', 'Smart, interest-based recommendations', 'Travel-aware city briefings & reminders', 'Premium AI narration · ad-free'];
       const pb = plusButton(subState);
       btnLabel = pb.label; btnAct = pb.act; btnDisabled = (pb.act === 'none');

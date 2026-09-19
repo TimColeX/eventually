@@ -193,7 +193,7 @@
           // HIDDEN for now (owner, 2026-09-19): not to be promoted until live updates are
           // offered. Flip LIVE_UPDATES_PROMO to bring the line back exactly as it was.
           (LIVE_UPDATES_PROMO ? '<p class="co-perk"><b>Included:</b> while your event is on, post live updates to everyone viewing it — doors, parking, running late. Opens an hour before, disappears when it ends.</p>' : '') +
-          '<p class="co-note">Your event is geo-located and published live to the globe.</p>' +
+          '<p class="co-note">We check every new event by hand before it goes on the globe, and email you as soon as it\'s live.</p>' +
         '</div>' +
       '</div>';
 

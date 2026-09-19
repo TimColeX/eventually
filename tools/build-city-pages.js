@@ -26,6 +26,9 @@ const ANON = process.env.SUPABASE_ANON_KEY ||
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdwc2V0bXFpdnpjaGx2eXJjZ2xkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1MDM2NzcsImV4cCI6MjA5ODA3OTY3N30.a0BB-FQDh5NKFvgxeSgJ3YmeN_HYOWGLOJza29wW8KI';
 
 const SITE = 'https://eventually-app.com';
+// The "Post live updates" perk in each page's organiser section. Off while live updates
+// aren't being promoted (owner, 2026-09-19); flip to put the line back.
+const LIVE_UPDATES_PROMO = false;
 // Where to write. Two different layouts have to work:
 // The repo root IS the deployable site, here and in CI.
 //
@@ -454,9 +457,9 @@ ${distinct.length > MAX_LISTED ? `  <p class="muted" style="margin-top:14px">…
       <li><b>Take registrations, if you want them.</b> People register in one tap and you
           get a door list with names and emails, downloadable as a spreadsheet. Or just
           link to wherever you already sell tickets — your choice at publish time.</li>
-      <li><b>Post live updates while it's running.</b> Doors open, parking round the back,
+${LIVE_UPDATES_PROMO ? `      <li><b>Post live updates while it's running.</b> Doors open, parking round the back,
           running fifteen minutes late — straight to everyone viewing your event.</li>
-      <li><b>You keep the relationship.</b> Booking stays with you, and the people who
+` : ''}      <li><b>You keep the relationship.</b> Booking stays with you, and the people who
           register are yours to check in.</li>
     </ul>
     <p class="muted">New listings are checked by hand before they appear, so there's a short
