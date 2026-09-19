@@ -27,7 +27,7 @@
 <div class="wrap">
   <a class="back" href="/">← Back to Eventually</a>
   <h1>Privacy Policy</h1>
-  <p class="muted">Last updated: 2026-09-10</p>
+  <p class="muted">Last updated: 2026-09-19</p>
 
   <p>This Privacy Policy explains how <strong>TIM COLE</strong> (“Eventually”, “we”, “us”, or “our”) collects, uses, and protects your information when you use the Eventually web application at <a href="https://eventually-app.com">eventually-app.com</a> (the “Service”). By using the Service, you agree to this Policy.</p>
 
@@ -49,6 +49,7 @@
     <li><strong>Location</strong> — with your permission, your approximate GPS location, or a city you type or select, used to show nearby events and tailor the AI host. You can use the Service without granting GPS access by searching for a city instead.</li>
     <li><strong>Usage &amp; device data</strong> — basic technical data such as browser type, device type, general region, pages viewed, and interactions, used to operate and improve the Service.</li>
     <li><strong>Anonymous usage analytics</strong> — we record a small set of anonymous actions (for example: the app was opened, the AI host was started, a city was searched, an event was opened) together with a random identifier stored in your browser and, where relevant, a city name. This is first-party: it stays on our own servers and is not shared with any analytics provider. It contains no name, email, account id or IP address, and cannot be used to identify you. We use it only to understand which features are used, and we delete it after 180 days.</li>
+    <li><strong>Ticket link clicks</strong> — when you tap <em>Get Tickets</em> (or another link out to a ticket seller), the link passes through our own server on its way there, and we record that click: which event, which seller, whether it was a partner link, the time, your device type (phone, tablet or computer), the city and country on your profile, the random browser identifier described above and, <strong>if you are signed in, your account id</strong>. Unlike the anonymous analytics above, this record is linked to your account when you are signed in. We use it to see which events people go on to book, to reconcile partner commissions, and to fix broken links. It is not shared with the ticket seller or anyone else.</li>
     <li><strong>Cookies &amp; local storage</strong> — see Section 7.</li>
   </ul>
 
@@ -78,7 +79,12 @@
     <tr><td>Ticketmaster, PredictHQ</td><td>Event listings data</td><td>None of your personal data (inbound event data)</td></tr>
     <tr><td>Cloudflare, GitHub Pages</td><td>Hosting &amp; content delivery</td><td>Technical/connection data</td></tr>
   </table>
-  <p><strong>Event images.</strong> Event pictures are shown straight from the provider that supplied the listing (for example Ticketmaster’s image servers) — we don’t copy them onto ours. When a listing with a picture is displayed, your browser fetches that image from the provider, so the provider can see your IP address, device and browser type as part of serving it, exactly as if you had visited their site. Listings without a provider image show a plain coloured block instead.</p>
+  <p><strong>Event images.</strong> There are two kinds:</p>
+  <ul>
+    <li><strong>Pictures from event providers</strong> are shown straight from the provider that supplied the listing (for example Ticketmaster’s image servers) — we don’t copy them onto ours. When one is displayed, your browser fetches it from the provider, so the provider can see your IP address, device and browser type as part of serving it, exactly as if you had visited their site.</li>
+    <li><strong>Pictures organizers upload</strong> when they publish an event on Eventually are stored on our own servers (with our database and storage provider, Supabase). Before storing one, the app shrinks it on the organizer’s device, and this also drops the photo’s hidden details such as the camera’s GPS location. Each picture is checked by us before it is shown and is then displayed publicly with the event. A picture the organizer replaces or removes stops being shown, but the file may stay in our storage until we clear it out; the organizer can ask us to delete it at any time (see Section 14).</li>
+  </ul>
+  <p>Listings without a picture show a plain coloured block instead.</p>
 
   <h3>Sharing with event organizers</h3>
   <p>Some events let you <strong>register through Eventually</strong>. If you choose to register for one, we give that event’s organizer your <strong>name</strong>, the <strong>email address on your account</strong>, and the date you registered, so they can plan for you and check you in. This happens only for events you personally register for, and only that organizer (and our administrators) can see it — it is never shown to other attendees or to the public, which sees only a count.</p>
@@ -96,9 +102,10 @@
   <p>Subscribers to a paid ad-free tier (where offered) do not hear sponsor messages.</p>
 
   <h2>6a. Emails we send, and how to stop them</h2>
-  <p>We send two kinds of email you can control, both to your sign-in address:</p>
+  <p>We send three kinds of email you can control, all to your sign-in address:</p>
   <ul>
     <li><strong>Event reminders</strong> — before an event you saved or registered for. These are on by default because they are about something you did; switch them off in <em>Profile → Account details</em> or via the unsubscribe link.</li>
+    <li><strong>Changes to saved events</strong> — if an event you saved is cancelled, postponed or moved. On by default, for the same reason.</li>
     <li><strong>Weekly “what’s on near you”</strong> — off unless you turn it on. One email a week.</li>
   </ul>
   <p>Every one of these carries a one-click unsubscribe that works without signing in. We also send <strong>service emails</strong> you cannot opt out of while you hold an account — sign-in links, registration confirmations, and messages about an event you published — because they are the Service doing what you asked it to.</p>
@@ -110,10 +117,10 @@
   <h2>8. Data retention</h2>
   <p><strong>Live updates are deleted automatically.</strong> They are visible only during a limited window around the event and are removed shortly after it ends. They are not archived.</p>
   <p>Registrations are kept while the event is upcoming and for a short period afterwards, so organizers can reconcile who attended. Cancelling a registration removes it from the organizer’s list immediately; a copy they had already downloaded is then held by them rather than by us.</p>
-  <p>We keep your account information for as long as your account is active. Cached audio and event data are retained only as needed to operate the Service. You may delete your account at any time (see Section 9), after which we delete or anonymize your personal data except where retention is required by law.</p>
+  <p>We keep your account information for as long as your account is active. Cached audio and event data are retained only as needed to operate the Service. Ticket link click records are kept to measure how the Service is used and to reconcile partner commissions. You may ask us to delete your account at any time (see Section 9), after which we delete or anonymize your personal data — including removing your account id from any ticket link click records — except where retention is required by law.</p>
 
   <h2>9. Your rights &amp; choices</h2>
-  <p>Depending on where you live (including under the GDPR and the California CCPA/CPRA), you may have the right to access, correct, delete, or export your personal data, to object to or restrict certain processing, and to withdraw consent. To exercise any of these rights, contact us at <a href="mailto:info@eventually-app.com">info@eventually-app.com</a>. You can also edit your details or delete your account from within the app’s Profile. We will not discriminate against you for exercising these rights.</p>
+  <p>Depending on where you live (including under the GDPR and the California CCPA/CPRA), you may have the right to access, correct, delete, or export your personal data, to object to or restrict certain processing, and to withdraw consent. To exercise any of these rights, contact us at <a href="mailto:info@eventually-app.com">info@eventually-app.com</a>. You can edit your details and email preferences yourself in the app’s Profile. To delete your account, email us from the address on your account and we will delete it, together with your personal data, within 30 days. We will not discriminate against you for exercising these rights.</p>
 
   <h2>10. Children’s privacy</h2>
   <p>The Service is not directed to children under 13 (or under 16 in the EEA), and we do not knowingly collect personal data from them. If you believe a child has provided us data, contact us and we will delete it.</p>
