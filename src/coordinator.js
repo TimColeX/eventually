@@ -22,6 +22,11 @@
     return false;
   }
 
+  // The "Included: post live updates" line under Publish. Off while the feature isn't
+  // being offered to organisers; the feature itself (updates.js, 55_event_updates.sql)
+  // is untouched.
+  const LIVE_UPDATES_PROMO = false;
+
   // Geocoding is the shared EventuallyGeo util (OpenStreetMap Nominatim).
   const Geo = global.EventuallyGeo;
 
@@ -185,7 +190,9 @@
           '<button class="co-publish">Publish event ✦</button>' +
           // Surface the live-updates benefit where it is most persuasive — at the
           // moment someone is deciding to publish here rather than only elsewhere.
-          '<p class="co-perk"><b>Included:</b> while your event is on, post live updates to everyone viewing it — doors, parking, running late. Opens an hour before, disappears when it ends.</p>' +
+          // HIDDEN for now (owner, 2026-09-19): not to be promoted until live updates are
+          // offered. Flip LIVE_UPDATES_PROMO to bring the line back exactly as it was.
+          (LIVE_UPDATES_PROMO ? '<p class="co-perk"><b>Included:</b> while your event is on, post live updates to everyone viewing it — doors, parking, running late. Opens an hour before, disappears when it ends.</p>' : '') +
           '<p class="co-note">Your event is geo-located and published live to the globe.</p>' +
         '</div>' +
       '</div>';

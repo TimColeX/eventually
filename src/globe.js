@@ -184,7 +184,10 @@
 
   Globe.prototype._bind = function () {
     const self = this, cv = this.canvas;
-    let lastX = 0, lastY = 0, moved = 0;
+    let lastX = 0, lastY = 0, moved = 0, lastTouch = 0;
+    // Any touch, on the globe or on the UI above it (capture, so panels can't swallow it).
+    window.addEventListener('touchstart', function () { lastTouch = Date.now(); }, { capture: true, passive: true });
+    window.addEventListener('touchend', function () { lastTouch = Date.now(); }, { capture: true, passive: true });
 
     function down(e) {
       const p = point(e); if (!p) return;
@@ -201,7 +204,14 @@
         self.rotX = Math.max(-1.3, Math.min(1.3, self.rotX + dy * 0.005));
         moved += Math.abs(dx) + Math.abs(dy);
         lastX = p.x; lastY = p.y;
-      } else {
+      } else if (e.type === 'mousemove') {
+        // Hover is a mouse thing. After a tap ANYWHERE (search bar, a button, a panel)
+        // a phone fires one emulated mousemove at that spot, and this listener is on the
+        // window — so a spike that happened to sit under the tap lit its label, and with
+        // no mouse to move away it stayed up. Ignore mouse moves just after a touch, and
+        // clear the label when the pointer is over the UI rather than the globe itself.
+        if (Date.now() - lastTouch < 1000) return;
+        if (e.target !== cv) { self._hoverTest(-1e4, -1e4); return; }
         self._hoverTest(p.x, p.y);
       }
     }
