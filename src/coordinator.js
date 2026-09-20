@@ -495,7 +495,16 @@
       : (Date.now() + '_' + Math.random().toString(36).slice(2))));
 
     const evt = {
-      id: id, name: name, city: this.city || 'Dropped pin', venue: venue || null, endsAt: endsAt,
+      /* city: NULL, never a made-up name.
+         This used to fall back to the literal string "Dropped pin" when the reverse
+         geocode hadn't answered yet (it is fired when the pin is dropped, and someone can
+         publish before it returns). That string then became the event's city everywhere:
+         on its card, in the city's list, in the ledger, in the saved venue, and in the AI
+         host's briefing — "here's what's on in Dropped pin". Sending null instead hands it
+         to trg_events_city_fill (75_fill_missing_cities.sql), which borrows the nearest
+         named event's city or reverse-geocodes server-side, where it is far more reliable
+         than a browser call racing the publish button. */
+      id: id, name: name, city: this.city || null, venue: venue || null, endsAt: endsAt,
       address: address || null, timezone: zone,
       lat: this.pin.lat, lon: this.pin.lon,
       date: date, dayOffset: dayOffset, category: cat,
