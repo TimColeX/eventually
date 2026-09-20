@@ -36,7 +36,7 @@
 </head>
 <body>
 <div class="wrap">
-  <a class="back" href="/">← Back to Eventually</a>
+  <a class="back" href="/" data-back>← Back to Eventually</a>
   <h1>Advertise on Eventually</h1>
   <p class="lead">Reach people at the moment they are deciding what to do tonight — in the city you care about, in a voice they are already listening to.</p>
 
@@ -93,7 +93,32 @@
   <p class="muted">Or email <a href="mailto:info@eventually-app.com">info@eventually-app.com</a>.</p>
 
   <hr>
-  <p class="muted">Eventually · <a href="/about.html">About</a> · <a href="/privacy.html">Privacy Policy</a> · <a href="/terms.html">Terms of Service</a> · <a href="/">Home</a></p>
+  <p class="muted">Eventually · <a href="/about.html">About</a> · <a href="/privacy.html">Privacy Policy</a> · <a href="/terms.html">Terms of Service</a> · <a href="/" data-back>Home</a></p>
 </div>
+<script>
+/* "Back to Eventually" means BACK, when there is a back to go to.
+   Arriving from the app (or a city page) and clicking href="/" would LOAD the app
+   again — a second copy of the globe, and on a phone a fresh splash and a stopped
+   host. history.back() instead lets the browser restore the page we came from,
+   usually from its back-forward cache, so the globe returns exactly as it was.
+   Anyone arriving cold (a search result, a link in an email) has no such history,
+   and the plain href="/" they can see in the status bar is what happens. */
+(function () {
+  'use strict';
+  var cameFromUs = false;
+  try {
+    cameFromUs = !!document.referrer && new URL(document.referrer).origin === location.origin;
+  } catch (e) { cameFromUs = false; }
+  if (!cameFromUs || history.length < 2) return;
+  var links = document.querySelectorAll('a[data-back]');
+  for (var i = 0; i < links.length; i++) {
+    links[i].addEventListener('click', function (e) {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;   // open-in-new-tab still works
+      e.preventDefault();
+      history.back();
+    });
+  }
+})();
+</script>
 </body>
 </html>

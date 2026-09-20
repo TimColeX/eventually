@@ -2503,9 +2503,16 @@
     // arriving cold needs to know what's on offer before being asked for its details.
     // The form is one tap further on (the page's CTA is /?advertise=1 → openContact),
     // and a marketing email can still link straight to it.
-    // (No track() here: usage_events only accepts a fixed list of event names — see
-    // 52_usage_events.sql — and 'advertise_page' isn't one, so it would be dropped.)
-    else if (act === 'contact') window.open('advertise.html', '_blank', 'noopener');
+    /* Same tab, deliberately. A new tab left the globe running behind the page, and the
+       page's "Back to Eventually" then loaded a SECOND globe — two tabs of the same app.
+       It also broke the installed app: window.open('_blank') from a standalone PWA hands
+       the user to the system browser and they never come back. advertise.html is inside
+       the manifest scope ("./"), so navigating keeps them in the app window, and the
+       page's back link calls history.back(), which the browser restores from its back
+       cache — the globe as they left it, not a fresh load.
+       (No track() here: usage_events only accepts a fixed list of event names — see
+       52_usage_events.sql — and 'advertise_page' isn't one, so it would be dropped.) */
+    else if (act === 'contact') location.href = 'advertise.html';
   });
   renderMenuTrigger();
 
