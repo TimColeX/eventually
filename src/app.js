@@ -649,6 +649,21 @@
       if (!acctEnabled() || !A.uploadEventImage) return Promise.resolve({ error: 'offline' });
       return A.uploadEventImage(blob, eventId);
     },
+    // THE VENUE BOOK — places this organiser has used before (97_ledger_and_venues.sql).
+    // Empty for everyone who hasn't published yet, and the UI hides itself when it is.
+    getVenues: function () {
+      if (!acctEnabled() || !A.myVenues) return Promise.resolve([]);
+      return A.myVenues();
+    },
+    onSaveVenue: function (v) {
+      if (!acctEnabled() || !A.rememberVenue) return Promise.resolve(null);
+      return A.rememberVenue(v);
+    },
+    // The publish ledger: events that have since been pruned off the globe.
+    getPublishHistory: function () {
+      if (!acctEnabled() || !A.publishHistory) return Promise.resolve([]);
+      return A.publishHistory();
+    },
     // Returns a Promise<boolean>: true = published. When signed in we write the
     // native event to Supabase (attributed to the user); otherwise demo/local only.
     onPublish: function (evt) {

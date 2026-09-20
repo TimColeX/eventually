@@ -181,6 +181,36 @@
       if (!currentUser) return Promise.resolve([]);
       return sb.rpc('my_events').then(function (r) { return (r && r.data) || []; });
     },
+
+    /* THE VENUE BOOK (97_ledger_and_venues.sql). Places this organiser has used, most-used
+       first. The point is the time zone: it is the field people get wrong, and a wrong one
+       puts the event on the globe at the wrong hour. Saved once, reused in two taps. */
+    myVenues: function () {
+      if (!ENABLED || !currentUser) return Promise.resolve([]);
+      return sb.from('organiser_venues')
+        .select('id,name,address,lat,lon,timezone,city,country,used_count')
+        .order('used_count', { ascending: false })
+        .order('last_used_at', { ascending: false })
+        .limit(12)
+        .then(function (r) { return (r && r.data) || []; }, function () { return []; });
+    },
+    /* Remember (or bump) a venue. Never fails the publish it rides along with — a saved
+       venue is a convenience, and losing it must not lose someone their event. */
+    rememberVenue: function (v) {
+      if (!ENABLED || !currentUser || !v || !v.name || v.lat == null) return Promise.resolve(null);
+      return sb.rpc('remember_venue', {
+        p_name: v.name, p_lat: v.lat, p_lon: v.lon,
+        p_address: v.address || null, p_timezone: v.timezone || null,
+        p_city: v.city || null, p_country: v.country || null
+      }).then(function (r) { return (r && r.data) || null; }, function () { return null; });
+    },
+    /* Events this organiser published that have since been pruned. The ledger is what
+       the allowance counts, so it is also the honest history to show them. */
+    publishHistory: function () {
+      if (!ENABLED || !currentUser) return Promise.resolve([]);
+      return sb.rpc('my_publish_history', { p_limit: 12 })
+        .then(function (r) { return (r && r.data) || []; }, function () { return []; });
+    },
     // ---- creator tools: edit / unpublish / delete + per-event stats ----
     updateEvent: function (evt) {
       if (!currentUser) return Promise.resolve({ error: { message: 'Not signed in' } });

@@ -22,6 +22,16 @@
     return false;
   }
 
+  /* Module-level escape. Several render helpers used to define their own `esc` inside a
+     function body, which meant a helper written OUTSIDE one of them threw ReferenceError
+     at runtime — invisible, because the surrounding .catch() swallowed it. One escape,
+     usable anywhere in this file. */
+  function escHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (m) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[m];
+    });
+  }
+
   // The "Included: post live updates" line under Publish. Off while the feature isn't
   // being offered to organisers; the feature itself (updates.js, 55_event_updates.sql)
   // is untouched.
@@ -41,6 +51,11 @@
     this.getDefaultLocation = opts.getDefaultLocation; // () -> {lat,lon,city}|null (user's set location)
     this.onFlyTo = opts.onFlyTo;           // (lat, lon) -> void
     this.onUploadImage = opts.onUploadImage;   // (blob, eventId) -> Promise<{url}|{error}>
+    this.getVenues = opts.getVenues || null;   // () -> Promise<[{id,name,address,lat,lon,timezone,city}]>
+    this.getPublishHistory = opts.getPublishHistory || null;  // () -> Promise<[{title,city,start_time,outcome}]>
+    this.onSaveVenue = opts.onSaveVenue || null; // (venue) -> Promise (remember it for next time)
+    this._venues = [];                          // the venue book, as last loaded
+    this._venueId = null;                       // which saved venue this event is using
     this.getMyEvents = opts.getMyEvents;   // () -> [events]  (demo fallback)
     this._imageBlob = null;                 // a newly chosen poster, already shrunk
     this._imageExisting = null;             // the picture the event already has
@@ -55,6 +70,7 @@
   Coordinator.prototype.open = function () {
     this.el.classList.add('open');
     if (!this.editId && !this.locationChosen) this._applyDefaultLocation();   // start on the user's location
+    this._loadVenues();                      // the venue book, if this organiser has one
     // Canvas has no size until the modal is visible → draw on the next frame.
     const self = this;
     requestAnimationFrame(function () { self._drawMap(); });
@@ -149,6 +165,13 @@
           '<div class="co-col co-col-side">' +
             '<div class="co-loc">' +
               '<div class="co-card-h">Location · search or drop a pin</div>' +
+              /* THE VENUE BOOK. Hidden until there is something in it, so a first-time
+                 organiser sees exactly the form they see today. Each chip carries the
+                 address, the pin AND the time zone, which is the field worth saving. */
+              '<div class="co-venues" hidden>' +
+                '<div class="co-venues-h">Your venues</div>' +
+                '<div class="co-venue-list"></div>' +
+              '</div>' +
               '<div class="co-search"><input class="f-addr" placeholder="Search address or city…" autocomplete="off"><div class="co-suggest"></div></div>' +
               '<canvas class="map-canvas"></canvas>' +
               '<div class="co-coords">' +
@@ -307,6 +330,15 @@
     });
     document.addEventListener('click', function (e) { if (!e.target.closest('.co-search')) hideSuggest(); });
 
+    // Venue book: one tap fills the pin, the address and the time zone.
+    const venueList = this.el.querySelector('.co-venue-list');
+    if (venueList) venueList.addEventListener('click', function (e) {
+      const b = e.target.closest('[data-v]'); if (!b) return;
+      self._useVenue((self._venues || [])[+b.dataset.v]);
+    });
+    // Typing a different address by hand means this is no longer that saved venue.
+    addr.addEventListener('input', function () { self._venueId = null; self._markChosenVenue(); });
+
     function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (m) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[m]; }); }
 
     this.el.querySelector('.co-publish').addEventListener('click', function () {
@@ -329,6 +361,12 @@
       const id = b.dataset.id, act = b.dataset.meAct;
       const ev = (self._myEvents || []).find(function (x) { return x.event_id === id; });
       if (act === 'edit') { if (ev) { self._meClose(); self.open(); self._editEvent(ev); } }
+      /* DUPLICATE — the same event on another date. Everything is carried over EXCEPT
+         the date and the identity, so this becomes a new event (and a new slot), not an
+         edit of the old one. The picture comes too: the organiser keeps their poster
+         without going back to their camera roll, and no new file is stored — the copy
+         points at the one already uploaded. */
+      else if (act === 'duplicate') { if (ev) { self._meClose(); self.open(); self._duplicateEvent(ev); } }
       else if (act === 'toggle') {
         const on = !(ev && ev.published !== false);
         // Taking a listing off the globe is reversible and does NOT return the posting
@@ -480,6 +518,9 @@
     // save nothing at all and say so — publishing an event that silently lost
     // its poster is worse than asking someone to press the button again.
     evt.imageRemoved = !!this._imageRemoved;
+    // A duplicate's picture: the SAME file, referenced again. No upload, no second copy
+    // in storage, and it arrives as pending so it is checked rather than going live unseen.
+    if (!this._imageBlob && this._copiedImage && !this._imageRemoved) evt.imagePending = this._copiedImage;
     const upload = (this._imageBlob && this.onUploadImage)
       ? Promise.resolve(this.onUploadImage(this._imageBlob, id))
           .then(function (r) { if (r && r.url) { evt.imagePending = r.url; return true; } return false; },
@@ -498,6 +539,17 @@
         const r = (res && typeof res === 'object') ? res : { ok: !!res, live: true };
         btn.disabled = false;
         if (!r.ok) { btn.textContent = editing ? 'Update event' : 'Publish event ✦'; return; }
+        /* Remember the venue for next time — after the event is safely saved, never
+           before, and never in a way that can fail the publish. The time zone is the
+           part worth keeping: it is what the organiser would otherwise retype. */
+        if (self.onSaveVenue && evt.venue && evt.lat != null) {
+          try {
+            Promise.resolve(self.onSaveVenue({
+              name: evt.venue, lat: evt.lat, lon: evt.lon, address: evt.address || null,
+              timezone: evt.timezone || null, city: evt.city || null, country: evt.country || null
+            })).then(function () { self._loadVenues(); }, function () {});
+          } catch (e) { /* never let a convenience break a publish */ }
+        }
         let msg = r.message || (editing ? 'Changes saved.' : 'Published!');
         // Only say this when there is genuinely a picture waiting on a live event —
         // for a new event the picture rides along with the event's own approval.
@@ -516,6 +568,94 @@
      Adopt what it tells us: the venue's time zone, and the address — so the
      organiser doesn't retype what the map already knows. Anything they have
      already typed themselves is left alone. */
+  /* THE VENUE BOOK — places this organiser has already used.
+     Two rules keep it out of the way: the whole block stays hidden until there IS a
+     saved venue (a first-time organiser sees exactly today's form), and picking one is
+     the same act as picking a search result — pin, address, city and TIME ZONE together,
+     which is the field that otherwise gets typed wrong and puts an event on the globe at
+     the wrong hour. */
+  Coordinator.prototype._loadVenues = function () {
+    const self = this;
+    const wrap = this.el.querySelector('.co-venues');
+    const list = this.el.querySelector('.co-venue-list');
+    if (!wrap || !list || !this.getVenues) return;
+    Promise.resolve(this.getVenues()).then(function (vs) {
+      // Most-used first, and only the handful worth tapping: a dozen chips would be a
+      // wall of them on a phone, and anyone with more venues than this can still search.
+      self._venues = (vs || []).filter(function (v) { return v && v.name && v.lat != null; }).slice(0, 6);
+      if (!self._venues.length) { wrap.hidden = true; list.innerHTML = ''; return; }
+      list.innerHTML = self._venues.map(function (v, i) {
+        return '<button type="button" class="co-venue" data-v="' + i + '" aria-pressed="false" title="' +
+          escHtml([v.address, v.timezone].filter(Boolean).join(' · ')) + '">' +
+          '<span class="co-venue-n">' + escHtml(v.name) + '</span>' +
+          (v.city ? '<span class="co-venue-c">' + escHtml(v.city) + '</span>' : '') + '</button>';
+      }).join('');
+      wrap.hidden = false;
+      self._markChosenVenue();
+    }).catch(function (e) {
+      // A venue list is a convenience and must never block publishing — but a silent
+      // catch once hid a ReferenceError here, so say something to the console.
+      console.warn('[coordinator] venue book failed to render:', e && e.message);
+    });
+  };
+  // Show which chip is in use, so the card says where the event is without being read twice.
+  Coordinator.prototype._markChosenVenue = function () {
+    const self = this;
+    this.el.querySelectorAll('.co-venue').forEach(function (b) {
+      const v = (self._venues || [])[+b.dataset.v];
+      const on = !!(v && self._venueId && v.id === self._venueId);
+      b.classList.toggle('is-on', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  };
+  Coordinator.prototype._useVenue = function (v) {
+    if (!v) return;
+    this.pin = { lat: +v.lat, lon: +v.lon };
+    this.city = v.city || null;
+    this.locationChosen = true;
+    this._venueId = v.id || null;
+    const venueEl = this.el.querySelector('.f-venue');
+    const addrEl = this.el.querySelector('.f-address');
+    const addrSearch = this.el.querySelector('.f-addr');
+    if (venueEl) venueEl.value = v.name || '';
+    if (addrEl && v.address) addrEl.value = v.address;
+    if (addrSearch) addrSearch.value = v.city || v.name || '';
+    // The saved zone wins over a guess from coordinates — it is the one we know is right.
+    if (v.timezone) { this.timezone = v.timezone; this._tzSure = true; this._fillTzOptions({ zone: v.timezone, sure: true }); this._syncTzNote(); }
+    const loc = this.el.querySelector('.co-loc'); if (loc) loc.classList.remove('co-need-loc');
+    this._markChosenVenue();
+    this._drawMap();
+    this._toast('📍 ' + (v.name || 'Venue set'));
+  };
+
+  /* DUPLICATE — "the same thing, another night".
+     Built ON TOP of the edit path so there is one place that knows how to put an event
+     into this form, then the three things that make it a NEW event are undone:
+       • editId is cleared, so publishing writes a new row and takes a new slot;
+       • the DATE is cleared, because the date is the only thing that is certainly
+         different — leaving the old one invites publishing an event in the past;
+       • the picture is carried as a PENDING copy of the same uploaded file, so the
+         organiser keeps their poster with no upload, no second file in storage, and it
+         still passes under review rather than going live unseen. */
+  Coordinator.prototype._duplicateEvent = function (ev) {
+    this._editEvent(ev);
+    this.editId = null;
+    const q = function (s) { return this.el.querySelector(s); }.bind(this);
+    if (q('.f-date')) q('.f-date').value = '';
+    // Featuring is granted per event, so a copy asks again rather than inheriting it.
+    if (q('.f-feature')) q('.f-feature').checked = false;
+    const live = ev.image_pending || ev.image_url || null;
+    this._imageExisting = null; this._imageRemoved = false; this._imageBlob = null;
+    this._copiedImage = live;                                  // sent as image_pending on publish
+    if (live) this._showExistingImage(live, true);
+    const h = this.el.querySelector('.co-form-h');
+    if (h) h.textContent = 'Copy of: ' + (ev.title || 'event');
+    const pub = this.el.querySelector('.co-publish');
+    if (pub) pub.textContent = 'Publish event ✦';
+    const cancel = this.el.querySelector('.co-cancel-edit'); if (cancel) cancel.style.display = 'none';
+    this._toast('Copied — pick the new date' + (live ? '. The picture comes with it.' : '.'));
+  };
+
   Coordinator.prototype._adoptPlace = function (res) {
     if (!res) return;
     const TZ = global.EventuallyTZ;
@@ -721,6 +861,8 @@
   Coordinator.prototype._resetForm = function () {
     const q = function (s) { return this.el.querySelector(s); }.bind(this);
     this.editId = null; this.city = null;
+    // A fresh form is not a copy of anything, and is not at a saved venue yet.
+    this._copiedImage = null; this._venueId = null; this._markChosenVenue();
     q('.f-name').value = ''; q('.f-desc').value = ''; q('.f-url').value = '';
     q('.f-reg-link').checked = true; q('.f-capacity').value = '';
     this._syncRegMode();
@@ -750,6 +892,7 @@
   Coordinator.prototype._editEvent = function (ev) {
     const q = function (s) { return this.el.querySelector(s); }.bind(this);
     this.editId = ev.event_id;
+    this._copiedImage = null;                // editing is not duplicating
     this.locationChosen = true;              // an existing event already has a location
     q('.f-name').value = ev.title || '';
     q('.f-cat').value = ev.category || q('.f-cat').value;
@@ -870,6 +1013,7 @@
           '<small>' + esc(e.city || '') + ' · ★ ' + (+e.saves || 0) + ' · ♥ ' + (+e.likes || 0) + ' · ✓ ' + (+e.attends || 0) + ' going</small></div>' +
           '<div class="an-r-actions">' +
             '<button class="an-act" data-me-act="edit" data-id="' + esc(e.event_id) + '">Edit</button>' +
+            '<button class="an-act" data-me-act="duplicate" data-id="' + esc(e.event_id) + '">Duplicate</button>' +
             // "Remove from globe" replaces Delete: the listing comes off the map but the
             // record (and the posting slot it used) stays. Permanent deletion is admin-only —
             // otherwise publish → delete → publish would loop around the yearly limit.
@@ -888,7 +1032,8 @@
           '<div class="an-updates"><div class="live-updates" data-uid="' + esc(e.event_id) + '" hidden></div></div>' +
         '</div>';
       });
-      body.innerHTML = html + '</div>';
+      body.innerHTML = html + '</div><div class="an-history" hidden></div>';
+      self._renderHistoryInto(body.querySelector('.an-history'));
 
       if (global.EventuallyUpdates) {
         body.querySelectorAll('.an-updates .live-updates').forEach(function (box) {
@@ -910,6 +1055,35 @@
       const mine = (this.getMyEvents && this.getMyEvents()) || [];
       draw(mine.map(function (e) { return { event_id: e.id, title: e.name, city: e.city, published: true, saves: 0, likes: e.likes, attends: e.attending }; }), true);
     }
+  };
+
+  /* "Published earlier this year" — the events that have since come off the globe.
+     Finished events are pruned (that is deliberate: nobody pays to store a museum), so
+     without this an organiser's history silently disappears. The list comes from the
+     publish ledger, which is also what the yearly allowance counts — so what they see
+     here is exactly what they are being charged against. Stays hidden when empty. */
+  Coordinator.prototype._renderHistoryInto = function (box) {
+    if (!box || !this.getPublishHistory) return;
+    Promise.resolve(this.getPublishHistory()).then(function (rows) {
+      rows = (rows || []).filter(function (r) { return r && r.outcome !== 'rejected'; });
+      if (!rows.length) { box.hidden = true; box.innerHTML = ''; return; }
+      const when = function (iso) {
+        const d = iso ? new Date(iso) : null;
+        if (!d || isNaN(d)) return '';
+        return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+      };
+      box.innerHTML = '<div class="an-hist-h">Published earlier this year</div>' +
+        '<ul class="an-hist-list">' + rows.map(function (r) {
+          return '<li class="an-hist-row">' +
+            '<span class="an-hist-t">' + escHtml(r.title || 'Untitled event') + '</span>' +
+            '<span class="an-hist-c">' + escHtml(r.city || '') + '</span>' +
+            '<span class="an-hist-d">' + escHtml(when(r.start_time || r.published_at)) + '</span>' +
+          '</li>';
+        }).join('') + '</ul>' +
+        '<p class="an-hist-note">Finished events come off the globe, so only the record stays — ' +
+        'and that record is what counts towards your yearly allowance.</p>';
+      box.hidden = false;
+    }).catch(function () { box.hidden = true; });
   };
 
   Coordinator.prototype._toast = function (msg) {

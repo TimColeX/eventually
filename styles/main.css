@@ -575,6 +575,43 @@ body {
 .co-note { font-family: var(--mono); font-size: 10px; letter-spacing: .04em; color: var(--hint); margin: 8px 0 0; text-align: center; }
 .map-canvas { width: 100%; border-radius: 12px; border: 1px solid var(--line); cursor: crosshair; display: block; }
 .co-loc.co-need-loc .map-canvas, .co-loc.co-need-loc .f-addr { border-color: #b3402a; box-shadow: 0 0 0 2px rgba(179,64,42,.16); }
+
+/* THE VENUE BOOK — places this organiser has used before. Hidden entirely until there
+   is one, so a first-time publisher sees the form exactly as it was. Chips share the
+   height of the other controls in this card and wrap rather than scrolling sideways. */
+.co-venues { margin-bottom: 12px; }
+.co-venues-h { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); margin-bottom: 8px; }
+.co-venue-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.co-venue {
+  display: inline-flex; align-items: baseline; gap: 7px; max-width: 100%;
+  min-height: 40px; padding: 9px 13px; border-radius: 999px;
+  border: 1px solid var(--line-2); background: var(--paper); color: var(--ink);
+  font-family: var(--font); font-size: 13px; line-height: 1.2; cursor: pointer;
+  text-align: left;
+}
+.co-venue:hover { border-color: var(--clay); }
+.co-venue.is-on { background: var(--clay); border-color: var(--clay); color: var(--cream); font-weight: 600; }
+/* A long venue name shortens rather than stretching the row or wrapping mid-chip. */
+.co-venue-n { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* On a phone a 300px chip takes a row to itself, so four venues became four rows of
+   near-empty space. Shortening the name lets two share a row and keeps the card tight. */
+@media (max-width: 560px) {
+  .co-venue-n { max-width: 34vw; }
+  .co-venue { padding: 9px 12px; }
+  .co-venue-c { display: none; }   /* the city repeats the address below; drop it here */
+}
+.co-venue-c { font-size: 11.5px; color: var(--faint); white-space: nowrap; }
+.co-venue.is-on .co-venue-c { color: rgba(244,236,226,.82); }
+
+/* "Published earlier this year" — the ledger, under the live events in My Events. */
+.an-history { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.an-hist-h { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); margin-bottom: 10px; }
+.an-hist-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.an-hist-row { display: flex; align-items: baseline; gap: 10px; font-size: 13.5px; color: var(--ink); }
+.an-hist-t { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.an-hist-c { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; color: var(--muted); }
+.an-hist-d { flex: none; font-family: var(--mono); font-size: 11.5px; color: var(--faint); }
+.an-hist-note { margin: 12px 0 0; font-size: 12px; line-height: 1.55; color: var(--hint); }
 .co-coords { margin-top: 10px; display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .co-coords .co-place { margin: 0; }
 .co-coords .latlon { margin: 0; }
@@ -622,6 +659,13 @@ body {
 .an-r-actions { display: flex; gap: 6px; flex: none; }
 .an-act { padding: 6px 11px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--paper); color: var(--ink); font-family: var(--font); font-size: 12px; font-weight: 600; cursor: pointer; }
 .an-act:hover { border-color: var(--clay); }
+/* An event row now carries up to four actions (Edit · Duplicate · Remove · Registrations).
+   On a phone they must not squeeze into a single unreadable line or run off the card, so
+   the group takes the full width and the buttons pair up at a real touch size. */
+@media (max-width: 560px) {
+  .an-r-actions { flex: 1 1 100%; flex-wrap: wrap; gap: 8px; }
+  .an-act { flex: 1 1 calc(50% - 4px); min-height: 44px; padding: 10px 12px; font-size: 12.5px; }
+}
 .an-danger { color: #b3402a; }
 .an-danger:hover { border-color: #b3402a; background: rgba(179,64,42,.06); }
 .co-cancel-edit { width: 100%; margin-top: 8px; padding: 11px; border-radius: 12px; cursor: pointer; background: var(--paper); border: 1px solid var(--line-2); color: var(--muted); font-family: var(--font); font-weight: 600; font-size: 13px; }
