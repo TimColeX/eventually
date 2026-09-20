@@ -355,6 +355,12 @@
     onPause: function () { music.stop(); },
     onSpeakStart: function () { music.duck(true); },   // duck under the voice
     onSpeakEnd: function () { music.duck(false); },    // swell between segments
+    // Is sound REALLY coming out? Used only to catch a start the browser refused, so the
+    // play/pause icon can't claim to be playing over silence (see _verifyAudible).
+    audioLive: function () {
+      try { return !!(music && music.audioEl && !music.audioEl.paused && !music.audioEl.ended); }
+      catch (e) { return false; }
+    },
     // Cost-optimized "radio" model: a SHARED, cached ElevenLabs briefing keyed by
     // CLUSTER CELL (Plus only) — a RICHER Claude script than the free tier, same
     // location model. null → the host uses the free browser-voice rotation.

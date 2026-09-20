@@ -31,6 +31,7 @@
     this.getCityFiller = opts.getCityFiller || null;  // () -> Promise<{segments,filler}|null> (cached city radio filler for the current city)
     this.getWeatherSeg = opts.getWeatherSeg || null;  // () -> Promise<{segments}|null> (one cached "what it's doing outside" line)
     this.getLaterSeg = opts.getLaterSeg || null;      // () -> Promise<{segments}|null> (cached "still to come" bulletin, morning-made)
+    this.audioLive = opts.audioLive || null;          // () -> bool (is the music bed REALLY playing? see _verifyAudible)
     this.MUSIC_GAP = 4200;                        // ~4s music swell between radio-filler segments (uses the play-button bed)
     this._fillerPlaying = false;                  // true while cached city filler segments are playing (incl. music gaps)
     /* CONTINUOUS RADIO — a station that UNFOLDS, then gets out of the way.
@@ -1023,6 +1024,30 @@
     // passed). Cancelled the moment the user switches city, pauses, or stops.
     this._scheduleCycle();
   };
+  /* THE BUTTON MUST NOT LIE.
+     The show is started optimistically — the icon flips to pause, then music and voice are
+     asked to play. When that start came from the auto-start timer rather than a tap, the
+     browser refuses it (no user gesture, no sound), and the bar sat there showing "pause"
+     over complete silence. That is very likely where the habit of pressing pause-then-play
+     came from: the control said it was playing, so the only way to get sound was to toggle it.
+     So: a moment after an optimistic start, check whether anything is ACTUALLY audible, and
+     if not, put the play icon back. Only ever runs before the first successful unlock —
+     once audio has genuinely worked in this session the icon is left alone, so a quiet gap
+     between clips can never flip it. */
+  AIHost.prototype._verifyAudible = function () {
+    clearTimeout(this._audibleTimer); this._audibleTimer = null;
+    if (this._audioUnlocked) return;                 // audio has worked here already
+    const self = this;
+    this._audibleTimer = setTimeout(function () {
+      if (self._audioUnlocked) return;               // it started while we waited
+      if (!self.speaking && !self._musicHold) return;// stopped meanwhile — stop() owns the icon
+      if (self._premiumPlaying || self._fillerPlaying) return;              // a clip is talking
+      if (self.audioLive && self.audioLive()) return;                        // the music bed is up
+      self.icPlay.style.display = ''; self.icPause.style.display = 'none';
+      ealog('nothing audible after start → showing Play (a tap is needed)');
+    }, 2200);
+  };
+
   // Arm the next radio cycle, or don't — when the gaps are used up the station has said
   // everything it has for this city, and silence under the music is the right answer.
   AIHost.prototype._scheduleCycle = function () {
@@ -1415,6 +1440,7 @@
     this.icPause.style.display = '';
     this._unlockSpeech();                   // MUST run inside the tap to enable mobile TTS
     this.onPlay();                          // music starts and plays alone first
+    this._verifyAudible();                  // …and if the browser refuses, put the icon back
     if (this._timer) { clearInterval(this._timer); this._timer = null; }   // pause silent ticker
     const self = this;
     // full ~10s intro on the first play; ~6s on an auto-start (opts.shortLead, which
