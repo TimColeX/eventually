@@ -475,7 +475,7 @@ ${LIVE_UPDATES_PROMO ? `      <li><b>Post live updates while it's running.</b> D
        deep-link treatment as ?publish=1 — see openDeepLink() in src/app.js. Without
        it someone arriving here from a search has no route to Help at all: these
        pages carry no bottom bar. -->
-  <p class="muted">Eventually · <a href="/">Globe</a> · <a href="/browse/">All cities</a> · <a href="/?help=1">Help</a> · <a href="/about.html">About</a> · <a href="/privacy.html">Privacy</a> · <a href="/terms.html">Terms</a></p>
+  <p class="muted">Eventually · <a href="/">Globe</a> · <a href="/browse/">All cities</a> · <a href="/?help=1">Help</a> · <a href="/about.html">About</a> · <a href="/advertise.html">Advertise</a> · <a href="/privacy.html">Privacy</a> · <a href="/terms.html">Terms</a></p>
 </div>
 </body>
 </html>`;
@@ -531,7 +531,7 @@ function browseIndex(list) {
   <p>${list.length} cities with events on Eventually right now. Updated daily.</p>
 ${sections}
   <hr>
-  <p class="muted">Eventually · <a href="/">Globe</a> · <a href="/?help=1">Help</a> · <a href="/about.html">About</a> · <a href="/privacy.html">Privacy</a> · <a href="/terms.html">Terms</a></p>
+  <p class="muted">Eventually · <a href="/">Globe</a> · <a href="/?help=1">Help</a> · <a href="/about.html">About</a> · <a href="/advertise.html">Advertise</a> · <a href="/privacy.html">Privacy</a> · <a href="/terms.html">Terms</a></p>
 </div>
 </body>
 </html>`;
@@ -543,6 +543,9 @@ function sitemap(list) {
     { loc: `${SITE}/`, pri: '1.0', freq: 'daily' },
     { loc: `${SITE}/browse/`, pri: '0.8', freq: 'daily' },
     { loc: `${SITE}/about.html`, pri: '0.4', freq: 'monthly' },
+    // Businesses searching "advertise events <city>" are a real inbound route, so the
+    // page has to be indexable and in the sitemap — not just linked from the app menu.
+    { loc: `${SITE}/advertise.html`, pri: '0.4', freq: 'monthly' },
     { loc: `${SITE}/privacy.html`, pri: '0.2', freq: 'yearly' },
     { loc: `${SITE}/terms.html`, pri: '0.2', freq: 'yearly' },
     ...list.map((c) => ({ loc: `${SITE}/events/${c.slug}/`, pri: '0.7', freq: 'daily' })),

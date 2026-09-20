@@ -2428,7 +2428,13 @@
     else if (act === 'types') openTypes();
     else if (act === 'help') openHelp();
     else if (act === 'browse') location.href = '/browse/';
-    else if (act === 'contact') openContact();
+    // The menu now opens the Advertise PAGE rather than the enquiry form: a business
+    // arriving cold needs to know what's on offer before being asked for its details.
+    // The form is one tap further on (the page's CTA is /?advertise=1 → openContact),
+    // and a marketing email can still link straight to it.
+    // (No track() here: usage_events only accepts a fixed list of event names — see
+    // 52_usage_events.sql — and 'advertise_page' isn't one, so it would be dropped.)
+    else if (act === 'contact') window.open('advertise.html', '_blank', 'noopener');
   });
   renderMenuTrigger();
 
