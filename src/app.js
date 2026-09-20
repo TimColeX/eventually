@@ -443,6 +443,13 @@
       if (!loc || loc.lat == null) return Promise.resolve(null);
       return window.EventuallyHostVoice.getWeatherSeg({ lat: loc.lat, lon: loc.lon, lang: P.get().language || 'en' });
     },
+    // "Still to come" — cached-only; null unless the morning job wrote one for this city.
+    getLaterSeg: function () {
+      if (!window.EventuallyHostVoice || !window.EventuallyHostVoice.getLaterSeg) return Promise.resolve(null);
+      const loc = activeBriefingLocation || P.get().location;
+      if (!loc || loc.lat == null) return Promise.resolve(null);
+      return window.EventuallyHostVoice.getLaterSeg({ lat: loc.lat, lon: loc.lon, city: loc.city || null, lang: P.get().language || 'en' });
+    },
     // Admin-tunable delivery for the free browser voice (rate/pitch).
     getVoiceSettings: function () { return RT.hostVoice || {}; },
     // "Back to my area" — return the Host (and the map) to the user's home location.

@@ -152,6 +152,23 @@
         .then(function (j) { return (j && j.segments && j.segments.length) ? { segments: j.segments } : null; })
         .catch(function () { return null; });
     },
+    // "STILL TO COME" — the hosts naming events that haven't started yet, played later in
+    // the show. CACHE-ONLY from the app's side: the morning job writes it for the cities
+    // with proven listeners (95_still_to_come.sql), and a listener's request never
+    // generates one. No script for this city today → null, and the station plays on.
+    // opts: {lat,lon,city,lang} -> Promise<{segments:[{url,text}]}|null>
+    getLaterSeg: function (opts) {
+      if (!ENABLED) return Promise.resolve(null);
+      var o = opts || {};
+      if (o.lat == null || o.lon == null) return Promise.resolve(null);
+      return fetch(BASE + '/functions/v1/briefing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': ANON, 'Authorization': 'Bearer ' + ANON },
+        body: JSON.stringify({ later: true, lat: o.lat, lon: o.lon, city: o.city || null, lang: (o.lang || 'en').slice(0, 2) })
+      }).then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) { return (j && j.segments && j.segments.length) ? { segments: j.segments } : null; })
+        .catch(function () { return null; });
+    },
     // (Hover PRE-WARM was removed: it generated briefings for cities the pointer merely
     // passed over. Popular cities are now made each morning by 91_briefing_pregen.sql.)
     // ONE-TIME HOST INTRODUCTION — the hosts say their names ONCE per device, then every

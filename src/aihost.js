@@ -30,6 +30,7 @@
     this._transIdx = 0;                           // rotates through the transition lines
     this.getCityFiller = opts.getCityFiller || null;  // () -> Promise<{segments,filler}|null> (cached city radio filler for the current city)
     this.getWeatherSeg = opts.getWeatherSeg || null;  // () -> Promise<{segments}|null> (one cached "what it's doing outside" line)
+    this.getLaterSeg = opts.getLaterSeg || null;      // () -> Promise<{segments}|null> (cached "still to come" bulletin, morning-made)
     this.MUSIC_GAP = 4200;                        // ~4s music swell between radio-filler segments (uses the play-button bed)
     this._fillerPlaying = false;                  // true while cached city filler segments are playing (incl. music gaps)
     /* CONTINUOUS RADIO — a station that UNFOLDS, then gets out of the way.
@@ -51,6 +52,7 @@
     this._cityQueue = null;                       // cached city segments not yet heard for this city
     this._cityLoaded = false;                     // have this city's segments been fetched at all?
     this._weatherSaid = false;                    // the forecast is given once per city visit
+    this._laterSaid = false;                      // …and so is the "still to come" bulletin
     this.FILLER_COOLDOWN = 180000;                // never replay the city segments within 3 min of last playing them
     this._lastFillerAt = 0; this._replayTimer = null;
     this.onHomeReset = opts.onHomeReset || null;  // () -> void ("back to my area" clicked)
@@ -234,7 +236,7 @@
     if (!this.speaking && !this._musicHold) { ealog('  ignored: host is stopped'); return; }
     this._gen++;                                 // invalidate ANY in-flight generation for the old city (#4)
     clearTimeout(this._replayTimer); this._replayTimer = null;   // cancel any pending continuous-radio replay
-    this._cycleIdx = 0; this._cityQueue = null; this._cityLoaded = false; this._weatherSaid = false;          // a new city gets the full unfolding show again
+    this._cycleIdx = 0; this._cityQueue = null; this._cityLoaded = false; this._weatherSaid = false; this._laterSaid = false;          // a new city gets the full unfolding show again
     this._identCity = city || this._focusCity || null;   // → the generic transition plays while the new city loads
     this._primeAudio();                          // iOS: keep the audio element alive within THIS tap gesture
     // Still in the music lead-in after Play (nothing spoken yet) → switch NOW. Waiting for
@@ -1073,6 +1075,20 @@
       }).catch(function () { if (self._cityQueue && self._cityQueue.length) start(take()); });
       return;
     }
+    /* The SECOND later cycle is "still to come" — the hosts naming events that haven't
+       started yet. It is the only segment carrying new information, so it goes early,
+       right after the weather. Cache-only: if the morning job didn't write one for this
+       city today, this is null and the city's own segments take the slot instead. */
+    if (this._cycleIdx === 1 && this.getLaterSeg && !this._laterSaid) {
+      this._laterSaid = true;
+      Promise.resolve(this.getLaterSeg()).then(function (w) {
+        const segs = (w && w.segments) || [];
+        if (segs.length) start(segs);
+        else if (self._cityQueue && self._cityQueue.length) start(take());
+        else self._radioCycle();
+      }).catch(function () { if (self._cityQueue && self._cityQueue.length) start(take()); });
+      return;
+    }
     if (this._cityQueue && this._cityQueue.length) { start(take()); return; }
     // Queue loaded and now empty: this city has nothing left to say, and re-fetching would
     // simply hand back the segments already heard (a city with only two of them used to
@@ -1387,7 +1403,7 @@
     this.speaking = true;
     this._gen++;                           // new session → invalidate any older in-flight fetch
     this._musicHold = false; this._freeMode = false;
-    this._cycleIdx = 0; this._cityQueue = null; this._cityLoaded = false; this._weatherSaid = false;   // a fresh Play starts the unfolding show over
+    this._cycleIdx = 0; this._cityQueue = null; this._cityLoaded = false; this._weatherSaid = false; this._laterSaid = false;   // a fresh Play starts the unfolding show over
     this._openerDone = false;              // premium stinger plays once per Play session
     this._openingDone = false;             // replay the show opening (intro → briefing) on each Play
     this._switchPending = false;
@@ -1487,7 +1503,7 @@
     clearInterval(this._ampTimer); clearInterval(this._voiceTween);
     clearTimeout(this._introTimer); clearTimeout(this._gapTimer); clearTimeout(this._readTimer); clearTimeout(this._switchFade);
     clearTimeout(this._replayTimer); this._replayTimer = null; clearTimeout(this._fillerGap);   // cancel continuous-radio cycle + filler
-    this._cycleIdx = 0; this._cityQueue = null; this._cityLoaded = false; this._weatherSaid = false;   // stopped → the next Play starts the show over
+    this._cycleIdx = 0; this._cityQueue = null; this._cityLoaded = false; this._weatherSaid = false; this._laterSaid = false;   // stopped → the next Play starts the show over
     this.onPause();                         // stop the music bed
     if (!this._timer) this._timer = setInterval(this._rotate.bind(this), this.IDLE);   // resume silent ticker
   };
