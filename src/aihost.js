@@ -31,7 +31,23 @@
     this.getCityFiller = opts.getCityFiller || null;  // () -> Promise<{segments,filler}|null> (cached city radio filler for the current city)
     this.MUSIC_GAP = 4200;                        // ~4s music swell between radio-filler segments (uses the play-button bed)
     this._fillerPlaying = false;                  // true while cached city filler segments are playing (incl. music gaps)
-    this.REPLAY_MS = 180000;                      // continuous radio: after settling on music, re-run the show (~3 min)
+    /* CONTINUOUS RADIO — a station that UNFOLDS, then gets out of the way.
+     *
+     * It used to re-run the WHOLE show every 3 minutes: the same briefing recording and the
+     * same city segments, over and over, for as long as anyone left it on. Cached audio, so
+     * it cost nothing — but a listener who stayed on one city heard the identical briefing
+     * five times in fifteen minutes.
+     *
+     * Now each later cycle plays ONE piece that hasn't been heard yet (the city's history,
+     * then its culture, then the events it's known for, then the sign-off), the gaps grow,
+     * and when there's nothing new left to say the station simply stops talking and leaves
+     * the music playing. Nothing here generates anything: these are the same cached clips.
+     */
+    this.CYCLE_GAPS = [240000, 420000, 600000];   // music between later cycles: 4, 7, 10 min → then quiet
+    this.CYCLE_JITTER = 0.15;                     // ±15% so it never feels like a metronome
+    this._cycleIdx = 0;                           // how many later cycles have played this city
+    this._cityQueue = null;                       // cached city segments not yet heard for this city
+    this._cityLoaded = false;                     // have this city's segments been fetched at all?
     this.FILLER_COOLDOWN = 180000;                // never replay the city segments within 3 min of last playing them
     this._lastFillerAt = 0; this._replayTimer = null;
     this.onHomeReset = opts.onHomeReset || null;  // () -> void ("back to my area" clicked)
@@ -215,6 +231,7 @@
     if (!this.speaking && !this._musicHold) { ealog('  ignored: host is stopped'); return; }
     this._gen++;                                 // invalidate ANY in-flight generation for the old city (#4)
     clearTimeout(this._replayTimer); this._replayTimer = null;   // cancel any pending continuous-radio replay
+    this._cycleIdx = 0; this._cityQueue = null; this._cityLoaded = false;          // a new city gets the full unfolding show again
     this._identCity = city || this._focusCity || null;   // → the generic transition plays while the new city loads
     this._primeAudio();                          // iOS: keep the audio element alive within THIS tap gesture
     // Still in the music lead-in after Play (nothing spoken yet) → switch NOW. Waiting for
@@ -999,23 +1016,60 @@
     // CONTINUOUS RADIO: after ~3 min on the music bed, bring the show back around for the
     // current city (re-checks events; replays city segments only if the 3-min cooldown has
     // passed). Cancelled the moment the user switches city, pauses, or stops.
-    clearTimeout(this._replayTimer); this._replayTimer = null;
-    if (this.twoHost && this.REPLAY_MS > 0) {
-      const self = this;
-      this._replayTimer = setTimeout(function () { self._radioReplay(); }, this.REPLAY_MS);
-    }
+    this._scheduleCycle();
   };
-  // Continuous-radio re-engage: resume the show for the CURRENT city after the music pause.
-  // Only fires if still holding on the music bed (user hasn't switched/paused). Skips the
-  // welcome/intro (deduped anyway) and goes straight to the briefing → filler.
-  AIHost.prototype._radioReplay = function () {
+  // Arm the next radio cycle, or don't — when the gaps are used up the station has said
+  // everything it has for this city, and silence under the music is the right answer.
+  AIHost.prototype._scheduleCycle = function () {
+    clearTimeout(this._replayTimer); this._replayTimer = null;
+    if (!this.twoHost) return;
+    const gap = this.CYCLE_GAPS[this._cycleIdx];
+    if (gap == null) return;                               // out of cycles → music only, no more talking
+    const self = this;
+    const jitter = 1 + (Math.random() * 2 - 1) * this.CYCLE_JITTER;
+    this._replayTimer = setTimeout(function () { self._radioCycle(); }, Math.round(gap * jitter));
+  };
+  /* One later cycle: play the NEXT unheard city segment(s), then back to the music bed.
+     Deliberately NOT a re-run of the show — the briefing recording is never played twice in
+     a session. Only fires while still sitting on the music bed (a switch, pause or stop
+     cancels it). The last cycle empties whatever is left, so the sign-off always lands. */
+  AIHost.prototype._radioCycle = function () {
     clearTimeout(this._replayTimer); this._replayTimer = null;
     if (!this._musicHold || !this.twoHost) return;         // user acted → cancel
-    this._musicHold = false; this.speaking = true;
-    this._premiumPlaying = false; this._fillerPlaying = false;
-    this._openerDone = false;                              // re-run the show for the current city
-    this.icPlay.style.display = 'none'; this.icPause.style.display = '';
-    this._rotate();
+    const self = this, myGen = this._gen;
+    const start = function (segs) {
+      if (!self._musicHold || myGen !== self._gen) return;  // user acted while we fetched
+      if (!segs || !segs.length) { self._cycleIdx = self.CYCLE_GAPS.length; return; }   // nothing new to say → stay quiet
+      self._cycleIdx++;
+      self._musicHold = false; self.speaking = true;
+      self._premiumPlaying = false; self._fillerPlaying = false;
+      self.icPlay.style.display = 'none'; self.icPause.style.display = '';
+      self._playFillerSegs(segs, 0, myGen);                 // → _endFreeIntro() → _scheduleCycle()
+    };
+    const take = function () {
+      const q = self._cityQueue || [];
+      // On the final cycle take everything that's left (at most three, so it stays a
+      // moment and not a lecture) — otherwise the sign-off would never be heard.
+      const last = self._cycleIdx >= self.CYCLE_GAPS.length - 1;
+      const n = last ? Math.min(3, q.length) : 1;
+      const out = q.slice(0, n);
+      self._cityQueue = q.slice(n);
+      return out;
+    };
+    if (this._cityQueue && this._cityQueue.length) { start(take()); return; }
+    // Queue loaded and now empty: this city has nothing left to say, and re-fetching would
+    // simply hand back the segments already heard (a city with only two of them used to
+    // repeat the second one every cycle). Stop the cycles instead.
+    if (this._cityLoaded) { this._cycleIdx = this.CYCLE_GAPS.length; return; }
+    // Never loaded (e.g. the first pass skipped the filler) — fetch this city's cached
+    // segments once, then start from the second one: the opener belongs to the first pass.
+    if (!this.getCityFiller) { this._cycleIdx = this.CYCLE_GAPS.length; return; }
+    Promise.resolve(this.getCityFiller(true)).then(function (f) {
+      const segs = (f && f.segments) || [];
+      self._cityLoaded = true;
+      self._cityQueue = segs.slice(1);
+      start(take());
+    }).catch(function () { self._cycleIdx = self.CYCLE_GAPS.length; });
   };
 
   // ── CITY RADIO FILLER ───────────────────────────────────────────────────────────
@@ -1045,15 +1099,21 @@
     const self = this; if (myGen == null) myGen = this._gen;
     if (!this.speaking || myGen !== this._gen) return;
     if (!this.getCityFiller) { this._endFreeIntro(); return; }
-    // COOLDOWN: don't replay the city segments within 3 min of last playing them — settle
-    // to music instead (the replay timer will bring the show back around later).
-    if (Date.now() - this._lastFillerAt < this.FILLER_COOLDOWN) { this._endFreeIntro(); return; }
+    /* The 3-minute cooldown that used to guard this is gone, and so is the block-of-five.
+       The first pass plays only the OPENER — the bridge line out of the events, or the
+       "it's a little quiet here" line plus one more when there were no events to discuss
+       at all. Everything else is queued for the later cycles (see _radioCycle), so no
+       segment is ever heard twice in a session and no cooldown is needed to prevent it. */
     this._setBuffering(true);
     Promise.resolve(this.getCityFiller(!!afterEvents)).then(function (f) {
       self._setBuffering(false);
       if (!self.speaking || myGen !== self._gen) return;
-      if (f && f.segments && f.segments.length) self._playFillerSegs(f.segments, 0, myGen);
-      else self._endFreeIntro();
+      const segs = (f && f.segments) || [];
+      if (!segs.length) { self._cityLoaded = true; self._cityQueue = null; self._endFreeIntro(); return; }
+      const first = afterEvents ? 1 : 2;          // a quiet city gets a little more up front
+      self._cityLoaded = true;
+      self._cityQueue = segs.slice(first);
+      self._playFillerSegs(segs.slice(0, first), 0, myGen);
     }).catch(function () { self._setBuffering(false); if (self.speaking && myGen === self._gen) self._endFreeIntro(); });
   };
 
@@ -1303,14 +1363,14 @@
     this._musicHold = true;
     this.onPlay();                                       // resume the music bed (no narration)
     this.icPlay.style.display = 'none'; this.icPause.style.display = '';
-    clearTimeout(this._replayTimer);                     // resumed → bring the show back around (~3 min)
-    if (this.twoHost && this.REPLAY_MS > 0) { const self = this; this._replayTimer = setTimeout(function () { self._radioReplay(); }, this.REPLAY_MS); }
+    this._scheduleCycle();                               // resumed → pick the cycles up where they left off
   };
 
   AIHost.prototype.play = function (opts) {
     this.speaking = true;
     this._gen++;                           // new session → invalidate any older in-flight fetch
     this._musicHold = false; this._freeMode = false;
+    this._cycleIdx = 0; this._cityQueue = null; this._cityLoaded = false;   // a fresh Play starts the unfolding show over
     this._openerDone = false;              // premium stinger plays once per Play session
     this._openingDone = false;             // replay the show opening (intro → briefing) on each Play
     this._switchPending = false;
@@ -1409,7 +1469,8 @@
     try { this._audio.pause(); } catch (e) {}
     clearInterval(this._ampTimer); clearInterval(this._voiceTween);
     clearTimeout(this._introTimer); clearTimeout(this._gapTimer); clearTimeout(this._readTimer); clearTimeout(this._switchFade);
-    clearTimeout(this._replayTimer); this._replayTimer = null; clearTimeout(this._fillerGap);   // cancel continuous-radio replay + filler
+    clearTimeout(this._replayTimer); this._replayTimer = null; clearTimeout(this._fillerGap);   // cancel continuous-radio cycle + filler
+    this._cycleIdx = 0; this._cityQueue = null; this._cityLoaded = false;   // stopped → the next Play starts the show over
     this.onPause();                         // stop the music bed
     if (!this._timer) this._timer = setInterval(this._rotate.bind(this), this.IDLE);   // resume silent ticker
   };
