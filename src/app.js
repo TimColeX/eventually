@@ -435,6 +435,14 @@
       if (!city) return Promise.resolve(null);
       return window.EventuallyHostVoice.getCityFiller({ city: city, lat: loc && loc.lat, lon: loc && loc.lon, lang: P.get().language || 'en', afterEvents: !!afterEvents });
     },
+    // WEATHER for the place the host is talking about — one cached line, no city name in
+    // it, so the recording is shared by every city with the same sky and temperature.
+    getWeatherSeg: function () {
+      if (!window.EventuallyHostVoice || !window.EventuallyHostVoice.getWeatherSeg) return Promise.resolve(null);
+      const loc = activeBriefingLocation || P.get().location;
+      if (!loc || loc.lat == null) return Promise.resolve(null);
+      return window.EventuallyHostVoice.getWeatherSeg({ lat: loc.lat, lon: loc.lon, lang: P.get().language || 'en' });
+    },
     // Admin-tunable delivery for the free browser voice (rate/pitch).
     getVoiceSettings: function () { return RT.hostVoice || {}; },
     // "Back to my area" — return the Host (and the map) to the user's home location.
@@ -849,6 +857,36 @@
     });
   }
 
+  /* Fill every forecast slot under `root`. Slots are grouped by ~11 km cell, so a city's
+     whole list costs ONE request (and usually none — the answer is cached in the tab and
+     on the server). Best-effort throughout: no forecast simply means no chip. */
+  function paintWeather(root) {
+    const W = window.EventuallyWeather;
+    if (!W || !W.enabled || !root) return;
+    const slots = root.querySelectorAll ? root.querySelectorAll('.wx-slot[data-lat]') : [];
+    if (!slots.length) return;
+    const byCell = {};
+    slots.forEach(function (el) {
+      if (el.dataset.done) return;
+      const lat = +el.dataset.lat, lon = +el.dataset.lon;
+      if (!isFinite(lat) || !isFinite(lon)) return;
+      const key = lat.toFixed(1) + ',' + lon.toFixed(1);
+      (byCell[key] = byCell[key] || { lat: lat, lon: lon, els: [] }).els.push(el);
+    });
+    Object.keys(byCell).forEach(function (k) {
+      const g = byCell[k];
+      W.get(g.lat, g.lon).then(function (d) {
+        if (!d) return;
+        g.els.forEach(function (el) {
+          const p = W.at(d, +el.dataset.when);
+          if (!p) return;
+          el.innerHTML = W.chip(p);
+          el.dataset.done = '1';
+        });
+      });
+    });
+  }
+
   function eventCardHTML(ev) {
     const type = D.typeForDate(ev, selectedDate);
     // The card's date is the date AT THE VENUE — an 11 p.m. Lagos gig must not
@@ -874,7 +912,12 @@
             featured + badge +
           '</div>' +
           '<h4 class="ev-title">' + esc(ev.name) + '</h4>' +
-          '<p class="ev-date">' + dateLabel + (ev.city ? '  ·  ' + esc(ev.city) : '') + countdownChip(ev) + '</p>' +
+          '<p class="ev-date">' + dateLabel + (ev.city ? '  ·  ' + esc(ev.city) : '') + countdownChip(ev) +
+            // Filled in by paintWeather() once the forecast for this place arrives — one
+            // request covers every card in the list, and a card renders fine without it.
+            '<span class="wx-slot" data-when="' + ev.date.getTime() + '"' +
+              (ev.lat != null ? ' data-lat="' + ev.lat + '" data-lon="' + ev.lon + '"' : '') + '></span>' +
+          '</p>' +
           '<p class="ev-desc">' + esc(ev.description) + '</p>' +
           '<div class="ev-foot">' + srcs + '<span class="ev-view">View ›</span></div>' +
         '</div>' +
@@ -944,6 +987,7 @@
     shown.forEach(function (ev) { cardsHtml += eventCardHTML(ev); });
     placeList.innerHTML = cardsHtml + more + partnerCardHTML(c);
     ensureImages(shown);                      // pictures drop in when they arrive
+    paintWeather(placeList);                  // …and so does the forecast
     M.mountAdSense(placeList);
     if (focusEventId) {
       const el = placeList.querySelector('.ev[data-id="' + focusEventId + '"]');
@@ -1210,6 +1254,9 @@
           ((ev.venue || ev.city) ? '  —  ' + [ev.venue, ev.city].filter(Boolean).map(esc).join(', ') : '') + '</p>' +
         (ev.address ? '<p class="evd-addr">📍 ' + esc(ev.address) + '</p>' : '') +
         (type === 'upcoming' ? '<div class="evd-cd"><span class="cd-label">Starts in</span><span class="ev-cd" data-start="' + ev.date.getTime() + '">⏳ ' + esc(fmtCountdown(ev.date.getTime() - Date.now())) + '</span></div>' : '') +
+        // Forecast for when it starts. Empty (and invisible) unless one arrives.
+        '<p class="evd-wx" data-when="' + ev.date.getTime() + '"' +
+          (ev.lat != null ? ' data-lat="' + ev.lat + '" data-lon="' + ev.lon + '"' : '') + ' hidden></p>' +
         transparency +
         (gated
           ? '<div class="evd-gate">' +
@@ -1243,9 +1290,26 @@
       mountRegistration(eventScroll.querySelector('.reg-box'));
       mountCounts(ev);
     }
+    paintEventWeather(eventScroll);
     M.mountAdSense(eventScroll);
     eventScroll.scrollTop = 0; syncEventShade();
     eventEl.classList.add('open');
+  }
+  /* The event page says it in words, and credits MET Norway — showing their data is
+     licensed on the condition that they are credited wherever it appears. */
+  function paintEventWeather(scroll) {
+    const W = window.EventuallyWeather, el = scroll && scroll.querySelector('.evd-wx');
+    if (!W || !W.enabled || !el || el.dataset.lat == null) return;
+    W.get(+el.dataset.lat, +el.dataset.lon).then(function (d) {
+      if (!d) return;
+      const p = W.at(d, +el.dataset.when);
+      const text = p ? W.line(p) : '';
+      if (!text) return;
+      const l = W.look(p.sky);
+      el.innerHTML = '<span class="evd-wx-ic">' + l.icon + '</span> ' + esc(text) +
+        ' <span class="evd-wx-src">forecast · <a href="https://www.met.no/en" target="_blank" rel="noopener">MET Norway</a></span>';
+      el.hidden = false;
+    });
   }
   function closeEvent() { eventEl.classList.remove('open'); activeEventId = null; if (window.EventuallyUpdates) window.EventuallyUpdates.unmount(); }
 

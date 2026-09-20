@@ -136,6 +136,22 @@
         .then(function (j) { return (j && j.segments && j.segments.length) ? { segments: j.segments, filler: true, music: j.music || 'between' } : null; })
         .catch(function () { return null; });
     },
+    // WEATHER LINE — one spoken sentence about what it's doing outside, right now, where
+    // the listener is looking. The clip carries no city name, so every city that is
+    // "partly cloudy and 11 degrees" plays the same cached recording (see 31_briefing.ts).
+    // opts: {lat,lon,lang} -> Promise<{segments:[{url,text,speaker}]}|null>
+    getWeatherSeg: function (opts) {
+      if (!ENABLED) return Promise.resolve(null);
+      var o = opts || {};
+      if (o.lat == null || o.lon == null) return Promise.resolve(null);
+      return fetch(BASE + '/functions/v1/briefing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': ANON, 'Authorization': 'Bearer ' + ANON },
+        body: JSON.stringify({ weather: true, lat: o.lat, lon: o.lon, lang: (o.lang || 'en').slice(0, 2) })
+      }).then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) { return (j && j.segments && j.segments.length) ? { segments: j.segments } : null; })
+        .catch(function () { return null; });
+    },
     // (Hover PRE-WARM was removed: it generated briefings for cities the pointer merely
     // passed over. Popular cities are now made each morning by 91_briefing_pregen.sql.)
     // ONE-TIME HOST INTRODUCTION — the hosts say their names ONCE per device, then every

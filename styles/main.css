@@ -1131,6 +1131,17 @@ body.no-timeline.has-ad .legend { bottom: calc(138px + env(safe-area-inset-botto
   background: var(--clay); color: var(--cream); font-family: var(--font); font-size: 15px; font-weight: 700; }
 .evd-gate-cta:hover { background: #b94e32; }
 .evd-gate-fine { margin: 0; font-size: 12px; color: var(--hint); line-height: 1.5; }
+/* Forecast: a chip on the card, a sentence on the event page. Both appear only when a
+   forecast actually arrives, so nothing shifts on a card that never gets one. */
+.wx-chip { display: inline-flex; align-items: center; gap: 3px; margin-left: 8px; font-size: 11px;
+  font-weight: 600; color: var(--muted); white-space: nowrap; }
+.evd-wx { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; margin: 10px 0 0;
+  font-size: 13px; color: var(--muted); }
+.evd-wx[hidden] { display: none; }
+.evd-wx-ic { font-size: 15px; }
+.evd-wx-src { font-size: 11px; color: var(--hint); }
+.evd-wx-src a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+
 /* Small print at the foot of every event — present, not loud. */
 .evd-disclaimer { margin: 18px 0 4px; padding-top: 12px; border-top: 1px solid var(--line-2); font-size: 11px; line-height: 1.5; color: var(--hint); }
 .evd-disclaimer a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
