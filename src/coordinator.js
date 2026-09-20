@@ -448,6 +448,21 @@
       const map = this.el.querySelector('.co-loc'); if (map) { map.classList.add('co-need-loc'); q('.f-addr').focus(); }
       return;
     }
+    /* A pin in the sea is almost always a mis-tap on a 350px world map, and it publishes
+       a real event into the middle of an ocean — where nobody can attend it and the globe
+       shows a spike in open water. ASK rather than block: isLand() is the same coarse
+       ellipse test the mini-map draws with, so a genuinely coastal venue can be a false
+       positive, and an island venue must still be publishable. */
+    if (!isLand(this.pin.lat, this.pin.lon)) {
+      const where = this.pin.lat.toFixed(2) + ', ' + this.pin.lon.toFixed(2);
+      if (!confirm('That pin looks like it is out at sea (' + where + ').\n\n' +
+                   'If you meant an island or a harbour, carry on. Otherwise close this and ' +
+                   'search for the address instead.\n\nPublish here anyway?')) {
+        const map2 = this.el.querySelector('.co-loc');
+        if (map2) { map2.classList.add('co-need-loc'); q('.f-addr').focus(); }
+        return;
+      }
+    }
     const cat = q('.f-cat').value;
     const dateStr = q('.f-date').value;
     if (!dateStr) { this._toast('Pick a date.'); return; }
