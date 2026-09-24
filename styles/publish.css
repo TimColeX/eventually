@@ -1,0 +1,194 @@
+/* Eventually — the organiser's page (publish.html).
+ *
+ * This is the SHELL only. The form inside it is the same coordinator markup the app has
+ * always used (src/coordinator.js), rendered in `pageMode`, so there is exactly one
+ * publish form to maintain — see `.co-page` in main.css for how the modal chrome comes
+ * off. Everything below is the page around it: header, tabs, allowance, venue book.
+ *
+ * main.css is loaded first for the Clay tokens and every .co-/.an- rule. It also styles
+ * the APP body — fixed, unscrollable, dark grey behind a globe — so the first block here
+ * puts a normal document back.
+ */
+
+/* ── the page is a page ──────────────────────────────────────────────────────── */
+/* `hidden` is how this page shows and hides everything from script, and the browser
+   implements it as a UA `display: none` — which ANY author display rule silently beats.
+   The tab strip is `display: flex`, so it sat there fully visible with hidden="" on it.
+   One rule, once, rather than a [hidden] twin for every flexed block. */
+[hidden] { display: none !important; }
+html { height: auto; }
+body.pg-body {
+  height: auto; min-height: 100%;
+  overflow: visible;                     /* main.css hides overflow for the globe */
+  background: var(--canvas);
+  user-select: text;                     /* main.css turns selection off app-wide */
+  -webkit-user-select: text;
+  display: flex; flex-direction: column;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ── header ──────────────────────────────────────────────────────────────────── */
+.pg-top {
+  position: sticky; top: 0; z-index: 30;
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 12px 20px; padding-top: calc(12px + env(safe-area-inset-top, 0px));
+  background: rgba(244,236,226,.94);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+}
+.pg-brand { display: flex; align-items: baseline; gap: 9px; text-decoration: none; color: var(--ink); min-width: 0; }
+.pg-dots { display: inline-flex; gap: 3px; align-self: center; flex: none; }
+.pg-dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--clay); }
+.pg-dots i:nth-child(2) { opacity: .66; }
+.pg-dots i:nth-child(3) { opacity: .38; }
+.pg-word { font-size: 17px; font-weight: 800; letter-spacing: -0.03em; }
+.pg-kicker {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--clay); white-space: nowrap;
+}
+.pg-top-right { display: flex; align-items: center; gap: 10px; flex: none; }
+/* The allowance also rides in the header once it is known — the same chip the modal used. */
+.pg-top .pg-quota {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--muted); border: 1px solid var(--line-2); background: var(--paper);
+  border-radius: 999px; padding: 4px 10px; white-space: nowrap;
+}
+.pg-acct, .pg-globe {
+  font-size: 12.5px; font-weight: 600; text-decoration: none;
+  color: var(--ink); background: var(--paper); border: 1px solid var(--line-2);
+  border-radius: 999px; padding: 8px 13px; cursor: pointer; font-family: var(--font);
+  white-space: nowrap;
+}
+.pg-acct:hover, .pg-globe:hover { border-color: var(--clay); }
+/* The signed-in address can be anything up to a very long one, and it is the header's
+   only elastic item — so it is the one that gives way, never the way back to the globe. */
+.pg-acct { max-width: 32vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pg-globe-short { display: none; }
+
+/* ── main column ─────────────────────────────────────────────────────────────── */
+.pg-main { flex: 1 1 auto; width: 100%; max-width: 1020px; margin: 0 auto; padding: 22px 20px 56px; }
+
+.pg-intro { margin-bottom: 26px; max-width: 640px; }
+.pg-h1 { font-size: clamp(26px, 4.4vw, 38px); font-weight: 800; letter-spacing: -0.035em; margin: 0 0 10px; text-wrap: balance; }
+.pg-lead { font-size: 16px; line-height: 1.6; color: var(--muted); margin: 0 0 16px; }
+.pg-facts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.pg-facts li { position: relative; padding-left: 20px; font-size: 14px; line-height: 1.55; color: var(--muted); }
+.pg-facts li::before { content: ""; position: absolute; left: 0; top: 8px; width: 8px; height: 8px; border-radius: 50%; background: var(--clay); }
+.pg-facts b { color: var(--ink); font-weight: 700; }
+
+/* ── tabs ────────────────────────────────────────────────────────────────────── */
+.pg-tabs {
+  display: flex; gap: 6px; margin-bottom: 18px; padding: 5px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: 999px;
+  overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+}
+.pg-tabs::-webkit-scrollbar { display: none; }
+.pg-tab {
+  flex: 1 1 auto; min-height: 40px; padding: 9px 16px; white-space: nowrap;
+  border: 0; border-radius: 999px; background: transparent; cursor: pointer;
+  font-family: var(--font); font-size: 13.5px; font-weight: 600; color: var(--muted);
+}
+.pg-tab:hover { color: var(--ink); }
+.pg-tab.is-on { background: var(--ink); color: var(--cream); }
+.pg-tab:focus-visible { outline: 2px solid var(--clay); outline-offset: 2px; }
+
+/* ── the allowance, said plainly ─────────────────────────────────────────────── */
+.pg-allow { margin-bottom: 18px; padding: 15px 18px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); }
+.pg-allow-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.pg-allow-n { font-size: 15px; font-weight: 700; color: var(--ink); }
+.pg-allow-sub { font-family: var(--mono); font-size: 11px; letter-spacing: .05em; color: var(--faint); }
+.pg-allow-bar { height: 8px; border-radius: 99px; background: #efe4d4; overflow: hidden; }
+.pg-allow-bar i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--clay), var(--apricot)); }
+.pg-allow.is-full .pg-allow-n { color: var(--clay); }
+.pg-allow-note { margin: 10px 0 0; font-size: 12px; line-height: 1.55; color: var(--hint); }
+.pg-allow-note a { color: var(--clay); }
+
+/* ── cards (Your events, Your venues, Sign in) ───────────────────────────────── */
+.pg-card { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px 20px; }
+.pg-h2 { font-size: 18px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 6px; }
+.pg-sub { font-size: 13.5px; line-height: 1.55; color: var(--muted); margin: 0 0 16px; }
+
+/* ── the venue book ──────────────────────────────────────────────────────────── */
+.pg-venues { display: flex; flex-direction: column; }
+.pg-venue { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.pg-venue:last-child { border-bottom: 0; }
+.pg-v-main { flex: 1 1 auto; min-width: 0; }
+.pg-v-name { display: block; font-size: 14.5px; font-weight: 700; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pg-v-sub { display: block; font-size: 12.5px; color: var(--muted); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pg-v-tz { font-family: var(--mono); font-size: 11px; color: var(--faint); }
+.pg-v-acts { display: flex; gap: 6px; flex: none; }
+.pg-v-empty { font-size: 14px; color: var(--muted); margin: 0; }
+
+/* ── sign in ─────────────────────────────────────────────────────────────────── */
+.pg-signin .pg-card { max-width: 440px; }
+.pg-auth { display: flex; flex-direction: column; gap: 14px; }
+.pg-google {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  min-height: 46px; width: 100%; border-radius: 12px; cursor: pointer;
+  background: var(--paper); border: 1px solid var(--line-2); color: var(--ink);
+  font-family: var(--font); font-size: 14px; font-weight: 600;
+}
+.pg-google:hover { border-color: var(--clay); }
+.pg-or { display: flex; align-items: center; gap: 12px; color: var(--hint); font-size: 12px; }
+.pg-or::before, .pg-or::after { content: ""; flex: 1 1 auto; height: 1px; background: var(--line); }
+.pg-mail { display: flex; flex-direction: column; gap: 8px; }
+.pg-mail label { font-size: 11.5px; color: var(--muted); }
+.pg-mail input {
+  width: 100%; min-height: 46px; padding: 11px 13px; border-radius: 10px;
+  border: 1px solid var(--line-2); background: var(--bg2); color: var(--ink);
+  font-family: var(--font); font-size: 15px;         /* 15px+ or iOS zooms the page in */
+}
+.pg-mail input:focus { border-color: var(--clay); background: #fff; outline: none; }
+.pg-send {
+  min-height: 46px; border-radius: 12px; border: 0; cursor: pointer;
+  background: var(--clay); color: #fff; font-family: var(--font); font-size: 14.5px; font-weight: 700;
+}
+.pg-send:hover { background: #b94e32; }
+.pg-send[disabled] { opacity: .6; cursor: default; }
+.pg-auth-note { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--muted); }
+.pg-auth-note.is-bad { color: #b3402a; }
+
+/* ── the form panel ──────────────────────────────────────────────────────────── */
+/* The coordinator paints its own card; this panel only carries the gap around it. */
+.pg-panel[hidden] { display: none; }
+
+/* The "we kept what you typed" line. Quiet — it is reassurance, not an alert. */
+.pg-draft {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  margin-bottom: 12px; padding: 11px 14px; border-radius: 12px;
+  background: #F7F1E3; border: 1px solid #e7dcc4;
+}
+.pg-draft[hidden] { display: none; }
+.pg-draft span { flex: 1 1 220px; min-width: 0; font-size: 12.5px; line-height: 1.5; color: #7a6220; }
+.pg-draft .pg-draft-x { flex: none; }
+
+/* ── footer ──────────────────────────────────────────────────────────────────── */
+.pg-foot { border-top: 1px solid var(--line); padding: 20px; text-align: center; }
+.pg-foot p { margin: 0; font-size: 12.5px; color: var(--faint); }
+.pg-foot a { color: var(--muted); text-decoration: none; }
+.pg-foot a:hover { color: var(--clay); text-decoration: underline; }
+
+/* ── narrow screens ──────────────────────────────────────────────────────────── */
+@media (max-width: 620px) {
+  .pg-top { padding: 10px 14px; padding-top: calc(10px + env(safe-area-inset-top, 0px)); gap: 8px; }
+  .pg-kicker { display: none; }              /* the page title already says it */
+  .pg-top .pg-quota { display: none; }       /* it has its own block below, in full */
+  .pg-top-right { gap: 6px; min-width: 0; }
+  .pg-globe-long { display: none; }
+  .pg-globe-short { display: inline; }
+  .pg-acct { max-width: 40vw; padding: 8px 11px; }
+  .pg-main { padding: 18px 14px 44px; }
+  /* All three tabs fit a 375px phone at this size, so the strip doesn't need scrolling
+     — and a tab you have to scroll to find is a tab nobody presses. */
+  .pg-tabs { padding: 4px; gap: 3px; }
+  .pg-tab { flex: 1 1 auto; font-size: 12.5px; padding: 9px 6px; }
+  .pg-card { padding: 16px 15px 18px; }
+  .pg-allow { padding: 14px 15px; }
+  /* Actions wrap under the venue rather than squeezing the name to nothing. */
+  .pg-venue { flex-wrap: wrap; }
+  .pg-v-acts { flex: 1 1 100%; }
+  .pg-v-acts .an-act { flex: 1 1 calc(50% - 3px); min-height: 44px; }
+}
+@media (max-width: 380px) {
+  .pg-globe { padding: 8px 10px; font-size: 12px; }
+}

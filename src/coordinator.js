@@ -53,6 +53,7 @@
     this.onUploadImage = opts.onUploadImage;   // (blob, eventId) -> Promise<{url}|{error}>
     this.getVenues = opts.getVenues || null;   // () -> Promise<[{id,name,address,lat,lon,timezone,city}]>
     this.getPublishHistory = opts.getPublishHistory || null;  // () -> Promise<[{title,city,start_time,outcome}]>
+    this.pageMode = !!opts.pageMode;           // true on publish.html: a page, not a modal
     this.onSaveVenue = opts.onSaveVenue || null; // (venue) -> Promise (remember it for next time)
     this._venues = [];                          // the venue book, as last loaded
     this._venueId = null;                       // which saved venue this event is using
@@ -69,6 +70,7 @@
 
   Coordinator.prototype.open = function () {
     this.el.classList.add('open');
+    if (this.pageMode) this.el.classList.add('co-page');   // publish.html: no modal chrome
     if (!this.editId && !this.locationChosen) this._applyDefaultLocation();   // start on the user's location
     this._loadVenues();                      // the venue book, if this organiser has one
     // Canvas has no size until the modal is visible → draw on the next frame.
@@ -1012,9 +1014,16 @@
     function draw(rows, real) {
       self._myEvents = rows;
       if (!rows.length) {
+        /* An organiser with nothing CURRENT is not the same as one who has never
+           published. Finished events are pruned, so someone who ran four nights this
+           summer arrives here to an empty list — and used to be told "No events yet",
+           which reads as "we lost your events". The ledger knows better, so the history
+           is rendered in this state too, and the wording waits to see it. */
         body.innerHTML = '<p class="an-empty">' + (real === false
           ? 'Sign in to publish and manage your events here.'
-          : 'No events yet. Publish one to see it here with likes, saves and attendees.') + '</p>';
+          : 'Nothing coming up right now — publish an event and it appears here with its saves, likes and attendees.') +
+          '</p><div class="an-history" hidden></div>';
+        self._renderHistoryInto(body.querySelector('.an-history'));
         return;
       }
       const sum = function (k) { return rows.reduce(function (a, e) { return a + (+e[k] || 0); }, 0); };

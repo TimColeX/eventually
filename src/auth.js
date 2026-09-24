@@ -194,6 +194,22 @@
         .limit(12)
         .then(function (r) { return (r && r.data) || []; }, function () { return []; });
     },
+    /* Rename / forget a venue, from the organiser's page. These go straight at the table
+       rather than through an RPC because `organiser_venues` already carries an
+       own-rows-only update policy and an own-rows-only delete policy (97); the .eq() is
+       belt as well as braces. Forgetting a venue changes nothing about events already
+       published from it — the address and pin are copied onto the event at publish. */
+    renameVenue: function (id, name) {
+      const n = String(name == null ? '' : name).trim();
+      if (!ENABLED || !currentUser || !id || !n) return Promise.resolve({ error: { message: 'Nothing to save' } });
+      return sb.from('organiser_venues').update({ name: n.slice(0, 120) })
+        .eq('id', id).eq('user_id', currentUser.id).then(logErr('renameVenue'));
+    },
+    forgetVenue: function (id) {
+      if (!ENABLED || !currentUser || !id) return Promise.resolve({ error: { message: 'Not signed in' } });
+      return sb.from('organiser_venues').delete()
+        .eq('id', id).eq('user_id', currentUser.id).then(logErr('forgetVenue'));
+    },
     /* Remember (or bump) a venue. Never fails the publish it rides along with — a saved
        venue is a convenience, and losing it must not lose someone their event. */
     rememberVenue: function (v) {

@@ -122,8 +122,8 @@
     </div>
   </div>
 
-  <!-- coordinator portal -->
-  <div id="coordinator" class="coordinator"></div>
+  <!-- (The publish form lived here as a modal until v225. It has its own page now:
+       publish.html, which mounts the same src/coordinator.js in page mode.) -->
 
   <!-- full event detail (tap-through from a card) -->
   <aside id="event" class="evdetail"><div class="evd-scroll"></div></aside>
@@ -237,29 +237,16 @@
 
   <div id="toast" class="toast"></div>
 
-  <!-- Backend config. Safe to commit: the anon key is a PUBLIC key, protected by
-       row-level security. Leave both blank to run on the built-in demo data.
-       (The Ticketmaster key is NEVER here — it lives only in Supabase Secrets.) -->
   <script>
     /* Build stamp. Must match sw.js CACHE and version.json — `node tools/bump-version.js`
-       keeps all three in step. This is how a running app knows a newer one exists. */
-    window.EVENTUALLY_BUILD = 'v224';
-    window.EVENTUALLY_CONFIG = {
-      supabaseUrl: 'https://gpsetmqivzchlvyrcgld.supabase.co',
-      supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdwc2V0bXFpdnpjaGx2eXJjZ2xkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1MDM2NzcsImV4cCI6MjA5ODA3OTY3N30.a0BB-FQDh5NKFvgxeSgJ3YmeN_HYOWGLOJza29wW8KI',
-      // Billing (Lemon Squeezy). Leave blank to keep the mock Plus toggle.
-      // Fill these in once your store + products exist (see backend/SETUP-BILLING.md).
-      billing: {
-        plusCheckoutUrl: '',      // Lemon Squeezy "Eventually Plus" subscription checkout URL
-        featureCheckoutUrl: '',   // one-off "Feature this event" product checkout URL
-        freeFeaturesPerMonth: 3   // hybrid: free features/month for Plus members
-      },
-      // AI Host premium voice (ElevenLabs, Plus-only). Set elevenlabs:true once the
-      // host-tts function + ELEVENLABS_API_KEY + voice ids are set up. Free tier
-      // (and everyone if false) keeps the on-device browser voice.
-      host: { elevenlabs: true }
-    };
+       keeps all three in step. This is how a running app knows a newer one exists.
+       It stays inline because this file is the one the bump script rewrites. */
+    window.EVENTUALLY_BUILD = 'v225';
   </script>
+  <!-- Backend config, shared with publish.html so there is one copy of it. Safe to
+       commit: the anon key is a PUBLIC key, protected by row-level security.
+       (The Ticketmaster key is NEVER here — it lives only in Supabase Secrets.) -->
+  <script src="config.js"></script>
 
   <!-- Supabase JS (auth + user data). Falls back to anonymous mode if it can't load. -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -285,7 +272,6 @@
   <script src="src/globe.js"></script>
   <script src="src/timeline.js"></script>
   <script src="src/aihost.js"></script>
-  <script src="src/coordinator.js"></script>
   <script src="src/tour.js"></script>
   <script src="src/updates.js"></script>
   <script src="src/weather.js"></script>

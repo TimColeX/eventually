@@ -464,17 +464,18 @@ ${LIVE_UPDATES_PROMO ? `      <li><b>Post live updates while it's running.</b> D
     </ul>
     <p class="muted">New listings are checked before they appear, so there's a short
        wait the first time. You'll get an email when it's live.</p>
-    <a class="cta" href="/?publish=1">Publish an event in ${esc(c.city)} →</a>
+    <a class="cta" href="/publish.html">Publish an event in ${esc(c.city)} →</a>
   </section>
 
   <hr>
   <h2>Nearby cities</h2>
   <p class="nearby">__NEARBY__</p>
   <hr>
-  <!-- Help is a modal inside the app, not a page of its own, so it needs the same
-       deep-link treatment as ?publish=1 — see openDeepLink() in src/app.js. Without
-       it someone arriving here from a search has no route to Help at all: these
-       pages carry no bottom bar. -->
+  <!-- Help is a modal inside the app, not a page of its own, so it needs deep-link
+       treatment — see openDeepLink() in src/app.js. Without it someone arriving here
+       from a search has no route to Help at all: these pages carry no bottom bar.
+       (Publishing no longer needs it: publish.html is a real page and is linked
+       directly above, so the CTA skips booting the globe just to redirect.) -->
   <p class="muted">Eventually · <a href="/">Globe</a> · <a href="/browse/">All cities</a> · <a href="/?help=1">Help</a> · <a href="/about.html">About</a> · <a href="/advertise.html">Advertise</a> · <a href="/privacy.html">Privacy</a> · <a href="/terms.html">Terms</a></p>
 </div>
 </body>
@@ -546,6 +547,10 @@ function sitemap(list) {
     // Businesses searching "advertise events <city>" are a real inbound route, so the
     // page has to be indexable and in the sitemap — not just linked from the app menu.
     { loc: `${SITE}/advertise.html`, pri: '0.4', freq: 'monthly' },
+    // "publish my event <city>" is the other inbound search, and this is now a real page
+    // rather than a modal, so it can be found directly. Ranked above the legal pages
+    // because it is a destination, not small print.
+    { loc: `${SITE}/publish.html`, pri: '0.6', freq: 'monthly' },
     { loc: `${SITE}/privacy.html`, pri: '0.2', freq: 'yearly' },
     { loc: `${SITE}/terms.html`, pri: '0.2', freq: 'yearly' },
     ...list.map((c) => ({ loc: `${SITE}/events/${c.slug}/`, pri: '0.7', freq: 'daily' })),

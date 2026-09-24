@@ -585,152 +585,20 @@
   }
   function syncReminders() { if (Reminders) Reminders.sync(); }
 
-  /* ---------- coordinator portal ---------- */
-  function addPublishedLocally(evt) {
-    D.addEvent(evt);                 // re-clusters internally
-    globe.setClusters(D.getClusters());
-    refreshMarkers();
-    updateStats();
-    timeline._drawSpark();
-  }
-  // Re-fetch live events from the backend and repaint (after edit/unpublish/delete).
-  function refreshLiveEvents() {
-    if (!(window.EventuallyAPI && window.EventuallyAPI.config.remote)) return Promise.resolve();
-    return window.EventuallyAPI.fetchEvents({}).then(function (evs) {
-      if (evs) { D.replaceAll(evs); markMine(); globe.setClusters(D.getClusters()); refreshMarkers(); updateStats(); rerenderPlace(); if (timeline && timeline._drawSpark) timeline._drawSpark(); pruneSaved(); refreshSaved(); }
-    }).catch(function () {});
-  }
-  // The publishing wall. Reached only when the server refuses, so it always tells the
-  // truth. With a ROLLING window we can name the exact date their oldest post ages out
-  // — much better than a dead end — and give them a route to ask for more capacity.
-  function showPublishLimit(used, capacity, nextSlotISO) {
-    const email = (RT.publishing && RT.publishing.contactEmail) || 'info@eventually-app.com';
-    let when = '';
-    if (nextSlotISO) {
-      const d = new Date(nextSlotISO + 'T00:00:00');
-      if (!isNaN(d)) when = 'Your next slot opens on <b>' + esc(d.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })) + '</b>. ';
-    }
-    // Log the block even if they never ask. Otherwise the only organisers you hear about are
-    // the ones who bother to email — the ones who quietly give up are invisible.
-    if (acctEnabled() && A.logPublishBlock) A.logPublishBlock();
+  /* ---------- publishing has its own page now ---------- */
+  /* The publish form used to be a modal stacked on top of the globe: the map kept
+     spinning behind it, the host kept talking, and fifteen fields lived inside an 85vh
+     scroller. It moved to publish.html — an organiser filling that in is doing work, not
+     browsing, and it deserves a URL they can bookmark, share with a colleague and come
+     back to after signing in.
 
-    openModal('You\'ve used all your posts',
-      '<div class="pl-wall">' +
-        '<p>You\'ve published <b>' + capacity + ' of ' + capacity + '</b> events for the year. ' + when + '</p>' +
-        '<p class="pl-ask">Need more? Tell us a little about what you\'re running and we\'ll come back to you with options.</p>' +
-        '<label class="pl-l">Anything we should know? <span>(optional)</span></label>' +
-        '<textarea class="pl-msg" rows="3" placeholder="e.g. We run a weekly music night at The Artesian and have 20 dates booked."></textarea>' +
-        '<div class="pl-actions"><button class="pl-send" type="button">Request more posts</button>' +
-        '<a class="pl-mail" href="mailto:' + esc(email) + '">or email us</a></div>' +
-        '<p class="pl-ok" hidden></p>' +
-      '</div>',
-      function (body) {
-        const btn = body.querySelector('.pl-send');
-        btn.addEventListener('click', function () {
-          btn.disabled = true; btn.textContent = 'Sending…';
-          const msg = (body.querySelector('.pl-msg') || {}).value || '';
-          Promise.resolve(acctEnabled() && A.requestPublishingCapacity ? A.requestPublishingCapacity(msg) : { ok: false })
-            .then(function (r) {
-              const ok = body.querySelector('.pl-ok');
-              if (r && r.ok) {
-                // Hide the whole ask — leaving "tell us what you're running" on screen
-                // next to "Request sent" reads as though it didn't go through.
-                ['.pl-actions', '.pl-msg', '.pl-l', '.pl-ask'].forEach(function (s) {
-                  const el = body.querySelector(s); if (el) el.style.display = 'none';
-                });
-                ok.textContent = 'Request sent — we\'ll be in touch by email.';
-                ok.hidden = false;
-              } else {
-                btn.disabled = false; btn.textContent = 'Request more posts';
-                ok.textContent = 'Couldn\'t send that — please email ' + email + ' instead.';
-                ok.hidden = false;
-              }
-            });
-        });
-      });
-  }
-  const coordinator = new window.EventuallyCoordinator(document.getElementById('coordinator'), {
-    // The poster, already shrunk in the browser, uploaded to the publisher's own
-    // folder in Storage. Signed out (demo) there is nowhere to put it, so the
-    // form keeps the local preview and simply saves no picture.
-    onUploadImage: function (blob, eventId) {
-      if (!acctEnabled() || !A.uploadEventImage) return Promise.resolve({ error: 'offline' });
-      return A.uploadEventImage(blob, eventId);
-    },
-    // THE VENUE BOOK — places this organiser has used before (97_ledger_and_venues.sql).
-    // Empty for everyone who hasn't published yet, and the UI hides itself when it is.
-    getVenues: function () {
-      if (!acctEnabled() || !A.myVenues) return Promise.resolve([]);
-      return A.myVenues();
-    },
-    onSaveVenue: function (v) {
-      if (!acctEnabled() || !A.rememberVenue) return Promise.resolve(null);
-      return A.rememberVenue(v);
-    },
-    // The publish ledger: events that have since been pruned off the globe.
-    getPublishHistory: function () {
-      if (!acctEnabled() || !A.publishHistory) return Promise.resolve([]);
-      return A.publishHistory();
-    },
-    // Returns a Promise<boolean>: true = published. When signed in we write the
-    // native event to Supabase (attributed to the user); otherwise demo/local only.
-    onPublish: function (evt) {
-      if (acctEnabled()) {
-        return A.publishEvent(evt).then(function (r) {
-          if (r && r.error) {
-            // The publishing-limit trigger raises PUBLISH_LIMIT_REACHED|used|capacity|nextSlotDate.
-            // Turn that into a plain-English wall instead of a database error.
-            const m = String((r.error && r.error.message) || '').match(/PUBLISH_LIMIT_REACHED\|(\d+)\|(-?\d+)\|([\d-]*)/);
-            if (m) { showPublishLimit(+m[1], +m[2], m[3]); return { ok: false }; }
-            window.EventuallyToast('Publish failed: ' + r.error.message); return { ok: false };
-          }
-          if (evt.sponsored && billingEnabled()) handleFeature(evt);   // settle free/paid featuring
-          // Native events are PENDING admin review — don't show on the globe yet.
-          return { ok: true, live: false, message: 'Submitted for review — it goes live once an admin approves it.' };
-        });
-      }
-      evt._mine = true; addPublishedLocally(evt);
-      return Promise.resolve({ ok: true, live: true, message: 'Published! Live on the globe.' });
-    },
-    onUpdate: function (evt) {
-      if (!acctEnabled()) return Promise.resolve({ ok: false });
-      return A.updateEvent(evt).then(function (r) {
-        if (r && r.error) { window.EventuallyToast('Update failed: ' + r.error.message); return { ok: false }; }
-        // Edits send the event back to pending review → refresh (it drops off the globe until re-approved).
-        return refreshLiveEvents().then(function () { return { ok: true, live: false, message: 'Changes saved — resubmitted for review.' }; });
-      });
-    },
-    onDelete: function (id) {
-      if (!acctEnabled()) return Promise.resolve(false);
-      return A.deleteEvent(id).then(function (r) {
-        if (r && r.error) { window.EventuallyToast('Delete failed: ' + r.error.message); return false; }
-        window.EventuallyToast('Event deleted.');
-        return refreshLiveEvents().then(function () { return true; });
-      });
-    },
-    onSetPublished: function (id, on) {
-      if (!acctEnabled()) return Promise.resolve(false);
-      return A.setPublished(id, on).then(function () {
-        window.EventuallyToast(on ? 'Event published.' : 'Event unpublished (hidden from the globe).');
-        return refreshLiveEvents().then(function () { return true; });
-      });
-    },
-    getQuota: function () { return acctEnabled() && A.publishingQuota ? A.publishingQuota() : Promise.resolve(null); },
-    getCreatorStats: function () {
-      if (!acctEnabled()) return Promise.resolve([]);
-      return A.creatorStats();
-    },
-    // Start the publish map on the user's set location (from the home tab).
-    getDefaultLocation: function () {
-      const l = P.get().location;
-      return (l && l.lat != null) ? { lat: l.lat, lon: l.lon, city: l.city } : null;
-    },
-    onFlyTo: function (lat, lon) { coordinator.close(); globe.flyTo(lat, lon); },
-    getMyEvents: function () {
-      return D.getEvents().filter(function (e) { return e._mine; });
-    }
-  });
-  // (Coordinator / Profile / Sign-in are opened from the ⋯ menu, wired below.)
+     THE FORM ITSELF DID NOT FORK: publish.html mounts the same src/coordinator.js in
+     page mode, so there is still exactly one publish form in the codebase — it just
+     is not loaded on the globe any more. Everything here that only existed to support
+     the modal (the local demo publish, the allowance wall, the live re-fetch after an
+     edit, My Events, the feature settlement) went with it; see src/publish.js. */
+  function goPublish(tab) { location.href = "publish.html" + (tab ? "?tab=" + tab : ""); }
+  // (Profile / Sign-in are opened from the ⋯ menu, wired below.)
 
   /* ---------- auth ---------- */
   const authEl = document.getElementById('auth');
@@ -1556,10 +1424,12 @@
     let q;
     try { q = new URLSearchParams(location.search); } catch (e) { return; }
 
+    // ?publish=1 is the link the city pages and older emails carry. It now forwards to
+    // the organiser's page — and no longer demands a sign-in first: anyone can read what
+    // the deal is and fill the form in, and the account is asked for at the publish button.
     if (q.get('publish') === '1') {
       track('publish_open');
-      requireLogin(function () { coordinator.open(); },
-        'Sign in to publish your event — it takes a minute, and your first 10 events each year are free.');
+      goPublish();
       return;
     }
 
@@ -2438,8 +2308,12 @@
     const b = e.target.closest('[data-bb]'); if (!b) return;
     if (b.dataset.bb === 'publish') {
       track('publish_open');
-      requireLogin(function () { coordinator.open(); },
-        'Sign in to publish your event — your first 10 events each year are free.');
+      /* Same tab, and no sign-in gate in front of it — same reasoning as the Advertise
+         link: a new tab leaves the globe running behind the page, and from an installed
+         PWA it hands the user to the system browser and they never come back.
+         publish.html is inside the manifest scope, so this stays in the app window and
+         Back restores the globe from the browser's back cache. */
+      goPublish();
     } else if (b.dataset.bb === 'calendar') {
       // Opens over whatever is on screen; close the side panels it would otherwise sit on.
       // closeEvent() rather than just the class: it also unmounts the live-updates feed.
@@ -2524,7 +2398,9 @@
     else if (act === 'plus') openPlus();
     else if (act === 'profile') openProfile();
     // 'create' is gone with its menu item — publishing lives in the bottom bar.
-    else if (act === 'myevents') requireLogin(function () { openMyEvents(); });
+    // My Events is a tab on the organiser's page now — same page as publishing, because
+    // it is the same job. It asks for the sign-in itself.
+    else if (act === 'myevents') goPublish('events');
     else if (act === 'types') openTypes();
     else if (act === 'help') openHelp();
     else if (act === 'browse') location.href = '/browse/';
@@ -2671,8 +2547,8 @@
         '<p>Registering is <b>free and it isn\'t a ticket</b> — Eventually doesn\'t take payment for these events. Changed your mind? Open the event and cancel; that frees your place for someone else.</p>' +
         '<p>Organising something? Choose <b>“Eventually collects registrations”</b> when you publish. You can set a limit on places, and you\'ll find your list — with a CSV download — under <b>My Events</b>.</p></details>' +
       (SHOW_TIMELINE ? '<details><summary>How do the dates &amp; timeline work?</summary><p>The bar along the bottom is a day scrubber. Drag it, or use the ‹ › day arrows, to move between days — the globe and results update to show what\'s on for that day. Tap <b>Today</b> to jump back to now.</p></details>' : '') +
-      '<details><summary>How do I list my event?</summary><p>Tap <b>Publish Event</b> at the bottom of the screen and sign in. Add the details, find the place by searching its address or dropping a pin on the map, and add a photo if you like. Your first 10 events each year are free.</p>' +
-        '<p>We <b>check every new event</b> before it appears on the globe, and we\'ll email you as soon as it\'s approved. A new or changed photo is checked the same way. You can see each event\'s status, edit it, or take it off the globe under <b>⋯ menu → My Events</b>.</p>' +
+      '<details><summary>How do I list my event?</summary><p>Tap <b>Publish Event</b> at the bottom of the screen. That opens the organiser\'s page — <a href="publish.html">eventually-app.com/publish.html</a>, which you can bookmark. Add the details, find the place by searching its address or dropping a pin on the map, and add a photo if you like. You\'re asked to sign in when you publish, not before. Your first 10 events each year are free.</p>' +
+        '<p>We <b>check every new event</b> before it appears on the globe, and we\'ll email you as soon as it\'s approved. A new or changed photo is checked the same way. The same page has a <b>Your events</b> tab where you can see each event\'s status, edit it, take a copy for another date, or take it off the globe — and a <b>Your venues</b> tab for the places you\'ve saved.</p>' +
         '<p>Want more attention for it? Tick <b>Ask us to feature this event</b> when you publish. Featured events get a ★ badge, a taller spike, and first place in their location\'s list. We review every request and email you our decision — featuring is free while we\'re in beta.</p></details>' +
       '<details><summary>What is Eventually Plus?</summary><p>An optional membership that\'s <b>coming soon</b>: advanced AI briefings and personal event picks, ad-free listening &amp; browsing, travel-aware city briefings, and early access to new features. Open <b>⋯ menu → Eventually Plus</b> to join the waitlist and we\'ll email you when it launches.</p></details>' +
       // Re-entry point for the first-run tour — the one place people look when they're stuck.
@@ -2694,12 +2570,8 @@
         });
       });
   }
-  // My Events — manage/edit/delete your published events in its OWN modal (separate from Create).
-  function openMyEvents() {
-    openModal('My Events', '<div class="me-body"></div>', function (body) {
-      coordinator.mountMyEvents(body.querySelector('.me-body') || body, closeModal);
-    });
-  }
+  // My Events used to be its own modal here. It is now a tab on publish.html, next to the
+  // form that made those events and the allowance they spend — see goPublish('events').
   // Eventually Plus — its OWN Help-centre-style modal (blurred backdrop), not buried in Profile.
   function plusModalHTML() {
     const onList = !!((P.get().comms || {}).plusWaitlist);
@@ -3059,21 +2931,9 @@
       } catch (e) {}
     }, Math.max(0, delay));
   }
-  // After a native event is published with "Feature" ticked, settle the placement:
-  // a Plus member's monthly free quota first, otherwise a one-off checkout.
-  function handleFeature(evt) {
-    if (!billingEnabled()) return;                 // demo: it's already featured locally
-    A.claimFreeFeature(evt.id).then(function (res) {
-      if (res && res.ok) {
-        evt.sponsored = true; refreshMarkers();
-        window.EventuallyToast('Featured with Plus — ' + res.remaining + ' free left this month.');
-      } else {
-        evt.sponsored = false; refreshMarkers();   // not featured until paid
-        window.EventuallyToast('Opening checkout to feature this event…');
-        window.EventuallyBilling.startFeatureCheckout({ id: user.id, email: user.email }, evt.id);
-      }
-    }).catch(function () { window.EventuallyToast('Could not start featuring — try again.'); });
-  }
+  // Featuring is settled where the event is published — on publish.html (src/publish.js),
+  // which asks claim_free_feature for a Plus member's monthly allowance and otherwise opens
+  // the one-off checkout. It used to live here because the publish form did.
   // One-time "complete your profile" step after first sign-in.
   function promptProfileSetup(pr) {
     const p = P.get();
@@ -3311,10 +3171,10 @@
      Host is already on. Pausing only affects the current visit (owner's choice). */
   const autoHost = { armed: true, primed: false, splashDone: false, voiceDone: false, tour: false };
   function overlayOpen() {
-    const coord = document.getElementById('coordinator');
+    // (The publish form used to be checked here too. It is a separate page now, so if it
+    // is open the globe isn't running at all.)
     return !!(document.getElementById('signature') || document.querySelector('.tour') ||
-      (modal && modal.classList.contains('open')) || (authEl && authEl.classList.contains('open')) ||
-      (coord && coord.classList.contains('open')));
+      (modal && modal.classList.contains('open')) || (authEl && authEl.classList.contains('open')));
   }
   /* AUDIO UNLOCK — the root cause of the Safari failures since the auto-start (v189).
      ⚠️ This used to run ONCE, on `pointerdown`. iPhone Safari does NOT treat pointerdown

@@ -492,6 +492,24 @@ body {
   .co-cols { display: block; }
   .co-col-side .co-loc { margin-top: 6px; }
 }
+/* PAGE MODE (publish.html). The same form, with the modal taken off it: no fixed
+   overlay, no backdrop, no 85vh scroller with its masked edges — the PAGE scrolls, the
+   way a page should. Only the shell changes; every field, the venue book, the map and the
+   picture box are the identical markup the modal uses, so there is one form to maintain. */
+.coordinator.co-page { position: static; inset: auto; z-index: auto; display: block; }
+.co-page .co-backdrop { display: none; }
+.co-page .co-modal {
+  width: 100%; max-width: none; max-height: none; border-radius: 18px; box-shadow: none;
+  background: var(--panel-2); border: 1px solid var(--line);
+}
+.co-page .co-body { overflow: visible; -webkit-mask-image: none; mask-image: none; padding: 18px 20px 20px; }
+/* The publish button stays at the END of the form rather than sticking to the bottom of
+   the screen: it is the last thing you do, it is where you already are once the form is
+   filled in, and a button that follows you down a half-empty form only invites a tap
+   that gets refused. */
+.co-page .co-head { padding: 18px 20px 14px; }
+.co-page .co-close { display: none; }   /* nothing to close — leaving is the browser's Back */
+
 .co-head { display: flex; align-items: flex-start; justify-content: space-between; padding: 18px 20px 14px; border-bottom: 1px solid var(--line); }
 .co-kicker { font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--clay); }
 .co-head h2 { margin: 5px 0 0; font-size: 21px; font-weight: 800; letter-spacing: -0.03em; }

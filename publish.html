@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Publish your events — Eventually</title>
+<meta name="description" content="Put your events on Eventually: ten a year free, no commission on your tickets, and every event checked before it appears on the globe.">
+<meta name="robots" content="index,follow">
+<link rel="icon" href="assets/icon.svg">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Space+Mono:wght@400;700&display=swap">
+<link rel="stylesheet" href="styles/main.css">
+<link rel="stylesheet" href="styles/publish.css">
+</head>
+<body class="pg-body">
+
+<header class="pg-top">
+  <a class="pg-brand" href="/" aria-label="Eventually home">
+    <span class="pg-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+    <span class="pg-word">eventually</span>
+    <span class="pg-kicker">for organisers</span>
+  </a>
+  <div class="pg-top-right">
+    <span class="pg-quota" hidden></span>
+    <button type="button" class="pg-acct" hidden></button>
+    <a class="pg-globe" href="/"><span aria-hidden="true">←</span> <span class="pg-globe-long">Back to the globe</span><span class="pg-globe-short">Globe</span></a>
+  </div>
+</header>
+
+<main class="pg-main">
+
+  <!-- SIGNED OUT: what the deal is, then the form is still shown below it. -->
+  <section class="pg-intro" hidden>
+    <h1 class="pg-h1">Put your events on the globe</h1>
+    <p class="pg-lead">People open Eventually to find something to do tonight. Add your event and it's there — on the map, in the lists, and in the host's briefing for your city.</p>
+    <ul class="pg-facts">
+      <li><b>Ten events a year, free.</b> No fee, and no commission on your tickets.</li>
+      <li><b>We check every event</b> before it appears, and email you when it's live.</li>
+      <li><b>You keep the booking.</b> Link to wherever you already sell, or let us take free registrations.</li>
+    </ul>
+  </section>
+
+  <!-- Tabs. Hidden until signed in: there is nothing to switch between before that. -->
+  <nav class="pg-tabs" role="tablist" hidden>
+    <button type="button" class="pg-tab is-on" role="tab" aria-selected="true"  data-tab="new">Publish an event</button>
+    <button type="button" class="pg-tab"       role="tab" aria-selected="false" data-tab="events">Your events</button>
+    <button type="button" class="pg-tab"       role="tab" aria-selected="false" data-tab="venues">Your venues</button>
+  </nav>
+
+  <!-- The allowance, said plainly rather than as a chip in a header. -->
+  <section class="pg-allow" hidden>
+    <div class="pg-allow-head">
+      <span class="pg-allow-n"></span>
+      <span class="pg-allow-sub"></span>
+    </div>
+    <div class="pg-allow-bar" role="img" aria-label="Events used this year"></div>
+    <p class="pg-allow-note">A rejected event doesn't use one, and taking an event off the globe doesn't give one back. Need more than ten? <a href="mailto:info@eventually-app.com?subject=More%20events%20on%20Eventually">Tell us what you're planning.</a></p>
+  </section>
+
+  <!-- PANELS -->
+  <section class="pg-panel" data-panel="new">
+    <!-- What they typed, kept on this device while they work. Never uploaded. -->
+    <div class="pg-draft" hidden><span></span><button type="button" class="an-act pg-draft-x">Start again</button></div>
+    <div id="coordinator" class="coordinator"></div>
+  </section>
+
+  <section class="pg-panel" data-panel="events" hidden>
+    <div id="myevents" class="pg-card"></div>
+  </section>
+
+  <section class="pg-panel" data-panel="venues" hidden>
+    <div class="pg-card">
+      <h2 class="pg-h2">Your venues</h2>
+      <p class="pg-sub">Saved when you publish. Picking one fills in the address, the map pin and the time zone — the field that's easiest to get wrong.</p>
+      <div class="pg-venues"></div>
+    </div>
+  </section>
+
+  <!-- Sign-in. Shown in place of the tabs until there is an account. -->
+  <section class="pg-signin" hidden>
+    <div class="pg-card">
+      <h2 class="pg-h2">Sign in to publish</h2>
+      <p class="pg-sub">Your events are attached to your account, so you can edit them later and we can email you when they're approved.</p>
+      <div class="pg-auth">
+        <button type="button" class="pg-google">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="#4285F4" d="M23 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.2a5.3 5.3 0 0 1-2.3 3.5v2.9h3.7c2.2-2 3.4-5 3.4-8.6z"/><path fill="#34A853" d="M12 24c3.1 0 5.7-1 7.6-2.8l-3.7-2.9c-1 .7-2.3 1.1-3.9 1.1-3 0-5.5-2-6.4-4.7H1.8v3C3.7 21.4 7.6 24 12 24z"/><path fill="#FBBC05" d="M5.6 14.7a7.2 7.2 0 0 1 0-4.6v-3H1.8a12 12 0 0 0 0 10.6l3.8-3z"/><path fill="#EA4335" d="M12 4.8c1.7 0 3.2.6 4.4 1.7l3.3-3.3C17.7 1.2 15.1 0 12 0 7.6 0 3.7 2.6 1.8 6.1l3.8 3C6.5 6.8 9 4.8 12 4.8z"/></svg>
+          Continue with Google
+        </button>
+        <div class="pg-or"><span>or</span></div>
+        <form class="pg-mail">
+          <label for="pg-email">Your email</label>
+          <input id="pg-email" type="email" autocomplete="email" placeholder="you@yourvenue.com" required>
+          <button type="submit" class="pg-send">Email me a sign-in link</button>
+        </form>
+        <p class="pg-auth-note"></p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="pg-foot">
+  <p>Eventually · <a href="/">Globe</a> · <a href="advertise.html">Advertise</a> · <a href="about.html">About</a> · <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a></p>
+</footer>
+
+<div id="toast" class="toast"></div>
+
+<script src="config.js"></script>
+<!-- Same CDN entry the app uses, so a returning organiser gets it from cache. -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="src/tz.js"></script>
+<script src="src/geo.js"></script>
+<script src="src/data.js"></script>
+<script src="src/profile.js"></script>
+<script src="src/auth.js"></script>
+<script src="src/billing.js"></script>
+<script src="src/updates.js"></script>
+<script src="src/coordinator.js"></script>
+<script src="src/publish.js"></script>
+</body>
+</html>
