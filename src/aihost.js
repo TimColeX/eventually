@@ -112,6 +112,12 @@
       '<button class="ah-play" data-tour="play" aria-label="Play the Host aloud">' +
         '<svg viewBox="0 0 24 24" class="ic-play"><path d="M8 5v14l11-7z"/></svg>' +
         '<svg viewBox="0 0 24 24" class="ic-pause" style="display:none"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>' +
+        /* THINKING. Both are drawn only while .ah-buffering is on the host bar — a clip
+           is being written and spoken, which for a fresh city is around half a minute of
+           music with nothing else to show for it. Markup rather than a CSS pseudo so the
+           three dots can stagger. */
+        '<span class="ah-spin" aria-hidden="true"></span>' +
+        '<span class="ah-dots" aria-hidden="true"><i></i><i></i><i></i></span>' +
         '<span class="ah-cue" style="display:none" aria-hidden="true"></span>' +
       '</button>' +
       '<div class="ah-body">' +
@@ -432,6 +438,12 @@
   AIHost.prototype._setBuffering = function (on) {
     this._buffering = !!on;
     this.el.classList.toggle('ah-buffering', !!on);
+    // Say it to a screen reader too, not only in clay.
+    const btn = this.el.querySelector('.ah-play');
+    if (btn) {
+      if (on) btn.setAttribute('aria-busy', 'true');
+      else btn.removeAttribute('aria-busy');
+    }
     // A fresh city (or a language change) needs a new script AND new speech — around 30
     // seconds during which only the music bed plays. A pulsing button alone reads as
     // "broken"; say what's happening instead. The real caption overwrites this the moment

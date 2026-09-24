@@ -439,8 +439,39 @@ body {
 .ah-mute:hover { border-color: var(--clay); color: var(--clay); }
 .ah-mute.is-muted { color: var(--clay); border-color: var(--clay); }
 .ah-mute svg { width: 20px; height: 20px; fill: currentColor; display: block; }
-/* Buffering: premium briefing being prepared → pulse the play button */
-.ah-buffering .ah-play { animation: ahpulse 1.2s ease-in-out infinite; }
+/* ---------- THINKING: a clip is being prepared ----------
+   A fresh city needs a script AND speech — about half a minute in which only the music
+   bed plays. The button used to answer that by pulsing its own shadow, which reads as
+   "something is wrong with this button" rather than "give it a second"; people tapped it
+   again. Now it says so plainly: an arc going round the outside, three dots where the
+   icon was. (Mockup, owner 2026-09-24.) */
+.ah-spin, .ah-dots { display: none; }
+.ah-buffering .ah-spin { display: block; }
+.ah-buffering .ah-dots { display: flex; }
+/* The play/pause icons are shown and hidden by an INLINE style from script, so getting
+   them out of the way for the dots takes !important — nothing else here needs it. */
+.ah-buffering .ic-play, .ah-buffering .ic-pause { display: none !important; }
+.ah-spin {
+  position: absolute; inset: -4px; border-radius: 50%;
+  border: 2px solid transparent; border-top-color: var(--clay);
+  animation: ahspin 900ms linear infinite;
+}
+@keyframes ahspin { to { transform: rotate(360deg); } }
+.ah-dots { align-items: center; gap: 3px; }
+.ah-dots i { width: 4px; height: 4px; border-radius: 50%; background: var(--cream); animation: ahdot 1s ease-in-out infinite; }
+.ah-dots i:nth-child(2) { animation-delay: .15s; }
+.ah-dots i:nth-child(3) { animation-delay: .3s; }
+@keyframes ahdot {
+  0%, 100% { opacity: .35; transform: translateY(1px); }
+  50%      { opacity: 1;   transform: translateY(-1px); }
+}
+/* Reduced motion: nothing spins or bounces, but the state still has to be visible — the
+   ring becomes a complete faint circle and the dots fade in place. */
+@media (prefers-reduced-motion: reduce) {
+  .ah-spin { animation: none; border-color: rgba(203,90,60,.45); }
+  .ah-dots i { animation: ahdotfade 1.6s ease-in-out infinite; }
+  @keyframes ahdotfade { 0%, 100% { opacity: .4; } 50% { opacity: 1; } }
+}
 .ah-buffering .ah-text { opacity: 0.75; }
 @media (max-width: 560px) {
   /* The voice bars now show on phones too (owner, 2026-09-24). They used to be hidden
