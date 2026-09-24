@@ -82,7 +82,11 @@
     this._audio.preload = 'auto'; this._audio.setAttribute('playsinline', '');
     this.speaking = false;
     this.amp = 0.14;
-    this.bars = 40;
+    /* FIVE bars, not forty (owner's choice, 2026-09-24). Forty hairlines under a sine
+       envelope drew a spiky readout — accurate, but at 60px wide nobody reads it as a
+       voice. Five thick pill bars are the same signal at a glance. They still follow the
+       real amplitude; only the drawing changed. */
+    this.bars = 5;
     this.phase = [];
     for (let i = 0; i < this.bars; i++) this.phase.push(Math.random() * Math.PI * 2);
     this.current = null;
@@ -1566,15 +1570,22 @@
 
     const t = performance.now() / 1000;
     const gap = w / this.bars, mid = h / 2;
+    const bw = Math.max(3, gap * 0.56);          // bar width
     for (let i = 0; i < this.bars; i++) {
-      const env = Math.sin((i / this.bars) * Math.PI);
+      /* (i + 0.5) / bars, NOT i / bars: with five bars the old form put the first one at
+         sin(0) — a permanently dead bar at the left end. This centres the envelope, so the
+         row reads small · mid · tall · mid · small. */
+      const env = Math.sin(((i + 0.5) / this.bars) * Math.PI);
       const wob = 0.35 + 0.65 * Math.abs(Math.sin(t * 3 + this.phase[i]));
-      const bh = Math.max(2, env * wob * this.amp * h * 1.6);
+      /* The floor is the bar's own width, so a silent moment is a neat row of dots rather
+         than five 2px slivers — it reads as "on, listening" instead of broken. */
+      const bh = Math.max(bw, env * wob * this.amp * h * 1.6);
       const x = i * gap + gap / 2;
-      const hue = 16 + i * 0.5;
-      ctx.fillStyle = this.speaking ? 'hsla(' + hue + ',62%,52%,0.95)' : 'rgba(138,59,30,0.4)';
+      // Flat brand clay, dimmed between clips. The hue ramp the forty bars used was
+      // invisible at this size and only muddied the colour.
+      ctx.fillStyle = this.speaking ? 'rgba(203,90,60,0.95)' : 'rgba(203,90,60,0.38)';
       ctx.beginPath();
-      roundRect(ctx, x - gap * 0.28, mid - bh / 2, gap * 0.56, bh, Math.min(gap * 0.3, 2));
+      roundRect(ctx, x - bw / 2, mid - bh / 2, bw, bh, bw / 2);   // bw/2 = pill ends
       ctx.fill();
     }
   };

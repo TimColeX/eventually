@@ -415,7 +415,9 @@ body {
 .ah-exp-body .ah-w.active { color: var(--clay); background: rgba(203,90,60,0.12); border-radius: 4px; box-shadow: 0 0 0 2px rgba(203,90,60,0.12); }
 @media (max-width: 560px) { .ah-exp-body { font-size: 17px; } .ah-exp-card { margin-bottom: 78px; } }
 @media (prefers-reduced-motion: reduce) { .ah-run { transition: none !important; } }
-.ah-wave { width: 60px; flex: none; height: 38px; }
+/* Five pill bars, so the box is narrower and shorter than the forty-bar readout was —
+   60×38 became 34×26, and the 26px caption line it sits beside gets the difference. */
+.ah-wave { width: 34px; flex: none; height: 26px; }
 .ah-briefing {
   flex: none; cursor: pointer; border: 1px solid var(--line-2); border-radius: 999px;
   background: var(--cream); color: var(--ink); font-family: var(--font); font-weight: 700;
@@ -441,7 +443,12 @@ body {
 .ah-buffering .ah-play { animation: ahpulse 1.2s ease-in-out infinite; }
 .ah-buffering .ah-text { opacity: 0.75; }
 @media (max-width: 560px) {
-  .ah-wave { display: none; }
+  /* The voice bars now show on phones too (owner, 2026-09-24). They used to be hidden
+     here, which meant the screen most people actually use had NO sign the host was
+     speaking — only the caption moving. Narrower than desktop and pulled in tight against
+     the caption, because this is the row where every pixel was already fought over (see
+     the note below): 26px of bars plus a 6px gap, not 34 plus 10. */
+  .ah-wave { display: block; width: 26px; height: 22px; margin-left: -4px; }
   .ah-briefing, .ah-home { font-size: 11px; padding: 6px 10px; }
   /* .ah-mute keeps 42px here on purpose — .ah-play has no mobile override, so shrinking
      one of the pair is what made them mismatched. */
