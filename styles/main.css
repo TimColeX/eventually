@@ -490,7 +490,14 @@ body {
 @media (max-width: 720px) {
   .co-modal { width: calc(100vw - 28px); max-width: 480px; }
   .co-cols { display: block; }
-  .co-col-side .co-loc { margin-top: 6px; }
+  /* Stacked, the side column's first section follows the left column's last one, so it
+     needs the divider that `:first-child` takes away in the two-column layout. Without
+     this, "How people get in" ran straight into "Location" with no break at all. */
+  /* `.co-cols` is carried only to outspecify the `.co-col > .co-sec:first-child` reset,
+     which is declared later in the file and would otherwise win on source order. */
+  .co-cols .co-col-side > .co-sec:first-child {
+    margin-top: var(--co-sec-gap); padding-top: var(--co-sec-gap); border-top: 1px solid var(--line);
+  }
 }
 /* PAGE MODE (publish.html). The same form, with the modal taken off it: no fixed
    overlay, no backdrop, no 85vh scroller with its masked edges — the PAGE scrolls, the
@@ -506,9 +513,20 @@ body {
 /* The publish button stays at the END of the form rather than sticking to the bottom of
    the screen: it is the last thing you do, it is where you already are once the form is
    filled in, and a button that follows you down a half-empty form only invites a tap
-   that gets refused. */
+   that gets refused. Its band takes the SAME side padding as the head and the body, so
+   the button's edges line up with the fields above it. */
 .co-page .co-head { padding: 18px 20px 14px; }
+.co-page .co-foot { padding: 14px 20px 18px; }
 .co-page .co-close { display: none; }   /* nothing to close — leaving is the browser's Back */
+/* On a phone every card on the organiser's page uses a 16px gutter (see publish.css),
+   and the form's card is one of those cards — so it narrows with them rather than
+   keeping a desktop gutter that would leave its fields on a different left edge. */
+@media (max-width: 620px) {
+  .co-page .co-head { padding: 16px 16px 14px; }
+  .co-page .co-body { padding: 16px 16px 18px; }
+  .co-page .co-foot { padding: 14px 16px 18px; }
+  .co-page .co-head h2 { font-size: 19px; }
+}
 
 .co-head { display: flex; align-items: flex-start; justify-content: space-between; padding: 18px 20px 14px; border-bottom: 1px solid var(--line); }
 .co-kicker { font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--clay); }
@@ -523,35 +541,80 @@ body {
 .co-foot { flex: none; padding: 12px 18px 15px; border-top: 1px solid var(--line); background: var(--cream); }
 .co-foot .co-publish { margin-top: 0; }
 .co-foot .co-cancel-edit { margin-bottom: 8px; }
-.co-body label { display: block; font-size: 11.5px; color: var(--muted); margin-bottom: 11px; }
+/* ═══ THE PUBLISH FORM'S ONE CONTROL SYSTEM ═══════════════════════════════════
+   Every control in this form is the same object: one height, one padding, one radius,
+   one border, one type size, one focus ring. It is written once here and nothing
+   below is allowed to restyle a single field on its own.
+
+   WHY (measured on the live page, 2026-09-24): text inputs came out 39px, selects 41px
+   and date/time 42px — so "Category" sat visibly taller than "Venue" in the SAME row,
+   and the Location card's search box was a fourth shape again. Each difference is small;
+   together they are the thing that makes a form look assembled rather than designed.
+
+   The scale (change it here, nowhere else):
+     --co-field-h  control height, and the touch target on a phone
+     --co-gap      space between one field and the next
+     --co-sec-gap  space between one section and the next */
+.coordinator { --co-field-h: 44px; --co-gap: 14px; --co-sec-gap: 18px; }
+
+.co-body label { display: block; font-size: 12px; line-height: 1.35; color: var(--muted); margin-bottom: var(--co-gap); }
 .co-opt { color: var(--faint); font-weight: 400; }
-.co-row { display: grid; gap: 10px; margin-bottom: 11px; }
+.co-row { display: grid; gap: 12px; margin-bottom: var(--co-gap); }
 .co-row label { margin-bottom: 0; min-width: 0; }   /* let grid cells shrink → no horizontal scroll */
 .co-row-2 { grid-template-columns: 1fr 1fr; }
-.co-card-h { font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); margin-bottom: 10px; }
-.co-loc { margin: 4px 0 14px; padding-top: 13px; border-top: 1px solid var(--line); }
+
+/* ONE section header, used by every group in both columns — Event details, Location,
+   Picture, How people get in. There used to be three treatments side by side (mono
+   uppercase for two of them, bold sentence case for the fieldset legend, and nothing
+   at all above the left column, which is why the two columns didn't start level). */
+.co-card-h, .co-reg legend {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--faint); margin: 0 0 10px; padding: 0; font-weight: 400;
+}
+/* "Your venues" labels a control group INSIDE the Location section, so it takes the
+   field-label treatment, not a second section header nested under the first. */
+.co-venues-h, .co-search-l { font-size: 12px; line-height: 1.35; color: var(--muted); margin: 0 0 6px; }
+.co-search-l label { display: block; margin: 0; }   /* it IS the label; no extra gap */
+/* ONE supporting line, under a control or a card — the picture note, the map hint. */
+.co-hint { margin: 9px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--faint); }
+
+/* ONE section rhythm. A hairline above each group EXCEPT the first one in its column —
+   a divider with nothing above it is just a stray line, and it pushed the right-hand
+   column down so the two columns started at different heights. */
+.co-sec { margin: var(--co-sec-gap) 0 0; padding-top: var(--co-sec-gap); border-top: 1px solid var(--line); }
+.co-col > .co-sec:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+
 .co-body input, .co-body select, .co-body textarea {
-  display: block; width: 100%; max-width: 100%; min-width: 0; margin-top: 5px;
-  padding: 9px 11px; border-radius: 10px;
+  display: block; width: 100%; max-width: 100%; min-width: 0; margin-top: 6px;
+  min-height: var(--co-field-h);
+  padding: 10px 13px; border-radius: 11px;
   background: var(--paper); border: 1px solid var(--line-2); color: var(--ink);
-  font-family: var(--font); font-size: 16px; outline: none; resize: vertical;   /* 16px avoids iOS zoom-on-focus */
+  font-family: var(--font); font-size: 16px; line-height: 1.3;   /* 16px avoids iOS zoom-on-focus */
+  outline: none; resize: vertical;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+/* height, not just min-height: a <select> and a date/time box carry a taller intrinsic
+   box than a text input, so min-height alone still left them a pixel proud of the field
+   beside them — which is the exact defect this system exists to remove. */
+.co-body input:not([type="checkbox"]):not([type="radio"]), .co-body select { height: var(--co-field-h); }
+.co-body textarea { min-height: 92px; height: auto; }
+/* Tick boxes and radios are not fields — they must not inherit the 44px field height. */
+.co-body input[type="checkbox"], .co-body input[type="radio"] {
+  width: auto; height: auto; min-height: 0; margin: 3px 0 0; padding: 0; flex: none; accent-color: var(--clay);
 }
 /* iOS renders date/time inputs at an intrinsic width that can overflow — normalise them.
-   An EMPTY time input (e.g. the optional "End" time) also has NO content, so with
-   appearance:none it collapsed to just padding+border and rendered visibly shorter than the
-   filled "Start" field beside it. min-height pins both boxes to the same height whether or
-   not they hold a value; line-height keeps the text vertically centred. */
-.co-body input[type="date"], .co-body input[type="time"] {
-  -webkit-appearance: none; appearance: none;
-  min-height: 40px; line-height: 1.25;
+   An EMPTY time input (the optional "End" time) has no content at all, so with
+   appearance:none it collapses to padding+border; the shared min-height above is what
+   keeps it the same height as the filled "Start" field beside it. */
+.co-body input[type="date"], .co-body input[type="time"] { -webkit-appearance: none; appearance: none; }
+.co-body input:focus, .co-body select:focus, .co-body textarea:focus {
+  border-color: var(--clay); background: #fff; box-shadow: 0 0 0 3px rgba(203,90,60,.13);
 }
-.co-body input:focus, .co-body select:focus, .co-body textarea:focus { border-color: var(--clay); background: #fff; }
 /* Event poster picker.
    ⚠️ The rule above gives every input in .co-body display:block, which BEATS the
    `hidden` attribute (a UA-stylesheet rule). Without this the file input would
    sit there as a naked "Choose file" button next to the drop area. */
 .co-body input[type="file"] { display: none !important; }
-.co-img { margin: 4px 0 14px; padding-top: 13px; border-top: 1px solid var(--line); }
 .co-img-drop {
   position: relative; display: flex; align-items: center; justify-content: center;
   min-height: 116px; padding: 14px; cursor: pointer; overflow: hidden;
@@ -569,36 +632,37 @@ body {
 .co-img-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; }
 .co-img-info { font-family: var(--mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
 .co-img-x {
-  flex: none; padding: 5px 11px; border-radius: 8px; cursor: pointer;
-  background: none; border: 1px solid var(--line-2); color: var(--muted);
-  font-family: var(--font); font-size: 12px;
+  flex: none; min-height: 36px; padding: 7px 12px; border-radius: 9px; cursor: pointer;
+  background: var(--paper); border: 1px solid var(--line-2); color: var(--muted);
+  font-family: var(--font); font-size: 12.5px; font-weight: 600;
+  transition: border-color .15s ease, color .15s ease;
 }
 .co-img-x:hover { border-color: var(--clay); color: var(--clay); }
-.co-img-note { margin: 9px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--faint); }
 /* Auto event-colour preview (derived from category — no manual picker) */
-.co-catcolor { display: flex; align-items: center; gap: 10px; margin: 2px 0 16px; padding: 11px 13px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line); }
+.co-catcolor { display: flex; align-items: center; gap: 10px; margin: var(--co-sec-gap) 0 0; padding: 12px 13px; border-radius: 12px; background: var(--bg2); border: 1px solid var(--line); }
 .co-catdot { width: 22px; height: 22px; border-radius: 7px; flex: none; box-shadow: 0 1px 3px rgba(0,0,0,.18); }
 .co-catcolor-t { font-size: 12px; color: var(--muted); line-height: 1.4; }
 .co-catcolor-t b { color: var(--ink); font-weight: 700; }
-.co-feature { display: flex; align-items: flex-start; gap: 9px; margin-bottom: 16px; cursor: pointer; }
-.co-body input.f-feature { width: auto; margin: 3px 0 0; flex: none; accent-color: var(--clay); }
+.co-body .co-feature { display: flex; align-items: flex-start; gap: 10px; margin: var(--co-sec-gap) 0 0; cursor: pointer; }
 .co-feature-txt { display: flex; flex-direction: column; }
 .co-feature-txt b { font-size: 13.5px; color: var(--ink); font-weight: 700; }
-.co-feature-txt small { font-size: 11px; color: var(--hint); line-height: 1.4; margin-top: 2px; }
+.co-feature-txt small { font-size: 11.5px; color: var(--hint); line-height: 1.45; margin-top: 3px; }
 .co-publish {
-  width: 100%; padding: 13px; border-radius: 12px; cursor: pointer; font-family: var(--font);
+  width: 100%; min-height: 50px; padding: 13px; border-radius: 12px; cursor: pointer; font-family: var(--font);
   font-weight: 700; font-size: 15px; background: var(--clay); color: var(--cream); border: 0;
+  transition: background .15s ease, box-shadow .15s ease;
 }
 .co-publish:hover { background: #b94e32; box-shadow: 0 10px 26px rgba(203,90,60,.3); }
 .co-note { font-family: var(--mono); font-size: 10px; letter-spacing: .04em; color: var(--hint); margin: 8px 0 0; text-align: center; }
-.map-canvas { width: 100%; border-radius: 12px; border: 1px solid var(--line); cursor: crosshair; display: block; }
+/* The map is the next control after the search box, so it sits a field-gap below it —
+   it used to butt straight against it with no space at all. */
+.map-canvas { width: 100%; margin-top: var(--co-gap); border-radius: 12px; border: 1px solid var(--line); cursor: crosshair; display: block; }
 .co-loc.co-need-loc .map-canvas, .co-loc.co-need-loc .f-addr { border-color: #b3402a; box-shadow: 0 0 0 2px rgba(179,64,42,.16); }
 
 /* THE VENUE BOOK — places this organiser has used before. Hidden entirely until there
    is one, so a first-time publisher sees the form exactly as it was. Chips share the
    height of the other controls in this card and wrap rather than scrolling sideways. */
-.co-venues { margin-bottom: 12px; }
-.co-venues-h { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); margin-bottom: 8px; }
+.co-venues { margin-bottom: var(--co-gap); }
 .co-venue-list { display: flex; flex-wrap: wrap; gap: 8px; }
 .co-venue {
   display: inline-flex; align-items: baseline; gap: 7px; max-width: 100%;
@@ -633,11 +697,10 @@ body {
 .co-coords { margin-top: 10px; display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .co-coords .co-place { margin: 0; }
 .co-coords .latlon { margin: 0; }
-.f-addr {
-  width: 100%; padding: 10px 13px; border-radius: 11px; background: #faf3ea;
-  border: 1px solid var(--line-2); color: var(--ink); font-family: var(--font); font-size: 14px; outline: none;
-}
-.f-addr:focus { border-color: var(--clay); }
+/* NOTE: the address search box carries NO styling of its own. It used to (14px type, a
+   cream fill, its own radius) — half of which never applied anyway, because `.co-body
+   input` outspecifies a bare `.f-addr`. It is a field in this form like any other, so it
+   takes the shared control style above and nothing else. */
 .latlon { margin-top: 8px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
 .latlon strong { color: var(--clay); }
 .co-place { margin-top: 6px; font-size: 13px; color: var(--ink); }
@@ -675,7 +738,11 @@ body {
 .an-badge.an-rejected { color: #b3402a; background: #f6ddd6; }
 .an-reason { display: block; color: #b3402a; font-size: 11px; margin-top: 2px; }
 .an-r-actions { display: flex; gap: 6px; flex: none; }
-.an-act { padding: 6px 11px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--paper); color: var(--ink); font-family: var(--font); font-size: 12px; font-weight: 600; cursor: pointer; }
+/* ONE secondary-button height across the app's organiser surfaces (Edit / Duplicate /
+   Remove, Rename, the picture's Remove, the page header's chips). 36px reads as
+   deliberately secondary next to the 44px fields and the 50px primary button, and it
+   goes to a full 44px touch target on a phone in the rule below. */
+.an-act { min-height: 36px; padding: 7px 12px; border-radius: 9px; border: 1px solid var(--line-2); background: var(--paper); color: var(--ink); font-family: var(--font); font-size: 12.5px; font-weight: 600; cursor: pointer; transition: border-color .15s ease; }
 .an-act:hover { border-color: var(--clay); }
 /* An event row now carries up to four actions (Edit · Duplicate · Remove · Registrations).
    On a phone they must not squeeze into a single unreadable line or run off the card, so
@@ -1577,31 +1644,38 @@ body.no-timeline.has-ad .legend { bottom: calc(138px + env(safe-area-inset-botto
 .co-body .f-tz { width: 100%; }
 /* The confirmation line is the safeguard against a wrong zone slipping through,
    so it has to look like a statement, not a hint. */
-.co-tz-note { margin: -4px 0 11px; padding: 8px 10px; border-radius: 9px;
-  background: #FBF3EC; border: 1px solid var(--line-2);
+/* Pulled up to sit against the zone picker it belongs to — it is that field's
+   confirmation, not a separate block. The offset is the field gap, so it stays attached
+   if the gap ever changes. */
+.co-tz-note { margin: calc(var(--co-gap) * -1 + 6px) 0 var(--co-gap); padding: 9px 11px; border-radius: 9px;
+  background: var(--bg2); border: 1px solid var(--line-2);
   font-size: 11.5px; line-height: 1.5; color: var(--muted); }
 .co-tz-note:empty { display: none; }
 .co-tz-note b { color: var(--ink); }
 .co-tz-note.warn { background: #FDF1E7; border-color: #E9C9AE; }
 .co-tz-note .co-tz-check { color: var(--ember); }
 
-/* ---------- publish form: how people get in ---------- */
-.co-reg { margin: 0; padding: 14px 14px 8px; border: 1px solid var(--line-2); border-radius: 12px; background: #FDFBF8; }
-/* A <legend> is drawn ON the fieldset's top border by default, so the heading cut
-   through the line and crowded the rounded corner. Floating it is the standard way
-   to make a legend lay out like an ordinary block INSIDE the box. */
-.co-reg legend { float: left; width: 100%; padding: 0; margin: 0 0 4px; font-size: 12.5px; font-weight: 700; color: var(--ink); letter-spacing: .01em; }
+/* ---------- publish form: how people get in ----------
+   This used to be a bordered, tinted box sitting next to three borderless sections —
+   one container treatment for no reason other than that it is a <fieldset>. It is now
+   a section like the others: a hairline, the shared mono header, then its controls.
+   The border/padding reset is what stops the browser's default fieldset chrome. */
+.co-reg { border: 0; background: none; }
+/* A <legend> is drawn ON the fieldset's top border by default, which cut the heading
+   through the line. Floating it is the standard way to make a legend lay out like an
+   ordinary block. (Its type comes from the shared .co-card-h rule above.) */
+.co-reg legend { float: left; width: 100%; }
 .co-reg legend + * { clear: both; }
 /* `.co-body label { display:block }` outspecifies a bare `.co-reg-opt`, which
    turns the radio into a full-width block stacked above its own text. Match the
    same specificity so the row stays a row. */
-.co-body .co-reg-opt { display: flex; align-items: flex-start; gap: 9px; padding: 7px 0; cursor: pointer; margin-bottom: 0; }
-.co-body .co-reg-opt input { width: auto; margin: 3px 0 0; flex: none; accent-color: var(--clay); }
+.co-body .co-reg-opt { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; cursor: pointer; margin-bottom: 0; }
 .co-reg-opt span { display: block; }
-.co-reg-opt b { display: block; font-size: 13px; color: var(--ink); }
-.co-reg-opt small { display: block; margin-top: 2px; font-size: 11.5px; line-height: 1.45; color: var(--hint); }
-/* The follow-up field sits indented under the option it belongs to. */
-.co-body .co-reg-url, .co-body .co-reg-cap { display: block; margin: 0 0 6px 27px; font-size: 12px; color: var(--muted); }
+.co-reg-opt b { display: block; font-size: 13.5px; color: var(--ink); font-weight: 700; }
+.co-reg-opt small { display: block; margin-top: 3px; font-size: 11.5px; line-height: 1.45; color: var(--hint); }
+/* The follow-up field sits indented under the option it belongs to, and lines up with
+   that option's TEXT (radio 13px + the 10px gap) rather than at an arbitrary inset. */
+.co-body .co-reg-url, .co-body .co-reg-cap { display: block; margin: 0 0 var(--co-gap) 23px; font-size: 12px; color: var(--muted); }
 .co-reg[hidden], .co-reg-url[hidden], .co-reg-cap[hidden] { display: none; }
 
 /* ---------- My Events: the door list ---------- */

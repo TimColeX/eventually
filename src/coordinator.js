@@ -120,6 +120,13 @@
         '</header>' +
         '<div class="co-body"><div class="co-cols">' +
           '<div class="co-col co-col-main">' +
+            // Every group in this form opens with the same header, in both columns.
+            // Without one here the left column started with a field label while the
+            // right started with a header above a divider — so the two columns began at
+            // different heights and used two different kinds of type to say the same
+            // thing. Four sections now, one treatment: .co-sec + .co-card-h.
+            '<section class="co-sec">' +
+            '<div class="co-card-h">Event details</div>' +
             '<label>Event name<input class="f-name" placeholder="Midnight Rooftop Sessions"></label>' +
             '<div class="co-row co-row-2">' +
               '<label>Category<select class="f-cat">' + cats + '</select></label>' +
@@ -145,12 +152,13 @@
               '<select class="f-tz"></select></label>' +
             '<p class="co-tz-note" aria-live="polite"></p>' +
             '<label>Description<textarea class="f-desc" rows="3" placeholder="Tell people what to expect…"></textarea></label>' +
+            '</section>' +
             // How people get in. Previously one optional URL box, which left the
             // commonest native case — a free talk with no ticketing at all —
             // with no way for anyone to say they were coming. Now it's a choice,
             // and "Eventually handles it" is a real door list, not a dead button.
-            '<fieldset class="co-reg">' +
-              '<legend>How do people get in?</legend>' +
+            '<fieldset class="co-reg co-sec">' +
+              '<legend>How people get in</legend>' +
               '<label class="co-reg-opt"><input type="radio" name="co-reg" class="f-reg-link" value="link" checked>' +
                 '<span><b>They book somewhere else</b><small>A ticket page or your own website — we send people there.</small></span></label>' +
               // example.com is reserved for documentation (RFC 2606) — it can never
@@ -165,8 +173,11 @@
             '</fieldset>' +
           '</div>' +
           '<div class="co-col co-col-side">' +
-            '<div class="co-loc">' +
-              '<div class="co-card-h">Location · search or drop a pin</div>' +
+            '<section class="co-loc co-sec">' +
+              // Header trimmed to one word to match the others; the instruction it used
+              // to carry ("search or drop a pin") now sits under the map as a hint,
+              // where the picture card already puts its supporting line.
+              '<div class="co-card-h">Location</div>' +
               /* THE VENUE BOOK. Hidden until there is something in it, so a first-time
                  organiser sees exactly the form they see today. Each chip carries the
                  address, the pin AND the time zone, which is the field worth saving. */
@@ -174,16 +185,24 @@
                 '<div class="co-venues-h">Your venues</div>' +
                 '<div class="co-venue-list"></div>' +
               '</div>' +
-              '<div class="co-search"><input class="f-addr" placeholder="Search address or city…" autocomplete="off"><div class="co-suggest"></div></div>' +
+              /* The search box is labelled like every other field. It used to carry a
+                 placeholder and nothing else, which left this column starting a field
+                 lower than the one beside it — and left the control with no accessible
+                 name at all, since a placeholder is not a label. The label is a separate
+                 element rather than a wrapper: a <label> around the suggestion list
+                 would hand every click on a result back to the input. */
+              '<div class="co-search-l"><label for="co-addr">Find the place</label></div>' +
+              '<div class="co-search"><input id="co-addr" class="f-addr" placeholder="Search an address, venue or city" autocomplete="off"><div class="co-suggest"></div></div>' +
               '<canvas class="map-canvas"></canvas>' +
               '<div class="co-coords">' +
                 '<div class="co-place">📍 <strong class="ll-city">—</strong></div>' +
                 '<div class="latlon">lat <strong class="ll-lat"></strong> · lon <strong class="ll-lon"></strong></div>' +
               '</div>' +
-            '</div>' +
+              '<p class="co-hint">Tap the map to move the pin.</p>' +
+            '</section>' +
             // The poster. Optional — an event with no picture still gets the
             // category-colour block, which is what every native event had until now.
-            '<div class="co-img">' +
+            '<section class="co-img co-sec">' +
               '<div class="co-card-h">Picture <span class="co-opt">(optional)</span></div>' +
               '<div class="co-img-drop" tabindex="0" role="button" aria-label="Add a picture">' +
                 '<input type="file" class="f-image" accept="image/*" hidden>' +
@@ -196,9 +215,9 @@
                 '<span class="co-img-info"></span>' +
                 '<button type="button" class="co-img-x">Remove</button>' +
               '</div>' +
-              '<p class="co-img-note">We check pictures before they go live. ' +
+              '<p class="co-hint">We check pictures before they go live. ' +
                 'Use your own artwork or a photo you have the right to use.</p>' +
-            '</div>' +
+            '</section>' +
             '<div class="co-catcolor"><span class="co-catdot"></span>' +
               '<span class="co-catcolor-t">Shows in the <b class="co-catname">Music</b> colour on the globe &amp; card — set automatically by category.</span></div>' +
             '<label class="co-feature"><input type="checkbox" class="f-feature">' +

@@ -53,11 +53,15 @@ body.pg-body {
   color: var(--muted); border: 1px solid var(--line-2); background: var(--paper);
   border-radius: 999px; padding: 4px 10px; white-space: nowrap;
 }
+/* Same secondary height as .an-act — these are the same weight of control. */
 .pg-acct, .pg-globe {
+  /* inline-flex drops the whitespace between the arrow and the word, so the gap is
+     set explicitly — otherwise it reads "←Globe". */
+  display: inline-flex; align-items: center; gap: 6px; min-height: 36px;
   font-size: 12.5px; font-weight: 600; text-decoration: none;
   color: var(--ink); background: var(--paper); border: 1px solid var(--line-2);
-  border-radius: 999px; padding: 8px 13px; cursor: pointer; font-family: var(--font);
-  white-space: nowrap;
+  border-radius: 999px; padding: 7px 14px; cursor: pointer; font-family: var(--font);
+  white-space: nowrap; transition: border-color .15s ease;
 }
 .pg-acct:hover, .pg-globe:hover { border-color: var(--clay); }
 /* The signed-in address can be anything up to a very long one, and it is the header's
@@ -93,7 +97,9 @@ body.pg-body {
 .pg-tab:focus-visible { outline: 2px solid var(--clay); outline-offset: 2px; }
 
 /* ── the allowance, said plainly ─────────────────────────────────────────────── */
-.pg-allow { margin-bottom: 18px; padding: 15px 18px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); }
+/* Same padding as .pg-card — these two stack directly on top of each other, so 18px
+   here and 20px there put their text on two different left edges. */
+.pg-allow { margin-bottom: 18px; padding: 16px 20px 18px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); }
 .pg-allow-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
 .pg-allow-n { font-size: 15px; font-weight: 700; color: var(--ink); }
 .pg-allow-sub { font-family: var(--mono); font-size: 11px; letter-spacing: .05em; color: var(--faint); }
@@ -104,9 +110,13 @@ body.pg-body {
 .pg-allow-note a { color: var(--clay); }
 
 /* ── cards (Your events, Your venues, Sign in) ───────────────────────────────── */
+/* Every card on this page — Your events, Your venues, Sign in — is the same object as
+   the form's card: same padding, same radius, same border, and a title at the same size
+   and weight as "Publish to the globe" (.co-head h2). They are the same kind of thing,
+   so they must not be three sizes of heading in a row. */
 .pg-card { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px 20px; }
-.pg-h2 { font-size: 18px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 6px; }
-.pg-sub { font-size: 13.5px; line-height: 1.55; color: var(--muted); margin: 0 0 16px; }
+.pg-h2 { font-size: 21px; font-weight: 800; letter-spacing: -0.03em; margin: 0 0 7px; text-wrap: balance; }
+.pg-sub { font-size: 13.5px; line-height: 1.55; color: var(--muted); margin: 0 0 18px; }
 
 /* ── the venue book ──────────────────────────────────────────────────────────── */
 .pg-venues { display: flex; flex-direction: column; }
@@ -122,28 +132,36 @@ body.pg-body {
 /* ── sign in ─────────────────────────────────────────────────────────────────── */
 .pg-signin .pg-card { max-width: 440px; }
 .pg-auth { display: flex; flex-direction: column; gap: 14px; }
+/* The two sign-in buttons are like functions, so they are the same height as each other
+   and as the form's primary button (.co-publish, 50px). */
 .pg-google {
   display: flex; align-items: center; justify-content: center; gap: 10px;
-  min-height: 46px; width: 100%; border-radius: 12px; cursor: pointer;
+  min-height: 50px; width: 100%; border-radius: 12px; cursor: pointer;
   background: var(--paper); border: 1px solid var(--line-2); color: var(--ink);
-  font-family: var(--font); font-size: 14px; font-weight: 600;
+  font-family: var(--font); font-size: 14.5px; font-weight: 600;
+  transition: border-color .15s ease;
 }
 .pg-google:hover { border-color: var(--clay); }
 .pg-or { display: flex; align-items: center; gap: 12px; color: var(--hint); font-size: 12px; }
 .pg-or::before, .pg-or::after { content: ""; flex: 1 1 auto; height: 1px; background: var(--line); }
 .pg-mail { display: flex; flex-direction: column; gap: 8px; }
-.pg-mail label { font-size: 11.5px; color: var(--muted); }
+/* The sign-in field is a field of the same family as the form's, so it takes the same
+   height, padding, radius, type size and focus ring — set once in main.css, repeated
+   here only because this control is outside .co-body. */
+.pg-mail label { font-size: 12px; line-height: 1.35; color: var(--muted); }
 .pg-mail input {
-  width: 100%; min-height: 46px; padding: 11px 13px; border-radius: 10px;
-  border: 1px solid var(--line-2); background: var(--bg2); color: var(--ink);
-  font-family: var(--font); font-size: 15px;         /* 15px+ or iOS zooms the page in */
+  width: 100%; min-height: 44px; padding: 10px 13px; border-radius: 11px;
+  border: 1px solid var(--line-2); background: var(--paper); color: var(--ink);
+  font-family: var(--font); font-size: 16px; line-height: 1.3;   /* 16px avoids iOS zoom-on-focus */
+  transition: border-color .15s ease, box-shadow .15s ease;
 }
-.pg-mail input:focus { border-color: var(--clay); background: #fff; outline: none; }
+.pg-mail input:focus { border-color: var(--clay); background: #fff; outline: none; box-shadow: 0 0 0 3px rgba(203,90,60,.13); }
 .pg-send {
-  min-height: 46px; border-radius: 12px; border: 0; cursor: pointer;
-  background: var(--clay); color: #fff; font-family: var(--font); font-size: 14.5px; font-weight: 700;
+  min-height: 50px; border-radius: 12px; border: 0; cursor: pointer;
+  background: var(--clay); color: var(--cream); font-family: var(--font); font-size: 15px; font-weight: 700;
+  transition: background .15s ease, box-shadow .15s ease;
 }
-.pg-send:hover { background: #b94e32; }
+.pg-send:hover { background: #b94e32; box-shadow: 0 10px 26px rgba(203,90,60,.3); }
 .pg-send[disabled] { opacity: .6; cursor: default; }
 .pg-auth-note { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--muted); }
 .pg-auth-note.is-bad { color: #b3402a; }
@@ -182,8 +200,8 @@ body.pg-body {
      — and a tab you have to scroll to find is a tab nobody presses. */
   .pg-tabs { padding: 4px; gap: 3px; }
   .pg-tab { flex: 1 1 auto; font-size: 12.5px; padding: 9px 6px; }
-  .pg-card { padding: 16px 15px 18px; }
-  .pg-allow { padding: 14px 15px; }
+  .pg-card, .pg-allow { padding: 16px 16px 18px; }
+  .pg-h2 { font-size: 19px; }
   /* Actions wrap under the venue rather than squeezing the name to nothing. */
   .pg-venue { flex-wrap: wrap; }
   .pg-v-acts { flex: 1 1 100%; }
