@@ -998,26 +998,39 @@
     c.width = w * dpr; c.height = h * dpr;
     const ctx = c.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = '#efe5d6'; ctx.fillRect(0, 0, w, h);
+
+    /* The map is painted, not styled, so it cannot follow the page's tokens on its own —
+       it stayed a cream rectangle when publish.html went dark. It reads its three colours
+       from CSS custom properties instead, with the original light values as the fallback,
+       so the app's modal is pixel-identical and the page only has to declare the tokens.
+       (--map-sea / --map-land / --map-pin, set in publish.css.) */
+    const tok = getComputedStyle(this.el);
+    const col = function (name, fallback) {
+      const v = tok.getPropertyValue(name); return (v && v.trim()) || fallback;
+    };
+    const sea = col('--map-sea', '#efe5d6');
+    const land = col('--map-land', 'rgba(33,26,21,0.45)');
+    const pinCol = col('--map-pin', '#CB5A3C');
+
+    ctx.fillStyle = sea; ctx.fillRect(0, 0, w, h);
 
     // dotted land
     const step = 3.2;
+    ctx.fillStyle = land;
     for (let py = 0; py < h; py += step) {
       for (let px = 0; px < w; px += step) {
         const lon = px / w * 360 - 180;
         const lat = 90 - py / h * 180;
-        if (isLand(lat, lon)) {
-          ctx.fillStyle = 'rgba(33,26,21,0.45)';
-          ctx.fillRect(px, py, 1.4, 1.4);
-        }
+        if (isLand(lat, lon)) ctx.fillRect(px, py, 1.4, 1.4);
       }
     }
     // pin
     const px = (this.pin.lon + 180) / 360 * w;
     const py = (90 - this.pin.lat) / 180 * h;
-    ctx.strokeStyle = 'rgba(203,90,60,0.6)'; ctx.lineWidth = 1;
+    ctx.strokeStyle = pinCol; ctx.globalAlpha = 0.6; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.arc(px, py, 9, 0, Math.PI * 2); ctx.stroke();
-    ctx.fillStyle = '#CB5A3C'; ctx.shadowColor = '#CB5A3C'; ctx.shadowBlur = 12;
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = pinCol; ctx.shadowColor = pinCol; ctx.shadowBlur = 12;
     ctx.beginPath(); ctx.arc(px, py, 4, 0, Math.PI * 2); ctx.fill();
     ctx.shadowBlur = 0;
 

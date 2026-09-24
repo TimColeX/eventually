@@ -8,7 +8,67 @@
  * main.css is loaded first for the Clay tokens and every .co-/.an- rule. It also styles
  * the APP body — fixed, unscrollable, dark grey behind a globe — so the first block here
  * puts a normal document back.
+ *
+ * DARK, like /browse/ and the city pages. This page is a destination on the website
+ * rather than a panel inside the app, and those pages are all dark — an organiser
+ * arriving from a city page should not be flashbanged into a cream form. It is done by
+ * REDEFINING main.css's tokens for this body only, so every .co- and .an- rule follows
+ * along without being rewritten, and the globe app is untouched. The handful of rules in
+ * main.css that hard-code a light colour are listed at the bottom of this file and
+ * overridden there; that list is the complete set, so if a form control ever looks wrong
+ * on dark, the missing hex belongs in that block.
  */
+
+/* ── the dark palette ────────────────────────────────────────────────────────── */
+body.pg-body {
+  color-scheme: dark;
+  /* Ground and text lifted straight from /browse/ so the two pages are the same colour. */
+  --canvas: #14100c;          /* the page itself */
+  --bg:     #14100c;
+  --cream:  #1c1712;          /* a card sitting on it */
+  --bg2:    #1c1712;
+  --paper:  #241d16;          /* a control sitting on a card */
+  --panel-2:#1c1712;
+  --ink:    #ece5da;
+  --text:   #ece5da;
+  --muted:  #d9cfc2;
+  --faint:  #9a8f80;
+  --hint:   #7d7365;
+  --line:   #2e2820;
+  --line-2: #3b332a;
+  --stroke: #2e2820;
+  --stroke-2: #3b332a;
+  --frame:  #3b332a;
+  /* Brand clay (#CB5A3C) is too dark to read as an accent on this ground — as a link it
+     nearly disappears and as a button it muddies. The accent is the amber the city pages
+     already use for links, which makes the primary buttons amber with dark text: more
+     contrast than clay-on-dark could reach, and the same colour an organiser followed to
+     get here. --cream doubles as "text on an accent", which is why it is a dark value. */
+  --clay:   #f0a24a;
+  --accent: #f0a24a;
+  --cyan:   #f0a24a;
+  --apricot:#ffd8a8;
+  --ember:  #ffd8a8;
+  --shadow:    0 1px 3px rgba(0,0,0,.45);
+  --shadow-lg: 0 24px 60px rgba(0,0,0,.55);
+  /* The location mini-map is painted on a canvas, so it can't inherit any of the above.
+     _drawMap() in coordinator.js reads these three and falls back to the light values. */
+  --map-sea:  #1a150f;
+  --map-land: rgba(236,229,218,0.30);
+  --map-pin:  #f0a24a;
+}
+
+/* The same blurred globe + vignette the city pages sit on. Fixed and inert. */
+.pg-bg { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.pg-bg img {
+  position: absolute; top: 42%; left: 50%; width: min(140vw, 1400px);
+  transform: translate(-50%, -50%); filter: blur(24px) saturate(1.05); opacity: .34;
+}
+.pg-bg::after {
+  content: ""; position: absolute; inset: 0;
+  background: radial-gradient(ellipse at center, rgba(20,16,12,.30) 0%, rgba(20,16,12,.74) 58%, rgba(20,16,12,.96) 100%);
+}
+.pg-top, .pg-main, .pg-foot { position: relative; z-index: 1; }
 
 /* ── the page is a page ──────────────────────────────────────────────────────── */
 /* `hidden` is how this page shows and hides everything from script, and the browser
@@ -32,7 +92,7 @@ body.pg-body {
   position: sticky; top: 0; z-index: 30;
   display: flex; align-items: center; justify-content: space-between; gap: 14px;
   padding: 12px 20px; padding-top: calc(12px + env(safe-area-inset-top, 0px));
-  background: rgba(244,236,226,.94);
+  background: rgba(20,16,12,.82);
   -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--line);
 }
@@ -83,7 +143,7 @@ body.pg-body {
 /* ── tabs ────────────────────────────────────────────────────────────────────── */
 .pg-tabs {
   display: flex; gap: 6px; margin-bottom: 18px; padding: 5px;
-  background: var(--paper); border: 1px solid var(--line); border-radius: 999px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px;
   overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
 }
 .pg-tabs::-webkit-scrollbar { display: none; }
@@ -99,11 +159,11 @@ body.pg-body {
 /* ── the allowance, said plainly ─────────────────────────────────────────────── */
 /* Same padding as .pg-card — these two stack directly on top of each other, so 18px
    here and 20px there put their text on two different left edges. */
-.pg-allow { margin-bottom: 18px; padding: 16px 20px 18px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); }
+.pg-allow { margin-bottom: 18px; padding: 16px 20px 18px; background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius); }
 .pg-allow-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
 .pg-allow-n { font-size: 15px; font-weight: 700; color: var(--ink); }
 .pg-allow-sub { font-family: var(--mono); font-size: 11px; letter-spacing: .05em; color: var(--faint); }
-.pg-allow-bar { height: 8px; border-radius: 99px; background: #efe4d4; overflow: hidden; }
+.pg-allow-bar { height: 8px; border-radius: 99px; background: #2e2820; overflow: hidden; }
 .pg-allow-bar i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--clay), var(--apricot)); }
 .pg-allow.is-full .pg-allow-n { color: var(--clay); }
 .pg-allow-note { margin: 10px 0 0; font-size: 12px; line-height: 1.55; color: var(--hint); }
@@ -114,7 +174,7 @@ body.pg-body {
    the form's card: same padding, same radius, same border, and a title at the same size
    and weight as "Publish to the globe" (.co-head h2). They are the same kind of thing,
    so they must not be three sizes of heading in a row. */
-.pg-card { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px 20px; }
+.pg-card { background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px 20px; }
 .pg-h2 { font-size: 21px; font-weight: 800; letter-spacing: -0.03em; margin: 0 0 7px; text-wrap: balance; }
 .pg-sub { font-size: 13.5px; line-height: 1.55; color: var(--muted); margin: 0 0 18px; }
 
@@ -155,16 +215,16 @@ body.pg-body {
   font-family: var(--font); font-size: 16px; line-height: 1.3;   /* 16px avoids iOS zoom-on-focus */
   transition: border-color .15s ease, box-shadow .15s ease;
 }
-.pg-mail input:focus { border-color: var(--clay); background: #fff; outline: none; box-shadow: 0 0 0 3px rgba(203,90,60,.13); }
+.pg-mail input:focus { border-color: var(--clay); background: #2b231b; outline: none; box-shadow: 0 0 0 3px rgba(240,162,74,.18); }
 .pg-send {
   min-height: 50px; border-radius: 12px; border: 0; cursor: pointer;
   background: var(--clay); color: var(--cream); font-family: var(--font); font-size: 15px; font-weight: 700;
   transition: background .15s ease, box-shadow .15s ease;
 }
-.pg-send:hover { background: #b94e32; box-shadow: 0 10px 26px rgba(203,90,60,.3); }
+.pg-send:hover { background: #ffb463; box-shadow: 0 10px 28px rgba(240,162,74,.26); }
 .pg-send[disabled] { opacity: .6; cursor: default; }
 .pg-auth-note { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--muted); }
-.pg-auth-note.is-bad { color: #b3402a; }
+.pg-auth-note.is-bad { color: #ff9b84; }
 
 /* ── the form panel ──────────────────────────────────────────────────────────── */
 /* The coordinator paints its own card; this panel only carries the gap around it. */
@@ -174,10 +234,10 @@ body.pg-body {
 .pg-draft {
   display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
   margin-bottom: 12px; padding: 11px 14px; border-radius: 12px;
-  background: #F7F1E3; border: 1px solid #e7dcc4;
+  background: #241d13; border: 1px solid #4a3d22;
 }
 .pg-draft[hidden] { display: none; }
-.pg-draft span { flex: 1 1 220px; min-width: 0; font-size: 12.5px; line-height: 1.5; color: #7a6220; }
+.pg-draft span { flex: 1 1 220px; min-width: 0; font-size: 12.5px; line-height: 1.5; color: #e2c489; }
 .pg-draft .pg-draft-x { flex: none; }
 
 /* ── footer ──────────────────────────────────────────────────────────────────── */
@@ -210,3 +270,65 @@ body.pg-body {
 @media (max-width: 380px) {
   .pg-globe { padding: 8px 10px; font-size: 12px; }
 }
+
+/* ═══ THE LIGHT COLOURS main.css HARD-CODES ══════════════════════════════════════
+   Everything above works by redefining tokens, which carries the whole form across on
+   its own. These are the rules in main.css that name a light colour outright, so they
+   would otherwise punch cream holes in a dark page. This is the COMPLETE set — found by
+   grepping every .co-/.an- rule for a hex — so a control that still looks wrong on dark
+   means a new hard-coded colour was added upstream and belongs here.
+   Scoped to .pg-body throughout: the globe app's own modal is untouched. */
+
+/* Fields: the focus state filled white, and the picture drop zone lit white on hover. */
+.pg-body .co-body input:focus,
+.pg-body .co-body select:focus,
+.pg-body .co-body textarea:focus { background: #2b231b; box-shadow: 0 0 0 3px rgba(240,162,74,.18); }
+.pg-body .co-img-drop:hover,
+.pg-body .co-img-drop:focus-visible,
+.pg-body .co-img-drop.is-over { background: #2b231b; }
+.pg-body .co-sug:hover { background: #2b231b; }
+.pg-body .co-close { background: var(--paper); }
+
+/* The primary button is amber here, so its clay hover would have been a jump to a
+   darker colour than the button itself. */
+.pg-body .co-publish:hover { background: #ffb463; box-shadow: 0 10px 28px rgba(240,162,74,.26); }
+
+/* The allowance chip in the form header. */
+.pg-body .co-quota { background: var(--paper); border-color: var(--line-2); }
+.pg-body .co-quota.is-low  { color: #e2c489; background: #241d13; border-color: #4a3d22; }
+.pg-body .co-quota.is-full { color: #ffb0a0; background: #2a1a17; border-color: #573029; }
+
+/* The venue's time-zone confirmation, and its warning state. */
+.pg-body .co-tz-note { background: #241d16; border-color: var(--line-2); }
+.pg-body .co-tz-note.warn { background: #2e2014; border-color: #5b452c; }
+.pg-body .co-tz-note .co-tz-check { color: #ffd8a8; }
+
+/* Your events: the engagement bars, the status chips, and the destructive actions. */
+.pg-body .an-bar { background: #2e2820; }
+.pg-body .an-badge { color: #ffd8a8; background: #2e2417; }
+.pg-body .an-badge.an-pending { color: #e2c489; background: #2b2313; }
+.pg-body .an-badge.an-rejected { color: #ff9b84; background: #2a1a17; }
+.pg-body .an-reason { color: #ff9b84; }
+.pg-body .an-danger { color: #ff9b84; }
+.pg-body .an-danger:hover { border-color: #ff9b84; background: rgba(255,155,132,.10); }
+.pg-body .an-reg { background: #1f1a14; }
+.pg-body .kpi { background: #1f1a14; }
+
+/* The location card's error state — clay-red on cream, unreadable on this ground. */
+.pg-body .co-loc.co-need-loc .map-canvas,
+.pg-body .co-loc.co-need-loc .f-addr { border-color: #ff9b84; box-shadow: 0 0 0 2px rgba(255,155,132,.18); }
+
+/* The live-updates perk line (currently off — LIVE_UPDATES_PROMO) and the door list. */
+.pg-body .co-perk { background: #241d13; border-color: #4a3d22; }
+
+/* A card on this page reads as a raised surface rather than a bordered box: the border
+   is barely there against the ground, so the lift comes from the shadow. */
+.pg-body .pg-card,
+.pg-body .pg-allow,
+.pg-body .pg-tabs,
+.pg-body .co-page .co-modal { box-shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 18px 40px rgba(0,0,0,.35); }
+
+/* Two more surfaces that resolve to the card colour on dark and so would vanish into it:
+   the category-colour note (a tinted block inside the card) and the form's action band. */
+.pg-body .co-catcolor { background: var(--paper); border-color: var(--line-2); }
+.pg-body .co-page .co-foot { background: #181310; }

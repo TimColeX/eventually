@@ -13,6 +13,11 @@
 </head>
 <body class="pg-body">
 
+<!-- The same blurred globe and vignette the city pages and /browse/ sit on, so an
+     organiser arriving from one of them lands somewhere that is obviously the same
+     place. Decorative only: fixed, behind everything, and out of the a11y tree. -->
+<div class="pg-bg" aria-hidden="true"><img src="assets/globe-bg.webp" alt=""></div>
+
 <header class="pg-top">
   <a class="pg-brand" href="/" aria-label="Eventually home">
     <span class="pg-dots" aria-hidden="true"><i></i><i></i><i></i></span>
@@ -41,7 +46,7 @@
 
   <!-- Tabs. Hidden until signed in: there is nothing to switch between before that. -->
   <nav class="pg-tabs" role="tablist" hidden>
-    <button type="button" class="pg-tab is-on" role="tab" aria-selected="true"  data-tab="new">Publish an event</button>
+    <button type="button" class="pg-tab is-on" role="tab" aria-selected="true"  data-tab="new">Publish Event</button>
     <button type="button" class="pg-tab"       role="tab" aria-selected="false" data-tab="events">Your events</button>
     <button type="button" class="pg-tab"       role="tab" aria-selected="false" data-tab="venues">Your venues</button>
   </nav>
