@@ -40,6 +40,17 @@
   function n(v, code) { try { return Number(v).toLocaleString(LOCALE[code] || 'en-US'); } catch (e) { return '' + v; } }
   function c(code, k) { return (CAT[code] && CAT[code][k]) || k; }
   function nm(d, code) { return d.name || DEFAULT_NAME[code]; }
+  /* English plurals. The host reads these lines aloud AND prints them as the caption, so
+     "1 big music events are underway" is heard as well as seen. `s(1,'event')` → "event",
+     `s(3,'event')` → "events"; `are(1)` → "is". */
+  function s(count, word) { return +count === 1 ? word : word + 's'; }
+  function are(count) { return +count === 1 ? 'is' : 'are'; }
+  /* narrator.js falls back to the literal region name "around the world" when a point
+     doesn't land in one of its boxes — and "Over in around the world" is not a sentence.
+     That fallback reads as its own opener instead. */
+  function whereEn(region) {
+    return /^around the world$/i.test(region || '') ? 'Around the world' : 'Over in ' + region;
+  }
 
   const T = {
     en: {
@@ -47,12 +58,12 @@
       greeting: d => !d.hasRecs
         ? `${GREET.en[d.part]}, ${nm(d, 'en')}! Set your location and a few interests, and I'll line up events made just for you.`
         : d.exploring
-          ? `${GREET.en[d.part]}! You're exploring ${d.city}. There are ${d.k} ${c('en', d.cat)} events on here right now — including ${d.event}.`
-          : `${GREET.en[d.part]}, ${nm(d, 'en')}! Based on what you love, I've found ${d.k} live ${c('en', d.cat)} events within ${d.mi} miles — including ${d.event}, over in ${d.city}.`,
+          ? `${GREET.en[d.part]}! You're exploring ${d.city}. There ${are(d.k)} ${d.k} ${c('en', d.cat)} ${s(d.k, 'event')} on here right now — including ${d.event}.`
+          : `${GREET.en[d.part]}, ${nm(d, 'en')}! Based on what you love, I've found ${d.k} live ${c('en', d.cat)} ${s(d.k, 'event')} within ${d.mi} miles — including ${d.event}, over in ${d.city}.`,
       ident: d => `Now taking you to ${d.city} — here's what's happening there right now.`,
       spotlight: d => `Here's one to watch: ${d.event}, in ${d.city}.`,
-      countdown: d => `Heads up — ${d.event} in ${d.city} kicks off in just ${d.min} minutes.`,
-      region: d => `Over in ${d.region}, ${d.n} big ${c('en', d.cat)} events are underway right now.`,
+      countdown: d => `Heads up — ${d.event} in ${d.city} kicks off in just ${d.min} ${s(d.min, 'minute')}.`,
+      region: d => `${whereEn(d.region)}, ${d.n} big ${c('en', d.cat)} ${s(d.n, 'event')} ${are(d.n)} underway right now.`,
       trending: d => `Trending tonight: ${d.event}, in ${d.city}. It's climbing fast, with ${n(d.likes, 'en')} likes.`,
       sponsor: d => d.text || `This update is brought to you by ${d.sponsor}.`,
       tip: () => `Tap any glowing marker on the globe, and you'll see everything happening there.`

@@ -22,6 +22,17 @@
   --stroke: var(--line); --stroke-2: var(--line-2);
   --text: var(--ink); --cyan: var(--clay); --accent: var(--clay);
 
+  /* THE PAGE FRAME. Everything pinned to an edge sits on this inset: the brand on the
+     left, the nav and the globe controls on the right, the side panels, the Privacy ·
+     Terms line. Three of those used to sit on 18px while the rest sat on 22px, which put
+     them 4px proud of everything else for no reason. One number, one frame. */
+  --page-inset: 22px;
+  /* What a right-hand side panel must leave clear at the bottom of the screen. The AI
+     host bar is a floating control centred along the bottom, and on a 1024px-wide window
+     it reaches under the panels — it was drawn OVER the panel's bottom-left corner by
+     26px. The panels stop above it instead; they scroll, the host bar does not. */
+  --panel-clear: 166px;
+
   --radius: 14px;
   --shadow:    0 1px 3px rgba(33,26,21,0.10);
   --shadow-lg: 0 20px 50px rgba(33,26,21,0.20);
@@ -90,6 +101,13 @@ body {
   position: fixed; top: 0; left: 0; right: 0; z-index: 30;
   display: flex; align-items: center; gap: 18px;
   padding: calc(16px + env(safe-area-inset-top, 0px)) 22px 16px;
+  /* SAFETY NET, and the fix for a real bug: between 761px and ~852px the row could not
+     fit, and because a flex item never shrinks below its min-content width the nav simply
+     ran off the right-hand edge — taking the ⋯ menu with it. `body` is overflow:hidden, so
+     it could not even be scrolled to: on an iPad in portrait (768px) Sign in, Profile,
+     Help Centre, Advertise, Browse Cities and My Events were all unreachable.
+     Wrapping means the worst case is a second row, never a control nobody can reach. */
+  flex-wrap: wrap;
 }
 .brand { display: flex; align-items: center; gap: 10px; }
 .brand-dots { display: flex; align-items: center; gap: 5px; }
@@ -100,13 +118,18 @@ body {
 @keyframes evPulse { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.28); opacity: .55; } }
 .brand-name { font-size: 21px; font-weight: 800; letter-spacing: -0.04em; color: var(--ink); }
 
-.search-wrap { position: relative; flex: 1; max-width: 440px; display: flex; align-items: center; gap: 8px; }
+/* ONE height for every control in the top bar — the search box, the Types button, the
+   location chip and the ⋯ menu. They were 41 / 41 / 40 / 40 and top-aligned, so they
+   finished a pixel apart; 42px also matches the globe controls and the host's play
+   button, so every round control on the globe screen is the same size. */
+.topbar { --bar-ctl-h: 42px; }
+.search-wrap { position: relative; flex: 1; max-width: 440px; min-width: 200px; display: flex; align-items: center; gap: 8px; height: var(--bar-ctl-h); }
 .search-ic {
   position: absolute; left: 13px; top: 50%; transform: translateY(-50%);
   width: 18px; height: 18px; color: var(--faint); z-index: 1;
 }
 #search {
-  flex: 1; min-width: 0; padding: 11px 14px 11px 40px;
+  flex: 1; min-width: 0; height: 100%; padding: 0 14px 0 40px;
   background: var(--paper); border: 1px solid var(--line);
   border-radius: 12px; color: var(--ink); font-size: 14px; font-family: var(--font);
   outline: none; transition: border-color .2s, box-shadow .2s; box-shadow: var(--shadow);
@@ -137,6 +160,11 @@ body {
 
 .nav { display: flex; align-items: center; gap: 10px; margin-left: auto; }
 .stats { display: flex; gap: 16px; font-family: var(--mono); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink); }
+/* The counts are the first thing to go when the row gets tight — they are ambient
+   information, and the ⋯ menu behind them is the app's entire navigation. They used to
+   hold on until 760px, which is precisely why the menu was pushed off screen between
+   761px and 852px. Measured: with the counts gone the row fits comfortably from 700px up. */
+@media (max-width: 900px) { .stats { display: none; } }
 .stats b { color: var(--ink); font-size: 13px; font-weight: 700; }
 .stats .muted b { color: var(--faint); }
 .nav-btn {
@@ -189,13 +217,14 @@ body {
 .place {
   position: fixed; top: 78px; right: -460px; z-index: 40;
   width: 400px; max-width: calc(100vw - 28px);
-  max-height: calc(100vh - 180px); display: flex; flex-direction: column;
+  max-height: calc(100vh - var(--panel-clear) - env(safe-area-inset-bottom, 0px));
+  display: flex; flex-direction: column;
   /* Dark frame so the panel reads as one object against the globe (all side panels). */
   background: var(--cream); border: 1px solid var(--frame);
   border-radius: 20px; overflow: hidden; box-shadow: var(--shadow-lg);
   transition: right .35s cubic-bezier(.22,1,.36,1);
 }
-.place.open { right: 18px; }
+.place.open { right: var(--page-inset); }
 .place-head {
   display: flex; align-items: flex-start; justify-content: space-between;
   padding: 18px 18px 14px; border-bottom: 1px solid var(--line);
@@ -345,7 +374,7 @@ body {
 }
 .ah-play {
   position: relative;
-  width: 42px; height: 42px; flex: none; border-radius: 50%; cursor: pointer; border: 0;
+  width: 44px; height: 44px; flex: none; border-radius: 50%; cursor: pointer; border: 0;
   background: var(--clay); display: grid; place-items: center; box-shadow: 0 2px 10px rgba(203,90,60,.4);
 }
 .ah-focus { font-family: var(--mono); font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--clay); }
@@ -771,7 +800,7 @@ body {
    padding + line-height, which made it a few pixels short and left the two
    controls visibly misaligned in the top bar. */
 .loc-chip {
-  display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 13px;
+  display: flex; align-items: center; gap: 6px; height: var(--bar-ctl-h, 42px); padding: 0 13px;
   border-radius: 11px; cursor: pointer;
   font-family: var(--font); font-size: 13px; font-weight: 600; color: var(--ink);
   background: var(--paper); border: 1px solid var(--line-2);
@@ -818,12 +847,13 @@ body {
 /* ---------- profile / You panel ---------- */
 .profile, .saved {
   position: fixed; top: 78px; right: -440px; z-index: 45;
-  width: 380px; max-width: calc(100vw - 28px); max-height: calc(100vh - 180px);
+  width: 380px; max-width: calc(100vw - 28px);
+  max-height: calc(100vh - var(--panel-clear) - env(safe-area-inset-bottom, 0px));
   display: flex; flex-direction: column;
   background: var(--cream); border: 1px solid var(--frame); border-radius: 20px;
   overflow: hidden; box-shadow: var(--shadow-lg); transition: right .35s cubic-bezier(.22,1,.36,1);
 }
-.profile.open, .saved.open { right: 18px; }
+.profile.open, .saved.open { right: var(--page-inset); }
 
 /* ---- Saved events: month calendar + day list ---- */
 .sv-head { display: flex; align-items: flex-start; justify-content: space-between; padding: 18px 18px 14px; border-bottom: 1px solid var(--line); }
@@ -1044,6 +1074,10 @@ body {
 .bb-nav { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; }
 .bb-link { flex: 1 1 0; min-width: 0; max-width: 172px;
   display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+  /* 36px is the app's secondary-control height; on a phone it goes to a full 44px target
+     in the media query below. These three buttons ARE the app's navigation on a phone,
+     and they were 34px — the smallest thing on the screen. */
+  min-height: 36px;
   padding: 9px 14px; border-radius: 10px; border: 1px solid var(--line-2);
   background: var(--paper); color: var(--clay);
   font-family: var(--font); font-size: 13px; font-weight: 600; white-space: nowrap;
@@ -1056,7 +1090,7 @@ body {
    priority action reads first without breaking the symmetry. */
 .bb-link[data-bb="publish"] { font-weight: 800; }
 /* Quiet Privacy · Terms line at the strip's right edge (desktop). */
-.bb-legal { position: absolute; right: 18px; top: 50%; transform: translateY(-50%); pointer-events: auto;
+.bb-legal { position: absolute; right: var(--page-inset); top: 50%; transform: translateY(-50%); pointer-events: auto;
   font-family: var(--mono); font-size: 10.5px; letter-spacing: .03em; color: var(--faint); white-space: nowrap; }
 .bb-legal a { color: var(--muted); text-decoration: none; }
 .bb-legal a:hover { color: var(--clay); text-decoration: underline; }
@@ -1096,6 +1130,8 @@ body {
 /* lift the floating bottom UI when the ad bar is present. The ad bar's height is
    56px + safe-area-inset-bottom, so these offsets MUST add the same inset or the
    host bar overlaps the ad on notch/home-bar devices. */
+/* The bottom bar pushes the host bar up, so the panels have to stop that much higher. */
+body.has-ad { --panel-clear: 220px; }
 body.has-ad .ai-host { bottom: calc(70px + env(safe-area-inset-bottom, 0px)); }
 body.has-ad .timeline { bottom: calc(138px + env(safe-area-inset-bottom, 0px)); }
 body.has-ad .globe-controls { bottom: calc(204px + env(safe-area-inset-bottom, 0px)); }
@@ -1115,7 +1151,7 @@ body.no-timeline.has-ad .legend { bottom: calc(138px + env(safe-area-inset-botto
 /* ---------- ⋯ menu + dropdown ---------- */
 .menu-wrap { position: relative; }
 .menu-btn {
-  display: flex; align-items: center; gap: 7px; height: 40px; padding: 0 15px; border-radius: 11px; cursor: pointer;
+  display: flex; align-items: center; gap: 7px; height: var(--bar-ctl-h, 42px); padding: 0 15px; border-radius: 11px; cursor: pointer;
   background: var(--clay); border: 0; color: var(--cream); transition: background .15s;
 }
 .menu-btn:hover { background: #b94e32; }
@@ -1136,6 +1172,7 @@ body.no-timeline.has-ad .legend { bottom: calc(138px + env(safe-area-inset-botto
 .dd-user small { font-family: var(--mono); font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--clay); }
 .dd-item {
   display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; text-align: left;
+  min-height: 40px;
   padding: 10px 12px; border: 0; background: none; border-radius: 9px; cursor: pointer;
   font-family: var(--font); font-size: 14px; font-weight: 600; color: var(--ink);
 }
@@ -1210,12 +1247,13 @@ body.no-timeline.has-ad .legend { bottom: calc(138px + env(safe-area-inset-botto
 /* ---------- full event detail (dedup view) ---------- */
 .evdetail {
   position: fixed; top: 78px; right: -480px; z-index: 50;
-  width: 420px; max-width: calc(100vw - 28px); max-height: calc(100vh - 180px);
+  width: 420px; max-width: calc(100vw - 28px);
+  max-height: calc(100vh - var(--panel-clear) - env(safe-area-inset-bottom, 0px));
   display: flex; flex-direction: column;
   background: var(--cream); border: 1px solid var(--frame); border-radius: 20px;
   overflow: hidden; box-shadow: var(--shadow-lg); transition: right .35s cubic-bezier(.22,1,.36,1);
 }
-.evdetail.open { right: 18px; }
+.evdetail.open { right: var(--page-inset); }
 .evd-scroll { overflow-y: auto; }
 .evd-banner { position: relative; height: 120px; display: flex; align-items: flex-end; padding: 14px; }
 .evd-banner::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to top, rgba(33,26,21,.5), transparent 60%); }
@@ -1398,7 +1436,9 @@ body.no-timeline.has-ad .legend { bottom: calc(138px + env(safe-area-inset-botto
   .types-menu.show { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; align-content: start; }
   .types-menu .topt-all { grid-column: 1 / -1; }
   .types-menu .topt { padding: 11px 10px; font-size: 13px; }
-  .topbar { flex-wrap: wrap; gap: 10px; padding: 12px 14px; }
+  .topbar { flex-wrap: wrap; gap: 10px; padding: 12px 14px; --bar-ctl-h: 44px; }
+  /* A finger, not a mouse: every control on this screen gets a full 44px target. */
+  .bb-link, .dd-item { min-height: 44px; }
   .search-wrap { order: 3; max-width: none; flex-basis: 100%; }
   /* The spike label (city · N events) sat at top:78px — fine when the search is on the
      top row, but here the search wraps to a second row (62–105px), so the label hid
@@ -1410,7 +1450,10 @@ body.no-timeline.has-ad .legend { bottom: calc(138px + env(safe-area-inset-botto
   .loc-chip .loc-name { display: none; }
   .timeline { bottom: 82px; }
   .globe-controls { bottom: 138px; right: 14px; }
-  .ctl { width: 38px; height: 38px; }
+  /* Was 38px — the only controls on the phone screen still under a finger's worth. They
+     are pause / zoom in / zoom out, tapped repeatedly, so they get the full 44px like
+     everything else. Three buttons × 6px is 18px of a 812px screen. */
+  .ctl { width: 44px; height: 44px; }
   /* Mobile drawers: pin to BOTH edges (always fit) + slide via TRANSFORM. The old
      rule animated `right` from -460px (closed) to 50% (open); browsers can't
      interpolate px↔%, so the transition silently failed and the panel stayed parked
