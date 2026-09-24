@@ -13,8 +13,19 @@ name: Rebuild city pages
 
 on:
   schedule:
-    - cron: '30 6 * * *'      # 06:30 UTC daily — after the 05:00 event ingest
-  workflow_dispatch: {}        # plus a manual "Run workflow" button for testing
+    # Every four hours, not once a day. Two reasons, and the second is the better one:
+    #   1. An organiser who publishes an event and gets it approved had to wait up to a
+    #      full day to see it on their city's page. (It is on the globe instantly — the
+    #      page is the static SEO surface, rebuilt from live data.)
+    #   2. The page only lists events that have not started yet, so a daily rebuild could
+    #      leave something listed as upcoming twenty hours after it began.
+    # A run that finds no change commits nothing, so most of these are no-ops. The repo
+    # is public, so Actions minutes are free; the only real cost is the Supabase read.
+    # NOTE: GitHub queues scheduled jobs on shared runners — observed runs have landed
+    # 5–6 hours after the cron time, so treat these as "at the earliest", not "at".
+    - cron: '30 */4 * * *'     # 00:30 / 04:30 / 08:30 / 12:30 / 16:30 / 20:30 UTC
+  workflow_dispatch: {}        # plus a manual "Run workflow" button — use it after
+                               # approving an event you want on its city page now
 
 permissions:
   contents: write              # required so the job can push the rebuilt pages
