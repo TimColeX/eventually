@@ -182,7 +182,7 @@
                  organiser sees exactly the form they see today. Each chip carries the
                  address, the pin AND the time zone, which is the field worth saving. */
               '<div class="co-venues" hidden>' +
-                '<div class="co-venues-h">Your venues</div>' +
+                '<div class="co-venues-h">Your Venues</div>' +
                 '<div class="co-venue-list"></div>' +
               '</div>' +
               /* The search box is labelled like every other field. It used to carry a

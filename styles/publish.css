@@ -96,7 +96,12 @@ body.pg-body {
   -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--line);
 }
-.pg-brand { display: flex; align-items: baseline; gap: 9px; text-decoration: none; color: var(--ink); min-width: 0; }
+/* The brand NEVER shrinks. It used to carry `min-width: 0`, which let flex squeeze the
+   box below the width of the word inside it — and a <span> with no overflow rule simply
+   paints outside its box, so at 320px the wordmark rendered straight through the account
+   chip next to it. Deciding what gives way is the whole job here: identity does not,
+   the way back to the globe does not, the email address does. */
+.pg-brand { display: flex; align-items: baseline; gap: 9px; text-decoration: none; color: var(--ink); flex: 0 0 auto; }
 .pg-dots { display: inline-flex; gap: 3px; align-self: center; flex: none; }
 .pg-dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--clay); }
 .pg-dots i:nth-child(2) { opacity: .66; }
@@ -106,7 +111,8 @@ body.pg-body {
   font-family: var(--mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase;
   color: var(--clay); white-space: nowrap;
 }
-.pg-top-right { display: flex; align-items: center; gap: 10px; flex: none; }
+/* This group absorbs whatever width is left, and shrinks from the inside (the email). */
+.pg-top-right { display: flex; align-items: center; gap: 10px; flex: 0 1 auto; min-width: 0; }
 /* The allowance also rides in the header once it is known — the same chip the modal used. */
 .pg-top .pg-quota {
   font-family: var(--mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase;
@@ -124,9 +130,17 @@ body.pg-body {
   white-space: nowrap; transition: border-color .15s ease;
 }
 .pg-acct:hover, .pg-globe:hover { border-color: var(--clay); }
-/* The signed-in address can be anything up to a very long one, and it is the header's
-   only elastic item — so it is the one that gives way, never the way back to the globe. */
-.pg-acct { max-width: 32vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pg-globe { flex: none; }   /* the way back is never the thing that gives way */
+/* THE ONE ELASTIC ITEM in the header — an address can be any length, so this is what
+   shrinks. ⚠️ `display: inline-block`, NOT the inline-flex above: `text-overflow` has no
+   effect on a flex container, because the text becomes an anonymous flex item. The rule
+   was here all along and did nothing; "rotimialade@gmail.com" was cut off mid-word with
+   no ellipsis at all. Nothing else in this chip needs flex — it is one text node. */
+.pg-acct {
+  display: inline-block; flex: 0 1 auto; min-width: 0; max-width: 32vw;
+  line-height: 20px; padding: 7px 14px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .pg-globe-short { display: none; }
 
 /* ── main column ─────────────────────────────────────────────────────────────── */
@@ -141,14 +155,18 @@ body.pg-body {
 .pg-facts b { color: var(--ink); font-weight: 700; }
 
 /* ── tabs ────────────────────────────────────────────────────────────────────── */
+/* The strip does NOT scroll. Three tabs always divide the width between them and each
+   truncates if it has to, so the selected pill can never end up half off the left edge
+   with no sign that it is there — which is what a scrolling strip does the moment the
+   labels outgrow the phone. */
 .pg-tabs {
   display: flex; gap: 6px; margin-bottom: 18px; padding: 5px;
   background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px;
-  overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  overflow: hidden;
 }
-.pg-tabs::-webkit-scrollbar { display: none; }
 .pg-tab {
-  flex: 1 1 auto; min-height: 40px; padding: 9px 16px; white-space: nowrap;
+  flex: 1 1 0; min-width: 0; min-height: 40px; padding: 9px 16px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   border: 0; border-radius: 999px; background: transparent; cursor: pointer;
   font-family: var(--font); font-size: 13.5px; font-weight: 600; color: var(--muted);
 }
@@ -259,7 +277,7 @@ body.pg-body {
   /* All three tabs fit a 375px phone at this size, so the strip doesn't need scrolling
      — and a tab you have to scroll to find is a tab nobody presses. */
   .pg-tabs { padding: 4px; gap: 3px; }
-  .pg-tab { flex: 1 1 auto; font-size: 12.5px; padding: 9px 6px; }
+  .pg-tab { font-size: 12.5px; padding: 9px 6px; }
   .pg-card, .pg-allow { padding: 16px 16px 18px; }
   .pg-h2 { font-size: 19px; }
   /* Actions wrap under the venue rather than squeezing the name to nothing. */
@@ -269,6 +287,9 @@ body.pg-body {
 }
 @media (max-width: 380px) {
   .pg-globe { padding: 8px 10px; font-size: 12px; }
+  /* At 320px "Publish Event" came two pixels short of its third of the strip and
+     truncated to "Publish Ev…". Two pixels of padding buys the whole label back. */
+  .pg-tab { font-size: 12px; padding: 9px 3px; }
 }
 
 /* ═══ THE LIGHT COLOURS main.css HARD-CODES ══════════════════════════════════════
