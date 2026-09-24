@@ -19,9 +19,12 @@ AI radio host talk you through it.
   venue calendars, deduplicated across sources.
 - **An AI host** that narrates what's happening near you — a two-voice conversation
   generated per city and cached aggressively, so the same briefing is never paid for twice.
-- **Live updates** — while an event is running, its organiser can post practical notes
-  (doors, parking, running late) to everyone viewing it. Opens an hour before the start,
-  deleted when the event ends.
+- **Live updates** — *built, not offered.* While an event is running, its organiser can
+  post practical notes (doors, parking, running late) to everyone viewing it. Opens an
+  hour before the start, deleted when the event ends. The code is live and an admin can
+  switch it on per event, but `chat_enabled` defaults to false and nothing in the product
+  promises it: `LIVE_UPDATES_PROMO = false` guards the app, the publish form, the city
+  pages and the organiser emails. Flip those four to offer it.
 - **Anyone can publish an event** to the globe in a few taps, with a rolling annual
   allowance enforced in the database.
 - **Static city pages** for SEO, regenerated daily by a GitHub Action.

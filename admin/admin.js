@@ -1454,7 +1454,10 @@
       // heard two different companies each claim to sponsor the same briefing.
       '<div class="ad-field"><label>Global announcement (read to everyone, verbatim)</label>' +
       '<textarea id="db-ann">' + esc(dbCfg.announcement || '') + '</textarea>' +
-      '<span class="ad-hint"><b>Editorial and operational notices only</b> — e.g. “Live updates are now on event pages.” ' +
+      // The example used to be “Live updates are now on event pages.” — which is a
+      // feature we have built but are not offering, so it was an invitation to announce
+      // something untrue to every listener. Example swapped for one that is just true.
+      '<span class="ad-hint"><b>Editorial and operational notices only</b> — e.g. “Organisers can now publish events at eventually-app.com/publish.” ' +
       'This is read to <b>everyone, including Plus</b>, which is ad-free, and it carries no sponsor disclosure. ' +
       'Anything paid belongs in <b>Sponsors</b> below, where it is disclosed, free-tier only, and counted per advertiser.</span></div>' +
       '<div class="ad-field"><label>Daily voice-generation ceiling (0 = unlimited)</label>' +
