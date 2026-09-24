@@ -5,6 +5,11 @@
 (function (global) {
   'use strict';
 
+  /* The speaker button in the host bar (music-only mute). Hidden at the owner's request
+     2026-09-24 — the whole feature is intact behind this one flag, so bringing it back is
+     a one-word change, not a rebuild. */
+  const SHOW_MUTE = false;
+
   // Best-quality natural voices per platform, in priority order (name substrings).
   const VOICE_PREF = [
     'ava', 'samantha', 'allison', 'serena', 'zoe', 'nicky', 'evan',            // Apple
@@ -119,10 +124,16 @@
         '<svg class="ah-home-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2 2.8 11a1 1 0 0 0 1.3 1.5L5 11.8V20a1 1 0 0 0 1 1h4.2a.8.8 0 0 0 .8-.8v-4.4h2v4.4a.8.8 0 0 0 .8.8H18a1 1 0 0 0 1-1v-8.2l.9.7A1 1 0 0 0 21.2 11z"/></svg>' +
         '<span class="ah-home-txt"> My area</span>' +
       '</button>' +
-      '<button class="ah-mute" aria-label="Mute music" title="Mute music">' +
-        '<svg viewBox="0 0 24 24" class="ic-vol"><path d="M3 10v4h4l5 4V6L7 10H3z"/><path d="M15.5 8.5a4.5 4.5 0 010 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>' +
-        '<svg viewBox="0 0 24 24" class="ic-mute" style="display:none"><path d="M3 10v4h4l5 4V6L7 10H3z"/><path d="M15 9.5l5 5M20 9.5l-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>' +
-      '</button>' +
+      /* The music mute button is HIDDEN (owner, 2026-09-24: "I do not see the value of it
+         anymore… I may bring it back"). Nothing else is removed: onMuteToggle, the saved
+         preference and _setMuteIcon all still work, and the markup below returns as it was
+         by flipping SHOW_MUTE. Pause still stops everything, which is what people reach for. */
+      (SHOW_MUTE
+        ? '<button class="ah-mute" aria-label="Mute music" title="Mute music">' +
+            '<svg viewBox="0 0 24 24" class="ic-vol"><path d="M3 10v4h4l5 4V6L7 10H3z"/><path d="M15.5 8.5a4.5 4.5 0 010 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>' +
+            '<svg viewBox="0 0 24 24" class="ic-mute" style="display:none"><path d="M3 10v4h4l5 4V6L7 10H3z"/><path d="M15 9.5l5 5M20 9.5l-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>' +
+          '</button>'
+        : '') +
       '<canvas class="ah-wave"></canvas>';
 
     this.canvas = this.el.querySelector('.ah-wave');
@@ -1657,5 +1668,7 @@
     ctx.arcTo(x, y, x + w, y, r);
   }
 
+  // Published so app.js can tell whether a stored mute preference can still be undone.
+  AIHost.SHOW_MUTE = SHOW_MUTE;
   global.EventuallyAIHost = AIHost;
 })(window);

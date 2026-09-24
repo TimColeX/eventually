@@ -327,8 +327,16 @@
   });
   const music = new window.EventuallyMusic();   // duckable bed, swaps to a real file if provided
   // Music mute is a per-user preference (music only — narration always plays).
+  /* The music mute preference is IGNORED while the speaker button is hidden (see
+     SHOW_MUTE in aihost.js, owner 2026-09-24). Anyone who muted the music before it was
+     taken away would otherwise be stuck in permanent silence with no control to undo it —
+     and would reasonably report the music as broken. The stored value is left untouched,
+     so bringing the button back restores their choice with it. */
   let musicMuted = false;
-  try { musicMuted = localStorage.getItem('ev_mute_music') === '1'; } catch (e) {}
+  try {
+    musicMuted = localStorage.getItem('ev_mute_music') === '1' &&
+                 !!(window.EventuallyAIHost && window.EventuallyAIHost.SHOW_MUTE);
+  } catch (e) {}
   music.setMuted(musicMuted);
   const I18n = window.EventuallyI18n;
   const aiHost = new window.EventuallyAIHost(document.getElementById('ai-host'), {
