@@ -31,14 +31,78 @@
   function redirectTo() { return location.origin + location.pathname; }
   function logErr(tag) { return function (r) { if (r && r.error) console.warn('[EventuallyAuth] ' + tag + ' failed: ' + r.error.message); return r; }; }
 
+  /* ---------- magic-link cooldown ----------
+     Supabase's auth mailer is rate-limited PER PROJECT, not per account. Four or
+     five sign-in emails in an hour — from ANYONE — and the next person to try gets
+     "email rate limit exceeded" and cannot sign in at all. One frustrated user
+     tapping the button is enough to lock out everybody else.
+
+     The button disables itself while the request is in flight, but that lasts under
+     a second, and a reload wipes it — and reloading is precisely what someone does
+     when no email has arrived. So the guard lives here, keyed by address, in
+     localStorage, where it survives the reload and covers every caller.
+
+     Sixty seconds matches Supabase's own per-address minimum. A rate-limit refusal
+     arms it too: retrying into a limit that is already tripped spends nothing but
+     the user's patience. */
+  const COOLDOWN_MS = 60000;
+  const CD_KEY = 'ev.magiclink.sent';
+
+  function cdRead() {
+    try { return JSON.parse(localStorage.getItem(CD_KEY) || '{}') || {}; } catch (e) { return {}; }
+  }
+  function cdWrite(map) {
+    // Prune as we go: an address asked about once a year ago is not worth carrying.
+    const now = Date.now(), keep = {};
+    Object.keys(map).forEach(function (k) { if (now - map[k] < COOLDOWN_MS) keep[k] = map[k]; });
+    try { localStorage.setItem(CD_KEY, JSON.stringify(keep)); } catch (e) { /* private mode — guard degrades, nothing breaks */ }
+  }
+  function cdKey(email) { return String(email || '').trim().toLowerCase(); }
+
+  // Milliseconds left before this address may ask for another link. 0 = go ahead.
+  function cooldownLeft(email) {
+    const at = cdRead()[cdKey(email)];
+    if (!at) return 0;
+    const left = COOLDOWN_MS - (Date.now() - at);
+    return left > 0 ? left : 0;
+  }
+  function cooldownStart(email) {
+    const map = cdRead(); map[cdKey(email)] = Date.now(); cdWrite(map);
+  }
+
   const api = {
     enabled: ENABLED,
     client: sb,
     user: function () { return currentUser; },
     onChange: function (cb) { if (typeof cb === 'function') { listeners.push(cb); if (currentUser !== null) cb(currentUser); } },
 
+    /* Seconds this address must wait before asking for another link (0 = clear).
+       The UI uses this to count down on the button instead of letting someone
+       press a button that is going to be refused. */
+    emailCooldown: function (email) { return Math.ceil(cooldownLeft(email) / 1000); },
+
     signInWithEmail: function (email) {
-      return sb.auth.signInWithOtp({ email: email, options: { emailRedirectTo: redirectTo() } });
+      const left = cooldownLeft(email);
+      if (left > 0) {
+        // Shaped like a supabase-js result so callers need no special handling —
+        // `name` is there for the ones that want to word it better.
+        return Promise.resolve({
+          data: null,
+          error: {
+            name: 'cooldown', status: 429,
+            message: 'A link is already on its way. You can ask for another in ' +
+                     Math.ceil(left / 1000) + 's — check your spam folder first.'
+          }
+        });
+      }
+      return sb.auth.signInWithOtp({ email: email, options: { emailRedirectTo: redirectTo() } })
+        .then(function (r) {
+          // Arm on success, and on a rate-limit refusal — see the note above.
+          if (!r || !r.error || r.error.status === 429 || /rate limit/i.test(r.error.message || '')) {
+            cooldownStart(email);
+          }
+          return r;
+        });
     },
     signInWithGoogle: function () {
       return sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: redirectTo() } });

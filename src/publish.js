@@ -376,6 +376,29 @@
     });
   });
   const mailForm = document.querySelector('.pg-mail');
+  const SEND_LABEL = 'Email me a sign-in link';
+
+  /* The button counts the wait down rather than sitting there inviting a press that
+     will be refused. Supabase's mailer is rate-limited across the WHOLE project, so
+     every needless retry is one the next person doesn't get. */
+  let cdTimer = null;
+  function countdown(btn, secs) {
+    if (cdTimer) { clearInterval(cdTimer); cdTimer = null; }
+    let left = Math.max(0, secs | 0);
+    function paint() {
+      if (left <= 0) {
+        btn.disabled = false; btn.textContent = SEND_LABEL;
+        if (cdTimer) { clearInterval(cdTimer); cdTimer = null; }
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = SEND_LABEL + ' (' + left + 's)';
+      left--;
+    }
+    paint();
+    if (left > 0) cdTimer = setInterval(paint, 1000);
+  }
+
   if (mailForm) mailForm.addEventListener('submit', function (e) {
     e.preventDefault();
     const input = document.getElementById('pg-email');
@@ -386,12 +409,33 @@
     if (!acctEnabled()) { note.textContent = 'Accounts are unavailable right now.'; note.classList.add('is-bad'); return; }
     btn.disabled = true; btn.textContent = 'Sending…';
     A.signInWithEmail(email).then(function (r) {
-      btn.disabled = false; btn.textContent = 'Email me a sign-in link';
-      if (r && r.error) { note.textContent = 'Couldn\'t send that: ' + r.error.message; note.classList.add('is-bad'); return; }
+      if (r && r.error) {
+        note.textContent = r.error.name === 'cooldown' ? r.error.message : 'Couldn\'t send that: ' + r.error.message;
+        note.classList.add('is-bad');
+        // A refusal is still a reason to wait — most of them are the rate limit.
+        countdown(btn, A.emailCooldown ? A.emailCooldown(email) : 0);
+        return;
+      }
       note.classList.remove('is-bad');
       note.textContent = 'Check ' + email + ' — the link brings you straight back to this page, with your event still here.';
+      countdown(btn, A.emailCooldown ? A.emailCooldown(email) : 60);
     });
   });
+
+  // Reopening the panel, or a reload, must not hand back a fresh-looking button
+  // when the address is still in its wait — that is the press that wastes a send.
+  if (mailForm) {
+    const emailInput = document.getElementById('pg-email');
+    const sendBtn = mailForm.querySelector('.pg-send');
+    if (emailInput && sendBtn && A.emailCooldown) {
+      // countdown(btn, 0) is the release case: it clears any timer still running for
+      // the PREVIOUS address and restores the button. Without that, typing a second,
+      // un-throttled address would leave the first one's countdown ticking over it.
+      const sync = function () { countdown(sendBtn, A.emailCooldown((emailInput.value || '').trim())); };
+      emailInput.addEventListener('input', sync);
+      sync();
+    }
+  }
   if (el.acct) el.acct.addEventListener('click', function () {
     if (!user) { askToSignIn(); return; }
     if (!confirm('Sign out of Eventually?')) return;

@@ -653,7 +653,9 @@
     if (authReal) {
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) { window.EventuallyToast('Enter a valid email for the magic link.'); return; }
       A.signInWithEmail(v).then(function (r) {
-        if (r && r.error) window.EventuallyToast('Could not send link: ' + r.error.message);
+        // A cooldown refusal is advice, not a failure — it already reads as a full
+        // sentence, so prefixing it with "Could not send link" just muddies it.
+        if (r && r.error) window.EventuallyToast(r.error.name === 'cooldown' ? r.error.message : 'Could not send link: ' + r.error.message);
         else window.EventuallyToast('Magic link sent to ' + v + ' — check your email.');
       });
       return;
