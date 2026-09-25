@@ -4,21 +4,27 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Events in Birmingham — what's on | Eventually</title>
-<meta name="description" content="102 events happening in Birmingham, Great Britain over the next 90 days. Concerts, theatre, markets and more, updated daily.">
+<meta name="description" content="105 events happening in Birmingham, Great Britain over the next 90 days. Concerts, theatre, markets and more, updated daily.">
 <meta name="robots" content="index,follow">
 <link rel="canonical" href="https://eventually-app.com/events/birmingham-uk/">
 <meta property="og:title" content="Events in Birmingham — what's on | Eventually">
-<meta property="og:description" content="102 events happening in Birmingham, Great Britain over the next 90 days. Concerts, theatre, markets and more, updated daily.">
+<meta property="og:description" content="105 events happening in Birmingham, Great Britain over the next 90 days. Concerts, theatre, markets and more, updated daily.">
 <meta property="og:url" content="https://eventually-app.com/events/birmingham-uk/">
 <meta property="og:type" content="website">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap">
 <style>
-  :root { color-scheme: dark; }
+  :root {
+    color-scheme: dark;
+  /* The brand faces. Same two the app uses — Sora for everything you read, Space Mono
+     for the small utility text that wants to look measured rather than written. */
+  --font: 'Sora', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --mono: 'Space Mono', ui-monospace, 'SFMono-Regular', monospace;
+  }
   * { box-sizing: border-box; }
   body { margin:0; background:#14100c; color:#ece5da;
-    font:16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    font:16px/1.65 var(--font); }
   /* Blurred globe: one small static image, no JavaScript — these pages must stay fast. */
   .bg { position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
   .bg img { position:absolute; top:50%; left:50%; width:min(120vw,1100px); transform:translate(-50%,-50%);
@@ -39,7 +45,7 @@
     padding:11px 0; border-bottom:1px solid #2e2820; }
   ul.events li:last-child { border-bottom:0; }
   .ev-name { color:#ece5da; font-weight:600; }
-  .ev-when { color:#9a8f80; font-size:.88rem; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .ev-when { color:#9a8f80; font-family:var(--mono); font-size:.82rem; white-space:nowrap; font-variant-numeric:tabular-nums; }
   .ev-cat { color:#9a8f80; font-size:.82rem; grid-column:1/-1; margin-top:-4px; }
   .ev-runs { color:#f0a24a; font-size:.8rem; }
   /* The organiser pitch. Set apart from the listings so it reads as addressed to a
@@ -63,7 +69,7 @@
 <div class="wrap">
   <a class="back" href="/">← Eventually</a>
   <h1>Events in Birmingham</h1>
-  <p class="lead">72 events happening in Birmingham, Great Britain over the next 90 days, across 102 dates.</p>
+  <p class="lead">74 events happening in Birmingham, Great Britain over the next 90 days, across 105 dates.</p>
   <p class="muted">Updated daily · 10 venues</p>
   <a class="cta" href="/?city=Birmingham&lat=52.48509613&lon=-1.904386">Explore Birmingham on the globe →</a>
 
@@ -110,7 +116,7 @@
     <li><span class="ev-name">Otis Kane</span><span class="ev-when">Sun 4 Oct · 19:00</span><span class="ev-cat">Music · O2 Academy2 Birmingham</span></li>
     <li><span class="ev-name">Desi Central Comedy Show - Birmingham</span><span class="ev-when">Sun 4 Oct · 19:00</span><span class="ev-cat">Comedy · Glee Club</span></li>
   </ul>
-  <p class="muted" style="margin-top:14px">…and 32 more. <a href="/?city=Birmingham">See them all on the globe →</a></p>
+  <p class="muted" style="margin-top:14px">…and 34 more. <a href="/?city=Birmingham">See them all on the globe →</a></p>
 
   <hr>
   <section class="organiser">
@@ -131,7 +137,7 @@
 
   <hr>
   <h2>Nearby cities</h2>
-  <p class="nearby"><a href="/events/wolverhampton/">Wolverhampton</a> <a href="/events/leicester/">Leicester</a> <a href="/events/nottingham/">Nottingham</a> <a href="/events/oxford-uk/">Oxford</a> <a href="/events/sheffield/">Sheffield</a> <a href="/events/manchester/">Manchester</a></p>
+  <p class="nearby"><a href="/events/wolverhampton/">Wolverhampton</a> <a href="/events/coventry/">Coventry</a> <a href="/events/leicester/">Leicester</a> <a href="/events/nottingham/">Nottingham</a> <a href="/events/oxford-uk/">Oxford</a> <a href="/events/sheffield/">Sheffield</a></p>
   <hr>
   <!-- Help is a modal inside the app, not a page of its own, so it needs deep-link
        treatment — see openDeepLink() in src/app.js. Without it someone arriving here

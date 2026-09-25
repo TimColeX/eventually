@@ -4,21 +4,27 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Events in Amsterdam — what's on | Eventually</title>
-<meta name="description" content="213 events happening in Amsterdam, Netherlands over the next 90 days. Concerts, theatre, markets and more, updated daily.">
+<meta name="description" content="214 events happening in Amsterdam, Netherlands over the next 90 days. Concerts, theatre, markets and more, updated daily.">
 <meta name="robots" content="index,follow">
 <link rel="canonical" href="https://eventually-app.com/events/amsterdam/">
 <meta property="og:title" content="Events in Amsterdam — what's on | Eventually">
-<meta property="og:description" content="213 events happening in Amsterdam, Netherlands over the next 90 days. Concerts, theatre, markets and more, updated daily.">
+<meta property="og:description" content="214 events happening in Amsterdam, Netherlands over the next 90 days. Concerts, theatre, markets and more, updated daily.">
 <meta property="og:url" content="https://eventually-app.com/events/amsterdam/">
 <meta property="og:type" content="website">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap">
 <style>
-  :root { color-scheme: dark; }
+  :root {
+    color-scheme: dark;
+  /* The brand faces. Same two the app uses — Sora for everything you read, Space Mono
+     for the small utility text that wants to look measured rather than written. */
+  --font: 'Sora', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --mono: 'Space Mono', ui-monospace, 'SFMono-Regular', monospace;
+  }
   * { box-sizing: border-box; }
   body { margin:0; background:#14100c; color:#ece5da;
-    font:16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    font:16px/1.65 var(--font); }
   /* Blurred globe: one small static image, no JavaScript — these pages must stay fast. */
   .bg { position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
   .bg img { position:absolute; top:50%; left:50%; width:min(120vw,1100px); transform:translate(-50%,-50%);
@@ -39,7 +45,7 @@
     padding:11px 0; border-bottom:1px solid #2e2820; }
   ul.events li:last-child { border-bottom:0; }
   .ev-name { color:#ece5da; font-weight:600; }
-  .ev-when { color:#9a8f80; font-size:.88rem; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .ev-when { color:#9a8f80; font-family:var(--mono); font-size:.82rem; white-space:nowrap; font-variant-numeric:tabular-nums; }
   .ev-cat { color:#9a8f80; font-size:.82rem; grid-column:1/-1; margin-top:-4px; }
   .ev-runs { color:#f0a24a; font-size:.8rem; }
   /* The organiser pitch. Set apart from the listings so it reads as addressed to a
@@ -63,7 +69,7 @@
 <div class="wrap">
   <a class="back" href="/">← Eventually</a>
   <h1>Events in Amsterdam</h1>
-  <p class="lead">182 events happening in Amsterdam, Netherlands over the next 90 days, across 213 dates.</p>
+  <p class="lead">183 events happening in Amsterdam, Netherlands over the next 90 days, across 214 dates.</p>
   <p class="muted">Updated daily · 13 venues</p>
   <a class="cta" href="/?city=Amsterdam&lat=52.36483&lon=4.88127">Explore Amsterdam on the globe →</a>
 
@@ -110,7 +116,7 @@
     <li><span class="ev-name">Parking permit Koninklijk Concertgebouw Orkest</span><span class="ev-when">Fri 2 Oct · 23:56 <span class="ev-runs">+ 2 more dates</span></span><span class="ev-cat">Community</span></li>
     <li><span class="ev-name">Iran in verzet</span><span class="ev-when">Sat 3 Oct · 18:45</span><span class="ev-cat">Arts · Melkweg</span></li>
   </ul>
-  <p class="muted" style="margin-top:14px">…and 142 more. <a href="/?city=Amsterdam">See them all on the globe →</a></p>
+  <p class="muted" style="margin-top:14px">…and 143 more. <a href="/?city=Amsterdam">See them all on the globe →</a></p>
 
   <hr>
   <section class="organiser">
