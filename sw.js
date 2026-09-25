@@ -22,7 +22,7 @@
  * and index.html's build stamp, which is what lets a running app notice a
  * deploy at all. Bumping this constant by hand leaves those two behind.
  */
-const CACHE = 'eventually-v237';
+const CACHE = 'eventually-v238';
 const ASSETS = [
   './', './index.html', './styles/main.css', './config.js',
   // The organiser's page. Precached too: it is a real page of the app (the publish form

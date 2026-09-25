@@ -67,7 +67,10 @@
     let px;
     try { px = c.getImageData(0, 0, cols, rows).data; } catch (e) { return null; }
     const m = new Uint8Array(cols * rows);
-    for (let i = 0; i < m.length; i++) m[i] = px[i * 4 + 3] > 40 ? 1 : 0;   // alpha → land
+    /* A MAJORITY test, not 'any coverage'. At >40 a cell only grazed by a coastline
+       counted as land, which fattened every coast by a dot and was half the reason narrow
+       seas closed up. ~38% coverage keeps the outline honest. */
+    for (let i = 0; i < m.length; i++) m[i] = px[i * 4 + 3] > 96 ? 1 : 0;
     _maskCache[ck] = m;
     return m;
   }
@@ -1069,10 +1072,14 @@
 
     ctx.fillStyle = sea; ctx.fillRect(0, 0, w, h);
 
-    /* THE DOT GRID. Spacing is derived from the width so the map has the same density on
-       a 340px card and a 600px one — a fixed px step made the dots crowd on a phone and
-       scatter on a desktop. */
-    const step = Math.max(3.2, w / 105);
+    /* THE DOT GRID.
+       Spacing derives from the width, so density is the same on a 340px card and a 600px
+       one. It used to be w/105 — about 3.4° of longitude per dot, which is WIDER THAN THE
+       MEDITERRANEAN. Africa and Europe fused into one landmass, and so did every other
+       narrow sea. w/2.3 puts it near 1.6°, which opens the Med, the Red Sea, the Channel
+       and the Gulf. Smaller dots are the price and the point: finer grain reads as a
+       better map, not a blurrier one. */
+    const step = Math.max(1.9, w / 200);
     const cols = Math.round(w / step), rows = Math.round(h / step);
     const mask = landMask(cols, rows);
 
@@ -1081,7 +1088,15 @@
     const px = (this.pin.lon + 180) / 360 * w;
     const py = (90 - this.pin.lat) / 180 * h;
     const glowR = Math.max(60, w * 0.22);           // how far the warmth reaches
-    const dot = Math.max(1.4, step * 0.42);
+    const dot = Math.max(0.85, step * 0.38);
+
+    /* Drawn in BUCKETS, not dot by dot. At this resolution there are ~20,000 land cells,
+       and 20,000 separate beginPath/fill pairs is genuinely slow on a phone. Each cell is
+       sorted into one of a few glow levels, every cell in a level goes into one path, and
+       each level is filled once — so a pin move costs a handful of fills. */
+    const LEVELS = 7;
+    const paths = []; for (let i = 0; i < LEVELS; i++) paths.push(new Path2D());
+    const sx = w / cols, sy = h / rows;
 
     for (let gy = 0; gy < rows; gy++) {
       for (let gx = 0; gx < cols; gx++) {
@@ -1091,18 +1106,23 @@
           isL = isLand(90 - (gy + 0.5) / rows * 180, (gx + 0.5) / cols * 360 - 180);
         }
         if (!isL) continue;
-        const x = (gx + 0.5) * (w / cols), y = (gy + 0.5) * (h / rows);
+        const x = (gx + 0.5) * sx, y = (gy + 0.5) * sy;
         // Distance to the pin decides how lit this dot is — the warm pool in the middle
         // of the reference, which is what makes the pin read as a PLACE and not a marker
         // dropped on a chart.
         const d = Math.hypot(x - px, y - py);
         const t = d > glowR ? 0 : (1 - d / glowR) * (1 - d / glowR);   // squared falloff
-        ctx.globalAlpha = 0.42 + t * 0.58;
-        ctx.fillStyle = t > 0.02 ? glow : land;
-        ctx.beginPath();
-        ctx.arc(x, y, dot * (1 + t * 0.55), 0, Math.PI * 2);
-        ctx.fill();
+        const lv = t <= 0 ? 0 : Math.min(LEVELS - 1, 1 + Math.floor(t * (LEVELS - 1)));
+        const p = paths[lv];
+        p.moveTo(x + dot, y);                       // moveTo before arc: no connecting line
+        p.arc(x, y, dot * (1 + (lv / (LEVELS - 1)) * 0.7), 0, Math.PI * 2);
       }
+    }
+    for (let lv = 0; lv < LEVELS; lv++) {
+      const t = lv === 0 ? 0 : lv / (LEVELS - 1);
+      ctx.globalAlpha = 0.38 + t * 0.62;
+      ctx.fillStyle = lv === 0 ? land : glow;
+      ctx.fill(paths[lv]);
     }
     ctx.globalAlpha = 1;
 
