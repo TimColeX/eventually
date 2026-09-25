@@ -411,9 +411,24 @@ body {
   border-bottom: 1px solid var(--line); font-family: var(--mono); font-size: 11px; letter-spacing: .1em;
   text-transform: uppercase; color: var(--faint); }
 .ah-exp-x { border: 0; background: transparent; font-size: 15px; cursor: pointer; color: var(--muted); line-height: 1; }
-.ah-exp-body { padding: 18px 20px; overflow-y: auto; font-size: 18px; line-height: 1.7; color: var(--ink); }
+/* READING copy, so it wraps and scrolls DOWN only. `overflow-x: hidden` is the guarantee:
+   whatever the text does, this card can never be dragged sideways. `overflow-wrap` catches
+   the one thing wrapping alone cannot — a single token longer than the line (a long URL,
+   a hyphen-free place name). 15px rather than 18px: it is a transcript to read, not a
+   headline, and smaller means fewer lines lost to the fold on a phone. */
+.ah-exp-body {
+  padding: 16px 18px; overflow-y: auto; overflow-x: hidden;
+  font-size: 15px; line-height: 1.65; color: var(--ink);
+  overflow-wrap: break-word; word-break: normal;
+  -webkit-overflow-scrolling: touch;
+}
 .ah-exp-body .ah-w.active { color: var(--clay); background: rgba(203,90,60,0.12); border-radius: 4px; box-shadow: 0 0 0 2px rgba(203,90,60,0.12); }
-@media (max-width: 560px) { .ah-exp-body { font-size: 17px; } .ah-exp-card { margin-bottom: 78px; } }
+@media (max-width: 560px) {
+  .ah-exp-body { font-size: 14px; padding: 14px 15px; }
+  /* Taller on a phone: the card is the only thing on screen while it is open, and the
+     old 62vh left barely six lines of a briefing visible. */
+  .ah-exp-card { margin-bottom: 78px; max-height: 72vh; }
+}
 @media (prefers-reduced-motion: reduce) { .ah-run { transition: none !important; } }
 /* Five pill bars, so the box is narrower and shorter than the forty-bar readout was —
    60×38 became 34×26, and the 26px caption line it sits beside gets the difference. */

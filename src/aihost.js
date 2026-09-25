@@ -504,13 +504,19 @@
   }
   // Tokenize text into word spans tagged with their char offsets (so speech word-
   // boundary events can highlight the right word). Returns {html, meta:[{s,e}]}.
-  function wordsHTML(text) {
+  /* `wrap` = may this text break across lines?
+     The CAPTION is a one-line marquee, so its spaces are non-breaking — that is what keeps
+     the run in a single line to slide. The TRANSCRIPT PANEL reused the same HTML, and with
+     every space non-breaking it could not wrap AT ALL: long lines simply ran off both edges
+     of the card (owner's screenshot, 2026-09-24). Same word spans and the same data-s
+     offsets either way, so highlighting is unaffected — only the spaces differ. */
+  function wordsHTML(text, wrap) {
     const parts = String(text).split(/(\s+)/);
     let idx = 0, html = '';
     const meta = [];
     for (const p of parts) {
       if (!p) continue;
-      if (/^\s+$/.test(p)) { html += p.replace(/ /g, '&nbsp;').replace(/\t/g, '&nbsp;&nbsp;'); idx += p.length; }
+      if (/^\s+$/.test(p)) { html += wrap ? p.replace(/\t/g, '  ') : p.replace(/ /g, '&nbsp;').replace(/\t/g, '&nbsp;&nbsp;'); idx += p.length; }
       else { const s = idx, e = idx + p.length; meta.push({ s: s, e: e }); html += '<span class="ah-w" data-s="' + s + '">' + escHtml(p) + '</span>'; idx = e; }
     }
     return { html: html, meta: meta };
@@ -733,7 +739,7 @@
   };
   AIHost.prototype._renderExpand = function (text, rtl) {
     if (!this._expBody) return;
-    const w = wordsHTML(text);
+    const w = wordsHTML(text, true);            // the panel is for READING: let it wrap
     this._expBody.setAttribute('dir', rtl ? 'rtl' : 'ltr');
     this._expBody.innerHTML = w.html || '<span class="ah-hint">Press play to start the show.</span>';
     this._expWords = this._expBody.querySelectorAll('.ah-w');
