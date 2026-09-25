@@ -384,12 +384,18 @@ function page(c, prose, adsOn) {
 <meta property="og:type" content="website">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap">
 <style>
-  :root { color-scheme: dark; }
+  :root {
+    color-scheme: dark;
+  /* The brand faces. Same two the app uses — Sora for everything you read, Space Mono
+     for the small utility text that wants to look measured rather than written. */
+  --font: 'Sora', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --mono: 'Space Mono', ui-monospace, 'SFMono-Regular', monospace;
+  }
   * { box-sizing: border-box; }
   body { margin:0; background:#14100c; color:#ece5da;
-    font:16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    font:16px/1.65 var(--font); }
   /* Blurred globe: one small static image, no JavaScript — these pages must stay fast. */
   .bg { position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
   .bg img { position:absolute; top:50%; left:50%; width:min(120vw,1100px); transform:translate(-50%,-50%);
@@ -410,7 +416,7 @@ function page(c, prose, adsOn) {
     padding:11px 0; border-bottom:1px solid #2e2820; }
   ul.events li:last-child { border-bottom:0; }
   .ev-name { color:#ece5da; font-weight:600; }
-  .ev-when { color:#9a8f80; font-size:.88rem; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .ev-when { color:#9a8f80; font-family:var(--mono); font-size:.82rem; white-space:nowrap; font-variant-numeric:tabular-nums; }
   .ev-cat { color:#9a8f80; font-size:.82rem; grid-column:1/-1; margin-top:-4px; }
   .ev-runs { color:#f0a24a; font-size:.8rem; }
   /* The organiser pitch. Set apart from the listings so it reads as addressed to a
@@ -506,11 +512,17 @@ function browseIndex(list) {
 <link rel="canonical" href="${SITE}/browse/">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap">
 <style>
-  :root { color-scheme: dark; }
+  :root {
+    color-scheme: dark;
+  /* The brand faces. Same two the app uses — Sora for everything you read, Space Mono
+     for the small utility text that wants to look measured rather than written. */
+  --font: 'Sora', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --mono: 'Space Mono', ui-monospace, 'SFMono-Regular', monospace;
+  }
   * { box-sizing:border-box; }
-  body { margin:0; background:#14100c; color:#ece5da; font:16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  body { margin:0; background:#14100c; color:#ece5da; font:16px/1.65 var(--font); }
   .bg { position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
   .bg img { position:absolute; top:50%; left:50%; width:min(120vw,1100px); transform:translate(-50%,-50%); filter:blur(20px) saturate(1.05); opacity:.40; }
   .bg::after { content:""; position:absolute; inset:0; background:radial-gradient(ellipse at center, rgba(20,16,12,.30) 0%, rgba(20,16,12,.72) 58%, rgba(20,16,12,.95) 100%); }

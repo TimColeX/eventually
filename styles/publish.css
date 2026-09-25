@@ -49,6 +49,13 @@ body.pg-body {
   --cyan:   #f0a24a;
   --apricot:#ffd8a8;
   --ember:  #ffd8a8;
+  /* The semantic five, on this ground. These are the values the dark overrides at the
+     foot of this file were already using as literals. */
+  --tint:       #2b231b;
+  --clay-hover: #ffb463;
+  --sand:       #241d16;
+  --danger:     #ff9b84;
+  --warn:       #e2c489;
   --shadow:    0 1px 3px rgba(0,0,0,.45);
   --shadow-lg: 0 24px 60px rgba(0,0,0,.55);
   /* The location mini-map is painted on a canvas, so it can't inherit any of the above.
