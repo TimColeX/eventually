@@ -672,6 +672,9 @@
       html += '<div class="ad-sec" id="ad-dq"><h2>Data quality</h2><p class="ad-hint">Checking event coordinates…</p></div>';
       html += '<div class="ad-sec" id="ad-bu"><h2>Daily briefing usage</h2><p class="ad-hint">Counting Claude calls…</p></div>';
       html += '<div class="ad-sec" id="ad-el"><h2>AI Host voice usage</h2><p class="ad-hint">Measuring cache performance…</p></div>';
+      // The other half of the AI bill. Voice usage has always been measured; what the
+      // model costs to WRITE the scripts was never recorded at all until 100_llm_usage.sql.
+      html += '<div class="ad-sec" id="ad-llm"><h2>AI script usage</h2><p class="ad-hint">Counting tokens…</p></div>';
       html += '<div class="ad-sec" id="ad-contact"><h2>Sales enquiries <span id="ad-contact-n" class="ad-hint"></span></h2>' +
         '<p class="ad-hint">Everything sent through <b>Contact Sales</b>. These are emailed to info@eventually-app.com as well — this list is the backstop, so a lead is never lost if the email fails.</p>' +
         '<div id="ad-contact-list"><div class="ad-center">Loading…</div></div></div>';
@@ -683,6 +686,7 @@
       renderDataQuality();
       renderBriefingUsage();
       renderAudioUsage();
+      renderLLMUsage();
       renderContactEnquiries();
     });
   }
@@ -1491,6 +1495,96 @@
     if (prov === 'easyvoice') return { perK: 0, label: 'EasyVoice', free: true, flat: true, note: 'flat $9.99/mo Pro — cost does not scale with usage' };
     return { perK: 0.30, label: 'ElevenLabs', free: false, note: 'billed per character' };
   }
+  /* ── AI SCRIPT (LLM) USAGE ────────────────────────────────────────────────────
+     The other half of the AI bill. Voice usage has been measured to the character since
+     v82; what the model costs to WRITE the scripts was never recorded at all — the
+     briefing function threw away the token counts every provider returns. It records them
+     now (100_llm_usage.sql), and this is where they surface.
+
+     ⚠️ THE RATE CARD LIVES HERE, NOT IN THE MIGRATION. Per-million-token prices change,
+     and differ per provider and per model; a number baked into SQL goes stale silently and
+     nobody notices. The RPC returns counts, this multiplies. When the provider becomes
+     admin-switchable, a new provider needs one entry here.
+     Published prices per MILLION tokens, USD, checked 2026-09-24. */
+  const LLM_RATES = {
+    'claude-haiku-4-5': { in: 1.00, out: 5.00 },
+    'claude-sonnet-4-5': { in: 3.00, out: 15.00 },
+  };
+  function llmCost(model, inTok, outTok) {
+    const r = LLM_RATES[String(model)];
+    if (!r) return null;                                   // unknown model → show tokens, claim no price
+    return (inTok / 1e6) * r.in + (outTok / 1e6) * r.out;
+  }
+  function renderLLMUsage() {
+    const box = document.getElementById('ad-llm');
+    if (!box) return;
+    sb.rpc('admin_llm_usage', { p_days: 30 }).then(function (r) {
+      const d = r.data;
+      if (!d || (r.error && r.error.message)) {
+        box.innerHTML = '<h2>AI script usage</h2><p class="ad-hint">Unavailable (' +
+          esc((r.error && r.error.message) || 'run backend/100_llm_usage.sql') + ').</p>';
+        return;
+      }
+      const kpi = function (v, l) { return '<div class="ad-kpi"><b>' + v + '</b><span>' + l + '</span></div>'; };
+      const n = function (v) { return (v || 0).toLocaleString(); };
+      const money = function (v) { return v == null ? '—' : '≈ $' + (v < 1 ? v.toFixed(3) : v.toFixed(2)); };
+
+      // Cost is summed PER MODEL, because two models in the same window have different
+      // rates — a single blended number would be wrong the moment a second one appears.
+      const byProv = d.by_provider || {};
+      let total = 0, priced = true;
+      const provRows = Object.keys(byProv).map(function (k) {
+        const c = byProv[k];
+        const model = k.split(' · ')[1] || '';
+        const cost = llmCost(model, c.input_tokens || 0, c.output_tokens || 0);
+        if (cost == null) priced = false; else total += cost;
+        return '<div class="ad-li"><span><b>' + esc(k) + '</b>' +
+          (c.failed ? ' <span style="color:#b3402a">· ' + c.failed + ' failed</span>' : '') + '</span><span>' +
+          n(c.calls) + ' calls · ' + n(c.input_tokens) + ' in / ' + n(c.output_tokens) + ' out · ' +
+          (cost == null ? 'price unknown' : money(cost)) +
+          (c.avg_ms ? ' · ' + Math.round(c.avg_ms) + 'ms' : '') + '</span></div>';
+      }).join('') || '<div class="ad-li"><span class="ad-hint">No scripts written in this window.</span></div>';
+
+      const byPurp = d.by_purpose || {};
+      const PURPOSE = {
+        briefing: 'Event briefing', conversation: 'Two-host briefing',
+        conversation_headline: 'City taster (explored)', city: 'City segments (once per city)',
+        city_topup: 'City top-up (one-off)', test: 'Admin test',
+      };
+      const purpRows = Object.keys(byPurp).map(function (k) {
+        const c = byPurp[k];
+        return '<div class="ad-li"><span>' + esc(PURPOSE[k] || k) + '</span><span>' +
+          n(c.calls) + ' calls · ' + n((c.input_tokens || 0) + (c.output_tokens || 0)) + ' tokens</span></div>';
+      }).join('') || '<div class="ad-li"><span class="ad-hint">—</span></div>';
+
+      // A day series, so a spike shows rather than being averaged away.
+      const days = d.by_day || [];
+      const peak = Math.max.apply(null, days.map(function (x) { return x.calls || 0; }).concat([1]));
+      const spark = days.map(function (x) {
+        return '<div class="ad-li"><span>' + esc(String(x.d || '')) + '</span><span>' + n(x.calls) +
+          ' calls · ' + n((x.input_tokens || 0) + (x.output_tokens || 0)) + ' tokens' +
+          ((x.calls || 0) >= peak && days.length > 1 ? ' · busiest' : '') + '</span></div>';
+      }).join('') || '<div class="ad-li"><span class="ad-hint">—</span></div>';
+
+      box.innerHTML = '<h2>AI script usage · last ' + (d.window_days || 30) + ' days</h2>' +
+        '<p class="ad-hint">What the model costs to <b>write</b> the scripts, separately from what the voice costs to speak them. ' +
+        'Every script is cached — briefings per area per day, city segments once and forever — so these counts are ' +
+        'generations, not plays. Prices are the published per-million-token rates held in this page' +
+        (priced ? '' : ', and one model in this window has no rate here, so the total is a floor rather than the whole bill') + '.</p>' +
+        '<div class="ad-grid">' +
+          kpi(n(d.calls), 'Scripts written') +
+          kpi(n(d.input_tokens), 'Input tokens') +
+          kpi(n(d.output_tokens), 'Output tokens') +
+          kpi(money(total) + (priced ? '' : '+'), 'Est. spend') +
+          kpi(n(d.failed), 'Failed calls') +
+          kpi(d.avg_ms ? Math.round(d.avg_ms) + 'ms' : '—', 'Avg round-trip') +
+        '</div>' +
+        '<div class="ad-field" style="margin-top:14px"><label>By provider &amp; model</label><div class="ad-list">' + provRows + '</div></div>' +
+        '<div class="ad-field" style="margin-top:10px"><label>What it was written for</label><div class="ad-list">' + purpRows + '</div></div>' +
+        '<div class="ad-field" style="margin-top:10px"><label>By day</label><div class="ad-list">' + spark + '</div></div>';
+    }).catch(function () { box.innerHTML = '<h2>AI script usage</h2><p class="ad-hint">Unavailable.</p>'; });
+  }
+
   // ── Sponsor / announcement AIRINGS ───────────────────────────────────────────
   // Every tail play writes a usage row scoped 'tail:<first 12 of sha256(message)>'. We hash
   // the configured messages the same way and match, so counts survive voice/model changes
