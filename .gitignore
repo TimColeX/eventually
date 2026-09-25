@@ -16,7 +16,6 @@ supabase/
 # Local tooling and scratch
 .claude/
 node_modules/
-eventually-brand-identity-concepts/
 orbit-screenshot.png
 
 # OS noise
