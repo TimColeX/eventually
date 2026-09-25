@@ -22,6 +22,56 @@
     return false;
   }
 
+  /* ── THE REAL WORLD, AS DOTS ───────────────────────────────────────────────
+     The mini-map used to be drawn from the LAND ellipses above — the same two dozen
+     ovals the sea-check uses. As a coarse "is this a sea pin?" test they are fine. As a
+     PICTURE they are blobs: the owner's word was that it "does not look like the world
+     map", and it doesn't.
+     The globe has drawn real coastlines all along, from `window.EVENTUALLY_LAND`
+     (Natural Earth GeoJSON, src/landdata.js). This uses the same data.
+
+     Rasterised, not path-tested. Point-in-polygon for every dot against a few thousand
+     polygons would take seconds; instead the polygons are filled ONCE into a small
+     offscreen canvas at the dot resolution, and the pixels are read back as a mask. The
+     browser's fill is doing the geometry, which is what it is good at.
+     The mask is cached per grid size, so a pin move redraws dots from an array and
+     touches no geometry at all. */
+  const _maskCache = {};
+  function landMask(cols, rows) {
+    const ck = cols + 'x' + rows;
+    if (_maskCache[ck]) return _maskCache[ck];
+    const gj = global.EVENTUALLY_LAND;
+    if (!gj || !gj.features) return null;                 // data not loaded → caller falls back
+    const off = document.createElement('canvas');
+    off.width = cols; off.height = rows;
+    const c = off.getContext('2d', { willReadFrequently: true });
+    if (!c) return null;
+    c.fillStyle = '#fff';
+    // Equirectangular, the same projection the dots are drawn in: lon −180..180 → 0..cols,
+    // lat 90..−90 → 0..rows. No clipping needed; anything off-canvas is simply not filled.
+    const X = function (lon) { return (lon + 180) / 360 * cols; };
+    const Y = function (lat) { return (90 - lat) / 180 * rows; };
+    const ring = function (r) {
+      if (!r || r.length < 3) return;
+      c.moveTo(X(r[0][0]), Y(r[0][1]));
+      for (let i = 1; i < r.length; i++) c.lineTo(X(r[i][0]), Y(r[i][1]));
+      c.closePath();
+    };
+    c.beginPath();
+    gj.features.forEach(function (f) {
+      const g = f && f.geometry; if (!g) return;
+      if (g.type === 'Polygon') g.coordinates.forEach(ring);
+      else if (g.type === 'MultiPolygon') g.coordinates.forEach(function (p) { p.forEach(ring); });
+    });
+    c.fill('evenodd');                                    // even-odd so lakes stay holes
+    let px;
+    try { px = c.getImageData(0, 0, cols, rows).data; } catch (e) { return null; }
+    const m = new Uint8Array(cols * rows);
+    for (let i = 0; i < m.length; i++) m[i] = px[i * 4 + 3] > 40 ? 1 : 0;   // alpha → land
+    _maskCache[ck] = m;
+    return m;
+  }
+
   /* Module-level escape. Several render helpers used to define their own `esc` inside a
      function body, which meant a helper written OUTSIDE one of them threw ReferenceError
      at runtime — invisible, because the surrounding .catch() swallowed it. One escape,
@@ -193,10 +243,14 @@
                  would hand every click on a result back to the input. */
               '<div class="co-search-l"><label for="co-addr">Find the place</label></div>' +
               '<div class="co-search"><input id="co-addr" class="f-addr" placeholder="Search an address, venue or city" autocomplete="off"><div class="co-suggest"></div></div>' +
-              '<canvas class="map-canvas"></canvas>' +
-              '<div class="co-coords">' +
-                '<div class="co-place">📍 <strong class="ll-city">—</strong></div>' +
-                '<div class="latlon">lat <strong class="ll-lat"></strong> · lon <strong class="ll-lon"></strong></div>' +
+              /* The readout sits ON the map now, not under it — the place at the top, the
+                 coordinates in the corner. Kept as DOM rather than drawn into the canvas
+                 so the text stays crisp at any density and can still be selected. */
+              '<div class="co-map">' +
+                '<canvas class="map-canvas"></canvas>' +
+                '<div class="co-place"><span class="co-place-k">Pinned at</span>' +
+                  '<strong class="ll-city">—</strong></div>' +
+                '<div class="latlon"><strong class="ll-lat"></strong> · <strong class="ll-lon"></strong></div>' +
               '</div>' +
               '<p class="co-hint">Tap the map to move the pin.</p>' +
             '</section>' +
@@ -1011,31 +1065,65 @@
     const sea = col('--map-sea', '#efe5d6');
     const land = col('--map-land', 'rgba(33,26,21,0.45)');
     const pinCol = col('--map-pin', '#CB5A3C');
+    const glow = col('--map-glow', '#CB5A3C');
 
     ctx.fillStyle = sea; ctx.fillRect(0, 0, w, h);
 
-    // dotted land
-    const step = 3.2;
-    ctx.fillStyle = land;
-    for (let py = 0; py < h; py += step) {
-      for (let px = 0; px < w; px += step) {
-        const lon = px / w * 360 - 180;
-        const lat = 90 - py / h * 180;
-        if (isLand(lat, lon)) ctx.fillRect(px, py, 1.4, 1.4);
-      }
-    }
-    // pin
+    /* THE DOT GRID. Spacing is derived from the width so the map has the same density on
+       a 340px card and a 600px one — a fixed px step made the dots crowd on a phone and
+       scatter on a desktop. */
+    const step = Math.max(3.2, w / 105);
+    const cols = Math.round(w / step), rows = Math.round(h / step);
+    const mask = landMask(cols, rows);
+
+    // Pin position first: the glow is drawn INTO the dots rather than over them, so a lit
+    // dot is a dot, not a smear on top of one.
     const px = (this.pin.lon + 180) / 360 * w;
     const py = (90 - this.pin.lat) / 180 * h;
-    ctx.strokeStyle = pinCol; ctx.globalAlpha = 0.6; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.arc(px, py, 9, 0, Math.PI * 2); ctx.stroke();
+    const glowR = Math.max(60, w * 0.22);           // how far the warmth reaches
+    const dot = Math.max(1.4, step * 0.42);
+
+    for (let gy = 0; gy < rows; gy++) {
+      for (let gx = 0; gx < cols; gx++) {
+        let isL;
+        if (mask) isL = !!mask[gy * cols + gx];
+        else {                                      // landdata.js not loaded → the old ovals
+          isL = isLand(90 - (gy + 0.5) / rows * 180, (gx + 0.5) / cols * 360 - 180);
+        }
+        if (!isL) continue;
+        const x = (gx + 0.5) * (w / cols), y = (gy + 0.5) * (h / rows);
+        // Distance to the pin decides how lit this dot is — the warm pool in the middle
+        // of the reference, which is what makes the pin read as a PLACE and not a marker
+        // dropped on a chart.
+        const d = Math.hypot(x - px, y - py);
+        const t = d > glowR ? 0 : (1 - d / glowR) * (1 - d / glowR);   // squared falloff
+        ctx.globalAlpha = 0.42 + t * 0.58;
+        ctx.fillStyle = t > 0.02 ? glow : land;
+        ctx.beginPath();
+        ctx.arc(x, y, dot * (1 + t * 0.55), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
     ctx.globalAlpha = 1;
-    ctx.fillStyle = pinCol; ctx.shadowColor = pinCol; ctx.shadowBlur = 12;
-    ctx.beginPath(); ctx.arc(px, py, 4, 0, Math.PI * 2); ctx.fill();
+
+    // The pin: a soft halo, a ring, then a solid core.
+    const halo = ctx.createRadialGradient(px, py, 0, px, py, 26);
+    halo.addColorStop(0, glow); halo.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.globalAlpha = 0.28; ctx.fillStyle = halo;
+    ctx.beginPath(); ctx.arc(px, py, 26, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = pinCol; ctx.globalAlpha = 0.55; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(px, py, 8.5, 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = pinCol; ctx.shadowColor = pinCol; ctx.shadowBlur = 14;
+    ctx.beginPath(); ctx.arc(px, py, 4.5, 0, Math.PI * 2); ctx.fill();
     ctx.shadowBlur = 0;
 
-    this.el.querySelector('.ll-lat').textContent = this.pin.lat.toFixed(2);
-    this.el.querySelector('.ll-lon').textContent = this.pin.lon.toFixed(2);
+    // N/S · E/W rather than a bare signed number: on a map readout a minus sign is
+    // easy to miss, and '104.62° W' cannot be misread the way '-104.62' can.
+    const la = this.pin.lat, lo = this.pin.lon;
+    this.el.querySelector('.ll-lat').textContent = Math.abs(la).toFixed(2) + '° ' + (la >= 0 ? 'N' : 'S');
+    this.el.querySelector('.ll-lon').textContent = Math.abs(lo).toFixed(2) + '° ' + (lo >= 0 ? 'E' : 'W');
     const cityEl = this.el.querySelector('.ll-city');
     if (cityEl) cityEl.textContent = this.city || '—';
   };

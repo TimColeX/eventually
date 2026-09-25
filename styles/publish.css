@@ -54,8 +54,9 @@ body.pg-body {
   /* The location mini-map is painted on a canvas, so it can't inherit any of the above.
      _drawMap() in coordinator.js reads these three and falls back to the light values. */
   --map-sea:  #1a150f;
-  --map-land: rgba(236,229,218,0.30);
+  --map-land: rgba(236,229,218,0.52);
   --map-pin:  #f0a24a;
+  --map-glow: #ffb463;   /* the warm pool the pin sits in */
 }
 
 /* The same blurred globe + vignette the city pages sit on. Fixed and inert. */

@@ -776,17 +776,39 @@ body {
 .an-hist-c { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; color: var(--muted); }
 .an-hist-d { flex: none; font-family: var(--mono); font-size: 11.5px; color: var(--faint); }
 .an-hist-note { margin: 12px 0 0; font-size: 12px; line-height: 1.55; color: var(--hint); }
-.co-coords { margin-top: 10px; display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
-.co-coords .co-place { margin: 0; }
-.co-coords .latlon { margin: 0; }
+/* THE MAP CARD. The place and the coordinates sit ON the map — the reference the owner
+   picked, and it is the better arrangement: the readout belongs to the picture rather
+   than floating under it as two more lines of the form. */
+.co-map { position: relative; margin-top: var(--co-gap); border-radius: 12px; overflow: hidden;
+  border: 1px solid var(--line); background: var(--bg2); }
+.co-map .map-canvas { margin: 0; border: 0; border-radius: 0; display: block; }
+/* Scrims. The place name and the coordinates sit OVER the dots, and a name across a
+   dotted continent is unreadable — these darken just enough behind the text and fade to
+   nothing, so the map keeps its full width and the words keep their contrast. */
+.co-map::before, .co-map::after {
+  content: ""; position: absolute; left: 0; right: 0; height: 58px; pointer-events: none;
+}
+.co-map::before { top: 0; background: linear-gradient(to bottom, rgba(10,8,6,.72), rgba(10,8,6,0)); }
+.co-map::after  { bottom: 0; background: linear-gradient(to top, rgba(10,8,6,.66), rgba(10,8,6,0)); }
+.co-place, .latlon { z-index: 1; }
+.co-place {
+  position: absolute; top: 12px; left: 14px; right: 14px; margin: 0;
+  display: flex; flex-direction: column; gap: 1px; pointer-events: none;
+}
+.co-place-k { font-family: var(--mono); font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); }
+/* A long place name truncates rather than running across the whole map. */
+.co-place strong { font-size: 15px; font-weight: 700; color: var(--ink); letter-spacing: -0.01em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.latlon {
+  position: absolute; left: 14px; bottom: 11px; margin: 0; pointer-events: none;
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .04em; color: var(--faint);
+}
+.latlon strong { color: var(--muted); font-weight: 400; }
 /* NOTE: the address search box carries NO styling of its own. It used to (14px type, a
    cream fill, its own radius) — half of which never applied anyway, because `.co-body
    input` outspecifies a bare `.f-addr`. It is a field in this form like any other, so it
    takes the shared control style above and nothing else. */
-.latlon { margin-top: 8px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
-.latlon strong { color: var(--clay); }
-.co-place { margin-top: 6px; font-size: 13px; color: var(--ink); }
-.co-place strong { color: var(--clay); font-weight: 700; }
+/* (.latlon / .co-place are styled with the map card above — they are overlays on it now.) */
 /* address autocomplete */
 .co-search { position: relative; }
 .co-suggest { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 30; display: none;
