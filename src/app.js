@@ -451,6 +451,11 @@
     },
     // WEATHER for the place the host is talking about — one cached line, no city name in
     // it, so the recording is shared by every city with the same sky and temperature.
+    // The "stay with us" tag between blocks. No location needed — the words are fixed.
+    getBridgeSeg: function (next) {
+      if (!window.EventuallyHostVoice || !window.EventuallyHostVoice.getBridgeSeg) return Promise.resolve(null);
+      return window.EventuallyHostVoice.getBridgeSeg(next);
+    },
     getWeatherSeg: function () {
       if (!window.EventuallyHostVoice || !window.EventuallyHostVoice.getWeatherSeg) return Promise.resolve(null);
       const loc = activeBriefingLocation || P.get().location;

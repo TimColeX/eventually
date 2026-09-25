@@ -36,8 +36,13 @@
     this.getCityFiller = opts.getCityFiller || null;  // () -> Promise<{segments,filler}|null> (cached city radio filler for the current city)
     this.getWeatherSeg = opts.getWeatherSeg || null;  // () -> Promise<{segments}|null> (one cached "what it's doing outside" line)
     this.getLaterSeg = opts.getLaterSeg || null;      // () -> Promise<{segments}|null> (cached "still to come" bulletin, morning-made)
+    this.getBridgeSeg = opts.getBridgeSeg || null;    // (next) -> Promise<{segments}|null> (fixed "stay with us" tag)
     this.audioLive = opts.audioLive || null;          // () -> bool (is the music bed REALLY playing? see _verifyAudible)
-    this.MUSIC_GAP = 4200;                        // ~4s music swell between radio-filler segments (uses the play-button bed)
+    /* 2.4s, not 4.2s (2026-09-24). This is the swell BETWEEN clips of the same block —
+       inside what should feel like one continuous stretch of talking. Three clips back to
+       back carried 8.4s of music in the middle of them, which is long enough to think the
+       segment had ended. Still long enough for the bed to come up and be heard. */
+    this.MUSIC_GAP = 2400;
     this._fillerPlaying = false;                  // true while cached city filler segments are playing (incl. music gaps)
     /* CONTINUOUS RADIO — a station that UNFOLDS, then gets out of the way.
      *
@@ -51,13 +56,27 @@
      * and when there's nothing new left to say the station simply stops talking and leaves
      * the music playing. Nothing here generates anything: these are the same cached clips.
      */
-    // Weather takes the first slot, so there are four: weather, then the city's segments.
-    this.CYCLE_GAPS = [180000, 420000, 600000, 600000];   // 3, 7, 10, 10 min → then quiet
+    /* 90s / 3 / 5 / 7 / 8 / 8 min, not 3 / 7 / 10 / 10 (2026-09-24, owner: "the music
+       seems to play for too long between sections… it feels like it has stopped").
+       The old gaps were not arbitrary — they were spreading FOUR remaining pieces of
+       content over half an hour so the station didn't run dry. That is why this change
+       only works alongside the other half of it: the cities now carry ten segments
+       instead of six (CITY_SEG_ORDER in 31_briefing.ts), so there is enough to say at
+       this pace.
+       TEN gaps for ten pieces. The span is about what it was — half an hour, so the
+       station still doesn't run dry — but the listener now hears something every two to
+       four minutes instead of every seven to ten. First piece at 1m15s, not 3m; longest
+       gap 4m, not 10m; four pieces inside the first ten minutes, not two; and the
+       sign-off still lands (the last cycle empties whatever is left, up to three).
+       ⚠️ Check both halves together if you change either: fewer gaps than pieces and the
+       outro is never heard, which is exactly what the first draft of this did. */
+    this.CYCLE_GAPS = [75000, 120000, 150000, 180000, 180000, 210000, 210000, 240000, 240000, 240000];
     this.CYCLE_JITTER = 0.15;                     // ±15% so it never feels like a metronome
     this._cycleIdx = 0;                           // how many later cycles have played this city
     this._cityQueue = null;                       // cached city segments not yet heard for this city
     this._cityLoaded = false;                     // have this city's segments been fetched at all?
     this._weatherSaid = false;                    // the forecast is given once per city visit
+    this._bridgeSaid = false;                     // one hand-off tag per block of talking
     this._laterSaid = false;                      // …and so is the "still to come" bulletin
     this.FILLER_COOLDOWN = 180000;                // never replay the city segments within 3 min of last playing them
     this._lastFillerAt = 0; this._replayTimer = null;
@@ -258,7 +277,7 @@
     if (!this.speaking && !this._musicHold) { ealog('  ignored: host is stopped'); return; }
     this._gen++;                                 // invalidate ANY in-flight generation for the old city (#4)
     clearTimeout(this._replayTimer); this._replayTimer = null;   // cancel any pending continuous-radio replay
-    this._cycleIdx = 0; this._cityQueue = null; this._cityLoaded = false; this._weatherSaid = false; this._laterSaid = false;          // a new city gets the full unfolding show again
+    this._cycleIdx = 0; this._cityQueue = null; this._cityLoaded = false; this._weatherSaid = false; this._laterSaid = false; this._bridgeSaid = false;          // a new city gets the full unfolding show again
     this._identCity = city || this._focusCity || null;   // → the generic transition plays while the new city loads
     this._primeAudio();                          // iOS: keep the audio element alive within THIS tap gesture
     // Still in the music lead-in after Play (nothing spoken yet) → switch NOW. Waiting for
@@ -1025,7 +1044,41 @@
   };
   // Free intro finished: narration stops, but the music bed keeps playing (uninterrupted)
   // until the user pauses or mutes. The button now controls the music, not narration.
+  /* What the hosts will play NEXT, or null when the station is done for this city. Used
+     only to choose the hand-off tag, so it must never promise something that isn't
+     coming — hence the same conditions _radioCycle itself checks. */
+  AIHost.prototype._nextKind = function () {
+    if (this.CYCLE_GAPS[this._cycleIdx] == null) return null;          // no cycle left
+    if (this._cycleIdx === 0 && this.getWeatherSeg && !this._weatherSaid) return 'weather';
+    if (this._cycleIdx === 1 && this.getLaterSeg && !this._laterSaid) return 'later';
+    // "more about the place" is only true if there IS more: something queued, or a city
+    // whose segments have not been fetched yet and so might still have some.
+    if ((this._cityQueue && this._cityQueue.length) || !this._cityLoaded) return 'city';
+    return null;
+  };
+  /* THE HAND-OFF. A block of talking used to end straight onto the music bed, with the
+     next piece minutes away and nothing said about it — which is why the gap read as the
+     show stopping rather than continuing. Now the block signs off by naming what's next.
+     Fixed server-side text, cached once, reused by every city and listener. */
+  AIHost.prototype._playBridge = function (next) {
+    const self = this, myGen = this._gen;
+    this._bridgeSaid = true;                        // one per block, whatever happens below
+    Promise.resolve(this.getBridgeSeg(next)).then(function (b) {
+      const seg = b && b.segments && b.segments[0];
+      if (!seg || !self.speaking || myGen !== self._gen) { self._endFreeIntro(); return; }
+      self._audioSpeak(seg.url, seg.text || '', function () { self._endFreeIntro(); },
+        true /* no browser fallback: silence beats a robot voice reading a station ident */,
+        { text: seg.text || '', kind: 'greeting', lang: 'en-US' });
+    }).catch(function () { self._endFreeIntro(); });
+  };
+
   AIHost.prototype._endFreeIntro = function () {
+    /* Before settling onto the bed, hand off — but only when something really is coming,
+       and only once per block (_playBridge calls back in here when its clip ends). */
+    if (this.twoHost && this.getBridgeSeg && !this._bridgeSaid && this.speaking) {
+      const next = this._nextKind();
+      if (next) { this._playBridge(next); return; }
+    }
     this.speaking = false;
     this._musicHold = true;                               // music continues on its own
     this._introDone = true;
@@ -1100,6 +1153,7 @@
       self._cycleIdx++;
       self._musicHold = false; self.speaking = true;
       self._premiumPlaying = false; self._fillerPlaying = false;
+      self._bridgeSaid = false;                             // a new block earns a new hand-off
       self.icPlay.style.display = 'none'; self.icPause.style.display = '';
       self._playFillerSegs(segs, 0, myGen);                 // → _endFreeIntro() → _scheduleCycle()
     };
@@ -1455,7 +1509,7 @@
     this.speaking = true;
     this._gen++;                           // new session → invalidate any older in-flight fetch
     this._musicHold = false; this._freeMode = false;
-    this._cycleIdx = 0; this._cityQueue = null; this._cityLoaded = false; this._weatherSaid = false; this._laterSaid = false;   // a fresh Play starts the unfolding show over
+    this._cycleIdx = 0; this._cityQueue = null; this._cityLoaded = false; this._weatherSaid = false; this._laterSaid = false; this._bridgeSaid = false;   // a fresh Play starts the unfolding show over
     this._openerDone = false;              // premium stinger plays once per Play session
     this._openingDone = false;             // replay the show opening (intro → briefing) on each Play
     this._switchPending = false;
@@ -1556,7 +1610,7 @@
     clearInterval(this._ampTimer); clearInterval(this._voiceTween);
     clearTimeout(this._introTimer); clearTimeout(this._gapTimer); clearTimeout(this._readTimer); clearTimeout(this._switchFade);
     clearTimeout(this._replayTimer); this._replayTimer = null; clearTimeout(this._fillerGap);   // cancel continuous-radio cycle + filler
-    this._cycleIdx = 0; this._cityQueue = null; this._cityLoaded = false; this._weatherSaid = false; this._laterSaid = false;   // stopped → the next Play starts the show over
+    this._cycleIdx = 0; this._cityQueue = null; this._cityLoaded = false; this._weatherSaid = false; this._laterSaid = false; this._bridgeSaid = false;   // stopped → the next Play starts the show over
     this.onPause();                         // stop the music bed
     if (!this._timer) this._timer = setInterval(this._rotate.bind(this), this.IDLE);   // resume silent ticker
   };

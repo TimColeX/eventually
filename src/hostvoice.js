@@ -140,6 +140,21 @@
     // the listener is looking. The clip carries no city name, so every city that is
     // "partly cloudy and 11 degrees" plays the same cached recording (see 31_briefing.ts).
     // opts: {lat,lon,lang} -> Promise<{segments:[{url,text,speaker}]}|null>
+    /* The hand-off tag played at the end of a block, naming what is coming next so the
+       minutes of music that follow read as a break rather than the end of the show.
+       `next` is weather | later | city; the server owns the words, so there is a handful
+       of clips in existence and every one of them is cached. */
+    getBridgeSeg: function (next) {
+      if (!ENABLED) return Promise.resolve(null);
+      if (['weather', 'later', 'city'].indexOf(next) === -1) return Promise.resolve(null);
+      return fetch(BASE + '/functions/v1/briefing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': ANON, 'Authorization': 'Bearer ' + ANON },
+        body: JSON.stringify({ mode: 'bridge', next: next })
+      }).then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) { return (j && j.segments && j.segments.length) ? { segments: j.segments } : null; })
+        .catch(function () { return null; });
+    },
     getWeatherSeg: function (opts) {
       if (!ENABLED) return Promise.resolve(null);
       var o = opts || {};
