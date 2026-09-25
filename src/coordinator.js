@@ -1087,7 +1087,14 @@
     // dot is a dot, not a smear on top of one.
     const px = (this.pin.lon + 180) / 360 * w;
     const py = (90 - this.pin.lat) / 180 * h;
-    const glowR = Math.max(60, w * 0.22);           // how far the warmth reaches
+    /* HOW FAR THE WARMTH REACHES. This was w*0.22 — about 97px on a 442px map, which on
+       a world projection is several thousand kilometres: a pin in Lagos lit the whole of
+       West Africa and you could not tell WHICH city was pinned. The glow is a halo around
+       the pin, not a region light, so it is now about a tenth of that.
+       The honest limit: on a 440px world map a whole country is ~15px wide, so no glow can
+       ever say WHICH city. That is the 3px core's job. The glow only has to say 'here'
+       without hiding the coastline the eye uses to place it. */
+    const glowR = Math.max(9, w * 0.026);
     const dot = Math.max(0.85, step * 0.38);
 
     /* Drawn in BUCKETS, not dot by dot. At this resolution there are ~20,000 land cells,
@@ -1127,16 +1134,18 @@
     ctx.globalAlpha = 1;
 
     // The pin: a soft halo, a ring, then a solid core.
-    const halo = ctx.createRadialGradient(px, py, 0, px, py, 26);
+    const haloR = Math.max(7, w * 0.018);
+    const halo = ctx.createRadialGradient(px, py, 0, px, py, haloR);
     halo.addColorStop(0, glow); halo.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.globalAlpha = 0.28; ctx.fillStyle = halo;
-    ctx.beginPath(); ctx.arc(px, py, 26, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(px, py, haloR, 0, Math.PI * 2); ctx.fill();
     ctx.globalAlpha = 1;
     ctx.strokeStyle = pinCol; ctx.globalAlpha = 0.55; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.arc(px, py, 8.5, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(px, py, 6, 0, Math.PI * 2); ctx.stroke();
     ctx.globalAlpha = 1;
-    ctx.fillStyle = pinCol; ctx.shadowColor = pinCol; ctx.shadowBlur = 14;
-    ctx.beginPath(); ctx.arc(px, py, 4.5, 0, Math.PI * 2); ctx.fill();
+    // A 14px bloom around a 3px core is another way of hiding the city under orange.
+    ctx.fillStyle = pinCol; ctx.shadowColor = pinCol; ctx.shadowBlur = 7;
+    ctx.beginPath(); ctx.arc(px, py, 3, 0, Math.PI * 2); ctx.fill();
     ctx.shadowBlur = 0;
 
     // N/S · E/W rather than a bare signed number: on a map readout a minus sign is
