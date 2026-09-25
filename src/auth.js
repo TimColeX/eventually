@@ -104,8 +104,17 @@
           return r;
         });
     },
+    /* ALWAYS SHOW GOOGLE'S ACCOUNT CHOOSER.
+       Signing out of Eventually ends the SUPABASE session; it does nothing to the
+       Google one. Without `prompt: select_account`, Google silently reuses whichever
+       account the browser is already signed into and returns straight here — so on a
+       phone with one Google session there was no way to sign in as anybody else.
+       Someone with two accounts (an app account and an admin one) was simply stuck. */
     signInWithGoogle: function () {
-      return sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: redirectTo() } });
+      return sb.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: redirectTo(), queryParams: { prompt: 'select_account' } }
+      });
     },
     signOut: function () { return sb.auth.signOut(); },
 

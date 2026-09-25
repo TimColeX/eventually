@@ -37,7 +37,13 @@
       '<input id="ad-email" type="email" placeholder="you@email.com" />' +
       '<button class="ad-btn ghost" id="ad-magic">Email me a magic link</button></div>';
     document.getElementById('ad-google').onclick = function () {
-      sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: redirectTo() } });
+      // `prompt: select_account` matters MORE here than in the app: the admin account is
+      // usually not the account the phone is already signed into, and without it Google
+      // reuses that one and lands you on "Not authorized" with no way through.
+      sb.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: redirectTo(), queryParams: { prompt: 'select_account' } }
+      });
     };
     document.getElementById('ad-magic').onclick = function () {
       const v = document.getElementById('ad-email').value.trim();
@@ -47,9 +53,21 @@
     };
   }
 
+  /* NAME THE ACCOUNT THAT WAS REFUSED, and give a way out of here.
+     "This account isn't an admin" is true and unhelpful when the reason is that the
+     browser signed you in as the wrong one of your two Google accounts — which is the
+     usual reason. Saying WHICH account makes the situation obvious at a glance, and the
+     button does the only thing that actually helps: sign out, then go back to a chooser. */
   function renderDenied() {
-    main.innerHTML = '<div class="ad-deny"><h2>Not authorized</h2><p class="ad-muted">This account isn\'t an admin. ' +
-      'Set <code>is_admin = true</code> on your row in Supabase → Table Editor → profiles, then reload.</p></div>';
+    const who = (me && me.email) ? esc(me.email) : 'This account';
+    main.innerHTML = '<div class="ad-deny"><h2>Not authorized</h2>' +
+      '<p class="ad-muted"><b>' + who + '</b> isn\'t an admin.</p>' +
+      '<p class="ad-muted">If that is not the account you meant to use, sign out and pick the other one. ' +
+      'Otherwise set <code>is_admin = true</code> on your row in Supabase → Table Editor → profiles, then reload.</p>' +
+      '<button class="ad-btn" id="ad-switch">Sign out and use a different account</button></div>';
+    document.getElementById('ad-switch').onclick = function () {
+      sb.auth.signOut().then(function () { location.reload(); });
+    };
   }
 
   /* ---------------- dashboard ---------------- */
