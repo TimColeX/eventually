@@ -116,6 +116,13 @@
     this._imageRemoved = false;             // they took the existing one off
     this.pin = { lat: 48.85, lon: 2.35 };  // default Paris
     this.city = null;                       // resolved place name (geocoded)
+    /* The country the geocoder already told us and we used to throw away. Every
+       organiser-published event had `country = null` as a result, while the events
+       table, the venue book and the insert in auth.js all carried the column and were
+       waiting for it. It is not cosmetic: country-scoped sponsors are matched against
+       the events' own country, so a city served only by native events could not be
+       sold to a national advertiser at all. */
+    this.country = null;
     this.editId = null;                     // set when editing an existing event
     this.locationChosen = false;            // a real location must be picked before publishing
     this._build();
@@ -153,7 +160,7 @@
   // leave the neutral default and require an explicit pick before publishing.
   Coordinator.prototype._applyDefaultLocation = function () {
     const d = this.getDefaultLocation && this.getDefaultLocation();
-    if (d && d.lat != null) { this.pin = { lat: d.lat, lon: d.lon }; this.city = d.city || null; this.locationChosen = true; }
+    if (d && d.lat != null) { this.pin = { lat: d.lat, lon: d.lon }; this.city = d.city || null; this.country = d.country || null; this.locationChosen = true; }
     else { this.locationChosen = false; }
   };
 
@@ -356,6 +363,7 @@
       self.pin.lon = x * 360 - 180;
       self.pin.lat = 90 - y * 180;
       self.city = null;
+      self.country = null;                  // the reverse geocode below refills both
       self.locationChosen = true;           // dropping a pin counts as choosing a location
       var m0 = self.el.querySelector('.co-loc'); if (m0) m0.classList.remove('co-need-loc');
       self._drawMap();
@@ -597,7 +605,7 @@
          to trg_events_city_fill (75_fill_missing_cities.sql), which borrows the nearest
          named event's city or reverse-geocodes server-side, where it is far more reliable
          than a browser call racing the publish button. */
-      id: id, name: name, city: this.city || null, venue: venue || null, endsAt: endsAt,
+      id: id, name: name, city: this.city || null, country: this.country || null, venue: venue || null, endsAt: endsAt,
       address: address || null, timezone: zone,
       lat: this.pin.lat, lon: this.pin.lon,
       date: date, dayOffset: dayOffset, category: cat,
@@ -714,6 +722,7 @@
     if (!v) return;
     this.pin = { lat: +v.lat, lon: +v.lon };
     this.city = v.city || null;
+    this.country = v.country || null;       // organiser_venues already stores it
     this.locationChosen = true;
     this._venueId = v.id || null;
     const venueEl = this.el.querySelector('.f-venue');
@@ -760,6 +769,11 @@
 
   Coordinator.prototype._adoptPlace = function (res) {
     if (!res) return;
+    /* Both geocode paths — the dropped pin's reverse lookup and a picked search
+       suggestion — land here, so this is the one place the country has to be kept.
+       Set before the `!TZ` return below, which would otherwise skip it whenever the
+       timezone helper is absent. */
+    if (res.country) this.country = res.country;
     const TZ = global.EventuallyTZ;
     const addrEl = this.el.querySelector('.f-address');
     const venueEl = this.el.querySelector('.f-venue');
@@ -962,7 +976,7 @@
 
   Coordinator.prototype._resetForm = function () {
     const q = function (s) { return this.el.querySelector(s); }.bind(this);
-    this.editId = null; this.city = null;
+    this.editId = null; this.city = null; this.country = null;
     // A fresh form is not a copy of anything, and is not at a saved venue yet.
     this._copiedImage = null; this._venueId = null; this._markChosenVenue();
     q('.f-name').value = ''; q('.f-desc').value = ''; q('.f-url').value = '';
@@ -1031,7 +1045,7 @@
     else if (ev.url) q('.f-reg-link').checked = true;
     else q('.f-reg-none').checked = true;
     this._syncRegMode();
-    this.pin = { lat: +ev.lat, lon: +ev.lon }; this.city = ev.city || null;
+    this.pin = { lat: +ev.lat, lon: +ev.lon }; this.city = ev.city || null; this.country = ev.country || null;
     // A picture waiting for review is the one to show them — it's what they last
     // chose, even though the event is still showing the old one to everyone else.
     this._showExistingImage(ev.image_pending || ev.image_url || null, !!ev.image_pending);

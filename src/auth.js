@@ -311,6 +311,13 @@
         timezone: evt.timezone || null, venue: evt.venue || null, address: evt.address || null,
         collect_registrations: !!evt.collectRegistrations, capacity: evt.capacity || null
       };
+      /* COUNTRY IS ONLY SENT WHEN WE HAVE ONE, never as a null.
+         `creator_event_stats` — the query the edit form is filled from — returns city
+         but not country, so an edit that never touched the location has `evt.country`
+         undefined. Writing that straight through would erase, on every ordinary edit,
+         the country the geocoder captured at publish. Moving the pin re-runs the
+         geocode and sets it, so a genuinely changed location still updates. */
+      if (evt.country) patch.country = evt.country;
       // The image columns are only touched when the publisher actually changed the
       // picture. Taking one DOWN needs no review (removing content can't be abused
       // the way adding it can); putting one up waits for the Review queue.

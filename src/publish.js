@@ -100,6 +100,9 @@
     if (!coordinator || coordinator.editId) return;      // editing a live event is not a draft
     const q = function (s) { const n = document.querySelector(s); return n ? n.value : ''; };
     const d = { at: Date.now(), fields: {}, pin: coordinator.pin, city: coordinator.city,
+                // Carried with the pin: a restored draft that lost its country would
+                // publish without one, which is the bug this whole change is about.
+                country: coordinator.country,
                 chosen: !!coordinator.locationChosen, tz: coordinator.timezone || null };
     DRAFT_FIELDS.forEach(function (s) { d.fields[s] = q(s); });
     const reg = document.querySelector('input[name="co-reg"]:checked');
@@ -122,6 +125,7 @@
     if (d.pin && d.pin.lat != null) {
       coordinator.pin = { lat: +d.pin.lat, lon: +d.pin.lon };
       coordinator.city = d.city || null;
+      coordinator.country = d.country || null;
       coordinator.locationChosen = !!d.chosen;
     }
     if (d.tz) { coordinator.timezone = d.tz; coordinator._tzTouched = true; coordinator._tzSure = true; coordinator._fillTzOptions(null); coordinator._syncTzNote(); }
