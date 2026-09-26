@@ -1439,8 +1439,9 @@
         ' — ' + esc(prev) + '…' +
         // Filled in by checkScopeReach() once the database has been asked whether this
         // scope matches anything. Empty unless there is bad news.
-        '<span class="spon-reach" data-scope="' + esc(s.scope) + '"></span>' +
+        '<span class="spon-reach" data-id="' + esc(s.id) + '" data-scope="' + esc(s.scope) + '"></span>' +
         '</span><span>' +
+        '<button class="ad-regen ad-spon-edit" data-id="' + esc(s.id) + '">Edit</button> ' +
         '<button class="ad-regen ad-spon-tog" data-id="' + esc(s.id) + '" data-en="' + (s.enabled === false ? '0' : '1') + '">' + (s.enabled === false ? 'Enable' : 'Disable') + '</button> ' +
         '<button class="ad-regen ad-spon-del" data-id="' + esc(s.id) + '">Delete</button></span></div>';
     }).join('');
@@ -1469,7 +1470,9 @@
       '<div class="ad-row"><div class="ad-field"><label>Active from (optional, UTC)</label><input id="db-spon-from" type="date"></div>' +
         '<div class="ad-field"><label>Active to (optional, UTC)</label><input id="db-spon-to" type="date"></div></div>' +
       '<div class="ad-hint">Dates are UTC and inclusive. Leave blank to air indefinitely.</div>' +
-      '<div><button class="ad-save" id="db-spon-add">Add sponsor</button><span class="ad-saved" id="db-spon-ok"></span></div></div>';
+      '<div><button class="ad-save" id="db-spon-add">Add sponsor</button> ' +
+        '<button class="ad-regen" id="db-spon-cancel" hidden>Cancel</button>' +
+        '<span class="ad-saved" id="db-spon-ok"></span></div></div>';
 
     return '<div class="ad-sec"><h2>Briefing content &amp; controls</h2>' +
       '<p class="ad-hint">Claude authors the AI Host briefing per area (the two-host conversation, or the single-host script). Toggle it on/off, add a global announcement, cap daily generations, and manage sponsors. The hosts, voices and provider are set in <b>AI Host Manager</b> above. Changes apply to briefings generated after you save.</p>' +
@@ -1628,6 +1631,8 @@
 
      So ask the database. One cheap count per scope against events.city and
      events.country; say so plainly when the answer is neither. */
+  let airingsByTag = {};      // message hash -> { plays, ... }, filled by renderAirings
+  let editingSponsor = null;  // the sponsor row being edited, or null when adding
   const reachCache = {};
   function scopeReaches(scope) {
     const key = String(scope || '').toLowerCase();
@@ -1665,7 +1670,9 @@
     (sponsors || []).forEach(function (s) {
       const w = windowWarning(s);
       if (!w) return;
-      const el = document.querySelector('.spon-reach[data-scope="' + String(s.scope).replace(/"/g, '\\"') + '"]');
+      // Matched by ROW id, not scope: three sponsors can share the scope "world", and
+      // matching on that put one row's window warning on a different row's line.
+      const el = document.querySelector('.spon-reach[data-id="' + String(s.id).replace(/"/g, '\\"') + '"]');
       if (el && !el.innerHTML) {
         el.innerHTML = ' <b style="color:#8a6d1e">⚠ not airing</b><span class="ad-hint"> — ' + w + '.</span>';
       }
@@ -1695,6 +1702,10 @@
       const d = r.data || {};
       const byTag = {};
       (d.tails || []).forEach(function (t) { byTag[t.tag] = t; });
+      // Kept so the edit confirm can quote a real number rather than a vague warning:
+      // "this has aired 286 times" is a decision someone can make; "this may reset a
+      // counter" is not.
+      airingsByTag = byTag;
       // Everything currently configured, so a message with zero plays still shows (which is
       // itself the useful signal — it means it isn't airing).
       const items = [];
@@ -1811,6 +1822,20 @@
       });
     });
     // Sponsors: add / toggle / delete.
+    /* EDIT REUSES THE ADD FORM rather than introducing a second editor: one set of
+       fields, one validation path, and the scope checker above applies to edits for
+       free. `editingSponsor` is the only state. */
+    const cancelS = $('db-spon-cancel');
+    function leaveEditMode() {
+      editingSponsor = null;
+      const a = $('db-spon-add'); if (a) a.textContent = 'Add sponsor';
+      if (cancelS) cancelS.hidden = true;
+      ['db-spon-scope', 'db-spon-msg', 'db-spon-from', 'db-spon-to'].forEach(function (id) { const e = $(id); if (e) e.value = ''; });
+      const w = $('db-spon-weight'); if (w) w.value = 1;
+      const n = $('db-spon-scope-note'); if (n) n.textContent = '';
+    }
+    if (cancelS) cancelS.onclick = leaveEditMode;
+
     const addS = $('db-spon-add');
     if (addS) addS.onclick = function () {
       const scope = ($('db-spon-scope').value || '').trim().toLowerCase();
@@ -1820,21 +1845,74 @@
       const row = {
         scope: scope, message: message,
         weight: Math.max(1, parseInt($('db-spon-weight').value, 10) || 1),
-        active_from: $('db-spon-from').value || null, active_to: $('db-spon-to').value || null, enabled: true
+        active_from: $('db-spon-from').value || null, active_to: $('db-spon-to').value || null
       };
-      addS.disabled = true;
-      sb.from('briefing_sponsors').insert(row).then(function (r) {
+
+      const finish = function (r) {
         addS.disabled = false;
         if (r.error) { ok.textContent = 'Error: ' + r.error.message; ok.style.color = '#b3402a'; return; }
+        leaveEditMode();
         renderHost(body);
+      };
+
+      if (!editingSponsor) {
+        row.enabled = true;
+        addS.disabled = true;
+        sb.from('briefing_sponsors').insert(row).then(finish);
+        return;
+      }
+
+      /* THE ONE EDIT THAT COSTS SOMETHING. Airings are counted per MESSAGE — the bucket
+         is a hash of the text — so scope, weight and dates can be changed freely, and
+         only rewriting the words starts a new count. Say the real number and let the
+         person decide; a vague "this may reset a counter" is not a decision anyone can
+         make. Disable + add is offered because it keeps both records intact, which is
+         usually what you want mid-campaign. */
+      const textChanged = message !== (editingSponsor.message || '');
+      const proceed = function () {
+        addS.disabled = true;
+        sb.from('briefing_sponsors').update(row).eq('id', editingSponsor.id).then(finish);
+      };
+      if (!textChanged) { proceed(); return; }
+      tailTag(editingSponsor.message || '').then(function (tag) {
+        const t = airingsByTag[tag];
+        const plays = t ? +t.plays : 0;
+        const warn = plays
+          ? 'This message has aired ' + plays.toLocaleString() + ' time' + (plays === 1 ? '' : 's') + '.\n\n' +
+            'Airings are counted per message, so changing the words starts a new count from zero. ' +
+            'The ' + plays.toLocaleString() + ' stays in the airings list below, but this sponsor will read 0 from now on.\n\n' +
+            'To keep the old record separate, cancel — then disable this sponsor and add a new one instead.\n\nEdit the message anyway?'
+          : 'Change the message? It has not aired yet, so nothing is lost.';
+        if (confirm(warn)) proceed();
       });
     };
     const sList = $('db-spon-list');
     if (sList) sList.addEventListener('click', function (e) {
       const del = e.target.closest('.ad-spon-del');
       const tog = e.target.closest('.ad-spon-tog');
+      const ed = e.target.closest('.ad-spon-edit');
+      if (ed) {
+        const s = dbSponsors.filter(function (x) { return String(x.id) === String(ed.dataset.id); })[0];
+        if (!s) return;
+        editingSponsor = s;
+        const $$ = function (id) { return document.getElementById(id); };
+        $$('db-spon-scope').value = s.scope || '';
+        $$('db-spon-msg').value = s.message || '';
+        $$('db-spon-weight').value = s.weight || 1;
+        $$('db-spon-from').value = s.active_from || '';
+        $$('db-spon-to').value = s.active_to || '';
+        const a = $$('db-spon-add'); if (a) a.textContent = 'Save changes';
+        const c = $$('db-spon-cancel'); if (c) c.hidden = false;
+        $$('db-spon-scope').focus();
+        $$('db-spon-scope').dispatchEvent(new Event('blur'));   // run the scope check on what's there
+        $$('db-spon-msg').scrollIntoView({ block: 'center', behavior: 'smooth' });
+        return;
+      }
       if (del) {
-        if (!confirm('Delete this sponsor?')) return;
+        // Deleting removes the ROW. The synthesized audio stays in the bucket and the
+        // airings history stays in the log — deliberately: the record of what actually
+        // went to air should outlive the booking that caused it.
+        if (!confirm('Delete this sponsor?\n\nIts airing history stays in the list below — only the booking is removed.')) return;
         sb.from('briefing_sponsors').delete().eq('id', del.dataset.id).then(function () { renderHost(body); });
       } else if (tog) {
         sb.from('briefing_sponsors').update({ enabled: tog.dataset.en === '0' }).eq('id', tog.dataset.id).then(function () { renderHost(body); });
