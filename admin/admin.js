@@ -1436,20 +1436,25 @@
       const prev = (s.message || '').slice(0, 60);
       const win = (s.active_from || s.active_to) ? (' · ' + (s.active_from || '…') + '→' + (s.active_to || '…')) : '';
       return '<div class="ad-li"><span>' + (s.enabled === false ? '⏸ ' : '') + '<b>' + esc(s.scope) + '</b> · w' + (s.weight || 1) + win +
-        ' — ' + esc(prev) + '…</span><span>' +
+        ' — ' + esc(prev) + '…' +
+        // Filled in by checkScopeReach() once the database has been asked whether this
+        // scope matches anything. Empty unless there is bad news.
+        '<span class="spon-reach" data-scope="' + esc(s.scope) + '"></span>' +
+        '</span><span>' +
         '<button class="ad-regen ad-spon-tog" data-id="' + esc(s.id) + '" data-en="' + (s.enabled === false ? '0' : '1') + '">' + (s.enabled === false ? 'Enable' : 'Disable') + '</button> ' +
         '<button class="ad-regen ad-spon-del" data-id="' + esc(s.id) + '">Delete</button></span></div>';
     }).join('');
     if (!sponRows) sponRows = '<div class="ad-li"><span class="ad-hint">No sponsors yet.</span></div>';
     const sponsors =
       '<div class="ad-field" style="margin-top:20px"><label>Sponsors (' + dbSponsors.length + ') — FREE tier only, verbatim; worldwide + city-targeted</label>' +
-      '<p class="ad-hint">Paid sponsors play on the <b>free</b> tier only (Plus is ad-free). Scope <b>world</b> plays everywhere; a city name (e.g. <b>toronto</b>) plays only there. One worldwide + one city sponsor per briefing, rotated by weight. Verbatim — not written by Claude, edits apply instantly (no regeneration). For a message on BOTH tiers, use the Announcement above.</p>' +
+      '<p class="ad-hint">Paid sponsors play on the <b>free</b> tier only (Plus is ad-free). Scope <b>world</b> plays everywhere; a <b>country</b> (e.g. <b>canada</b>) plays across that country; a <b>city</b> (e.g. <b>toronto</b>) plays only there. At most two air in one show — one worldwide and one local, and a city sponsor beats a country one. One city sponsor per briefing, rotated by weight. Verbatim — not written by Claude, edits apply instantly (no regeneration). For a message on BOTH tiers, use the Announcement above.</p>' +
       '<div class="ad-list" id="db-spon-list">' + sponRows + '</div>' +
       // Airings — the number a sponsor asks for before renewing. Filled in async so a slow
       // or not-yet-migrated database never blocks the sponsor editor from rendering.
       '<div id="db-airings" class="ad-hint" style="margin-top:10px">Loading airing counts…</div>' +
       '<div class="ad-row" style="margin-top:10px">' +
-        '<div class="ad-field"><label>Scope</label><input id="db-spon-scope" placeholder="world   or   toronto"></div>' +
+        '<div class="ad-field"><label>Scope</label><input id="db-spon-scope" placeholder="world   ·   toronto   ·   canada">' +
+          '<span class="ad-hint" id="db-spon-scope-note"></span></div>' +
         '<div class="ad-field"><label>Weight</label><input id="db-spon-weight" type="number" min="1" value="1"></div></div>' +
       // The old placeholder ("This briefing is brought to you by Acme Coffee…") invited
       // every sponsor to claim the WHOLE briefing — so a world sponsor and a city sponsor
@@ -1612,6 +1617,73 @@
     const hash = await crypto.subtle.digest('SHA-256', buf);
     return [...new Uint8Array(hash)].map(function (b) { return b.toString(16).padStart(2, '0'); }).join('').slice(0, 12);
   }
+  /* ---- does a sponsor's scope match anything that exists? ----
+     A scope is matched by the briefing against exactly three things: the literal string
+     "world", the listener's city, or the listener's country. Anything else — a province,
+     a region, a typo — matches nothing on every request, forever, and the sponsor is
+     simply never heard. Nothing errors, because nothing is wrong; there is just no row.
+     That has now cost two sponsors (one to a UTC date window, one to a scope of
+     "canada" before country scopes existed), and in both cases the only symptom was an
+     airings count sitting at zero.
+
+     So ask the database. One cheap count per scope against events.city and
+     events.country; say so plainly when the answer is neither. */
+  const reachCache = {};
+  function scopeReaches(scope) {
+    const key = String(scope || '').toLowerCase();
+    if (key === 'world') return Promise.resolve(true);
+    if (reachCache[key] !== undefined) return Promise.resolve(reachCache[key]);
+    const count = function (col) {
+      return sb.from('events').select('event_id', { count: 'exact', head: true }).ilike(col, key)
+        .then(function (r) { return r.error ? null : (r.count || 0); });
+    };
+    return Promise.all([count('city'), count('country')]).then(function (n) {
+      // A failed query must not be reported as "never airs" — unknown is not false.
+      if (n[0] === null && n[1] === null) return null;
+      const ok = (n[0] || 0) > 0 || (n[1] || 0) > 0;
+      reachCache[key] = ok;
+      return ok;
+    });
+  }
+  /* The OTHER way a sponsor goes silent: its booked window, compared against the UTC
+     date rather than yours. West of UTC the day rolls over while it is still yesterday
+     locally, so an "Active to" of today has already expired by mid-evening — and an
+     "Active from" of today can read as tomorrow if it was written by SQL `current_date`.
+     Both look identical from the outside: a sponsor that simply never plays. */
+  function windowWarning(s) {
+    const utcDay = new Date().toISOString().slice(0, 10);
+    if (s.active_to && String(s.active_to) < utcDay) {
+      return 'window ended ' + esc(String(s.active_to)) + ' (UTC — it is already ' + utcDay + ' in UTC)';
+    }
+    if (s.active_from && String(s.active_from) > utcDay) {
+      return 'does not start until ' + esc(String(s.active_from)) + ' (UTC)';
+    }
+    return null;
+  }
+  function checkScopeReach(sponsors) {
+    // Window first: it needs no query, so it can be said immediately.
+    (sponsors || []).forEach(function (s) {
+      const w = windowWarning(s);
+      if (!w) return;
+      const el = document.querySelector('.spon-reach[data-scope="' + String(s.scope).replace(/"/g, '\\"') + '"]');
+      if (el && !el.innerHTML) {
+        el.innerHTML = ' <b style="color:#8a6d1e">⚠ not airing</b><span class="ad-hint"> — ' + w + '.</span>';
+      }
+    });
+    const spans = document.querySelectorAll('.spon-reach');
+    Array.prototype.forEach.call(spans, function (el) {
+      if (el.innerHTML) return;                       // a window warning already won this row
+      const scope = el.getAttribute('data-scope') || '';
+      scopeReaches(scope).then(function (ok) {
+        if (ok === false && !el.innerHTML) {
+          el.innerHTML = ' <b style="color:#b3402a">⚠ never airs</b>' +
+            '<span class="ad-hint"> — no events have a city or country called “' + esc(scope) + '”. ' +
+            'Use <b>world</b>, or a city or country that exists.</span>';
+        }
+      });
+    });
+  }
+
   function renderAirings(announcement, sponsors) {
     const box = document.getElementById('db-airings');
     if (!box) return;
@@ -1686,6 +1758,30 @@
     const budget = $('db-budget'), ceil = $('db-ceiling');
     if (budget && ceil) budget.oninput = function () { ceil.innerHTML = budgetCeilingText(Math.max(0, parseInt(budget.value, 10) || 0)); };
     renderAirings((dbCfg.announcement || ''), dbSponsors);
+    checkScopeReach(dbSponsors);
+    // Same check, live, on the field being typed into — better to learn this before
+    // saving than from an airings count three weeks later.
+    const scopeIn = document.getElementById('db-spon-scope');
+    const scopeNote = document.getElementById('db-spon-scope-note');
+    if (scopeIn && scopeNote) {
+      scopeIn.onblur = function () {
+        const v = (scopeIn.value || '').trim().toLowerCase();
+        if (!v) { scopeNote.textContent = ''; return; }
+        scopeNote.textContent = 'checking…';
+        scopeNote.style.color = '';
+        scopeReaches(v).then(function (ok) {
+          if (ok === false) {
+            scopeNote.innerHTML = '⚠ Nothing matches “' + esc(v) + '” — a sponsor scoped to it would never air.';
+            scopeNote.style.color = '#b3402a';
+          } else if (ok === true) {
+            scopeNote.textContent = v === 'world' ? 'Plays everywhere.' : 'Matches real events — this will air.';
+            scopeNote.style.color = '#3a7d44';
+          } else {
+            scopeNote.textContent = '';   // couldn't check; say nothing rather than guess
+          }
+        });
+      };
+    }
     const save = $('db-save');
     if (save) save.onclick = function () {
       // persona/premiumPersona no longer edited here (two-host uses the conversation
