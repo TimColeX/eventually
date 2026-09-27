@@ -218,7 +218,13 @@
      an easier scan across a room. */
   var TARGET = 'https://eventually-app.com/publish.html';
   ['qr1', 'qr2'].forEach(function (id) {
-    new QRCode(document.getElementById(id), {
+    // Skip a missing box rather than throwing. Without this, rendering ONE sheet on
+    // its own (which is how the PNGs are made) killed the loop on the first missing
+    // id — so the second sheet's code silently never drew, and the poster printed
+    // with an empty white square where the QR should be.
+    var box = document.getElementById(id);
+    if (!box) return;
+    new QRCode(box, {
       text: TARGET, width: 600, height: 600,
       colorDark: '#211A15', colorLight: '#ffffff',
       correctLevel: QRCode.CorrectLevel.M
