@@ -774,6 +774,11 @@
           status.textContent = 'Read it.';
           intakeDraft = r.draft;
           renderIntakeDraft();
+          // Pin it straight away rather than leaving it as a button to remember. The
+          // model has already given us a venue and a city, which is all the geocoder
+          // needs — and a missing pin used to surface as a dead end on the ORGANISER'S
+          // screen, which is the worst place to discover it.
+          intakeGeocode();
           loadIntakeList();
         });
     };
@@ -809,7 +814,8 @@
       '<div class="ad-row">' + intakeField('organiser_name', 'Organiser', p.organiser_name) +
         intakeField('organiser_email', 'Their email', p.organiser_email) + '</div>' +
       '<div class="ad-field"><label>Location on the map</label>' +
-        '<button class="ad-regen" id="in-geo">Find this place</button> ' +
+        '<input id="in-geo-q" placeholder="Leave blank to search automatically, or type the place yourself">' +
+        '<button class="ad-regen" id="in-geo" style="margin-top:8px">Find this place</button> ' +
         '<span class="ad-hint" id="in-geo-out">' +
           (p.lat != null ? 'Pinned at ' + (+p.lat).toFixed(3) + ', ' + (+p.lon).toFixed(3) + (p.timezone ? ' · ' + esc(p.timezone) : '') : 'Not pinned yet — needed before it can be published.') +
         '</span></div>' +
@@ -835,26 +841,70 @@
   /* The geocoder the app already uses, so a poster that says only "The Exchange,
      Regina" ends up with the same pin, address, timezone and country a hand-filled
      event would have had. */
+  /* Several attempts, narrowing as it goes, then the city as a floor.
+     One try is not enough, and the failure that proved it is worth keeping: the very
+     first real poster gave "Hungarian Cultural & Social Club, Regina", which Nominatim
+     returns NOTHING for — while "Hungarian Club, Regina" lands on exactly the right
+     building. Long formal venue names and "&" are what break it, so the chain strips
+     them. The last step is the city itself, which always resolves and puts the event
+     in the right place on the globe even when the venue cannot be found at all.
+     Anything approximate says so, because a silent city-centre pin is a wrong pin. */
+  function intakeGeoQueries(p) {
+    const qs = [];
+    const city = (p.city || '').trim();
+    const venue = (p.venue || '').trim();
+    const addr = (p.address || '').trim();
+    const join = function (a) { return a.filter(Boolean).join(', '); };
+    if (venue) qs.push(join([venue, city]));
+    if (addr) qs.push(join([addr, city]));
+    if (venue.indexOf('&') > -1) qs.push(join([venue.replace(/&/g, 'and'), city]));
+    // "Hungarian Cultural & Social Club" → "Hungarian Club". Venue names are usually
+    // <distinguishing word> … <type word>, and the middle is what the geocoder trips on.
+    const w = venue.replace(/&/g, ' ').split(/\s+/).filter(Boolean);
+    if (w.length > 2) qs.push(join([w[0] + ' ' + w[w.length - 1], city]));
+    if (city) qs.push(city);
+    return qs.filter(function (q, i) { return q && qs.indexOf(q) === i; }).slice(0, 5);
+  }
+
   function intakeGeocode() {
     const out = document.getElementById('in-geo-out');
+    const typed = (document.getElementById('in-geo-q') || {}).value;
     const p = intakeCollect();
-    const q = [p.venue, p.address, p.city].filter(Boolean).join(', ');
-    if (!q) { out.textContent = 'Add a venue or city first.'; return; }
     if (!window.EventuallyGeo) { out.textContent = 'Geocoder not loaded.'; return; }
+    const queries = (typed && typed.trim()) ? [typed.trim()] : intakeGeoQueries(p);
+    if (!queries.length) { out.textContent = 'Add a venue or city first.'; return; }
+
+    let i = 0;
     out.textContent = 'Looking…';
-    window.EventuallyGeo.forward(q).then(function (r) {
-      if (!r) { out.textContent = 'Nothing found for “' + q + '”. Try just the venue and city.'; return; }
-      p.lat = r.lat; p.lon = r.lon;
-      p.city = p.city || r.city || null;
-      p.country = r.country || p.country || null;
-      if (window.EventuallyTZ) {
-        const g = window.EventuallyTZ.guess(r.countryCode);
-        p.timezone = (g && g.zone) || p.timezone || null;
+    const attempt = function () {
+      if (i >= queries.length) {
+        out.innerHTML = '<b style="color:#b3402a">Not found.</b> Type the place yourself above and try again ' +
+          '— or search it on OpenStreetMap and paste the name it uses.';
+        return;
       }
-      intakeDraft.payload = p;
-      out.textContent = 'Pinned at ' + r.lat.toFixed(3) + ', ' + r.lon.toFixed(3) +
-        (p.country ? ' · ' + p.country : '') + (p.timezone ? ' · ' + p.timezone : '');
-    }, function () { out.textContent = 'Lookup failed.'; });
+      const q = queries[i++];
+      window.EventuallyGeo.forward(q).then(function (r) {
+        if (!r) {
+          // Nominatim asks for no more than one request a second.
+          setTimeout(attempt, 1100);
+          return;
+        }
+        p.lat = r.lat; p.lon = r.lon;
+        p.city = p.city || r.city || null;
+        p.country = r.country || p.country || null;
+        if (window.EventuallyTZ) {
+          const g = window.EventuallyTZ.guess(r.countryCode);
+          p.timezone = (g && g.zone) || p.timezone || null;
+        }
+        intakeDraft.payload = p;
+        const cityOnly = q === (p.city || '').trim();
+        out.innerHTML = (cityOnly ? '<b style="color:#8a6d1e">Approximate</b> — pinned on ' + esc(q) +
+                                    ' itself, not the venue. ' : 'Pinned on “' + esc(q) + '”. ') +
+          r.lat.toFixed(3) + ', ' + r.lon.toFixed(3) +
+          (p.country ? ' · ' + esc(p.country) : '') + (p.timezone ? ' · ' + esc(p.timezone) : '');
+      }, function () { setTimeout(attempt, 1100); });
+    };
+    attempt();
   }
 
   function intakeMakeLink() {
@@ -892,10 +942,18 @@
         const p = d.payload || {};
         const when = p.date ? (p.date + (p.start ? ' ' + p.start : '')) : 'no date';
         const link = location.origin + '/review.html?t=' + d.token;
+        // A draft with no pin cannot be published, so its link must not be sendable.
+        // The token exists from the moment of extraction, which is why this guard
+        // lives here and not only on the Create button.
+        const pinned = p.lat != null && p.lon != null;
         return '<div class="ad-li"><span><b>' + esc(p.name || '(unnamed)') + '</b> · ' + esc(when) +
           ' · ' + esc(p.city || '—') + ' · <b>' + esc(d.status) + '</b>' +
-          (d.organiser_email ? ' · ' + esc(d.organiser_email) : '') + '</span><span>' +
-          (d.status === 'ready' ? '<button class="ad-regen in-copy" data-link="' + esc(link) + '">Copy link</button>' : '') +
+          (d.organiser_email ? ' · ' + esc(d.organiser_email) : '') +
+          (d.status === 'ready' && !pinned ? ' <b style="color:#b3402a">⚠ not pinned</b>' : '') + '</span><span>' +
+          (d.status === 'ready' ? '<button class="ad-regen in-open" data-id="' + esc(d.id) + '">Open</button> ' : '') +
+          (d.status === 'ready' && pinned
+            ? '<button class="ad-regen in-copy" data-link="' + esc(link) + '">Copy link</button>'
+            : '') +
           '</span></div>';
       }).join('');
       el.innerHTML = rows || '<span class="ad-hint">Nothing yet.</span>';
@@ -903,6 +961,24 @@
         b.onclick = function () {
           try { navigator.clipboard.writeText(b.dataset.link); b.textContent = 'Copied'; }
           catch (e) { prompt('Copy this link:', b.dataset.link); }
+        };
+      });
+      // Reopen an earlier draft — to pin one that was never placed, or to fix a
+      // detail before sending. Without this a draft that missed its geocode was
+      // stranded: the token existed, but nothing could edit the row behind it.
+      el.querySelectorAll('.in-open').forEach(function (b) {
+        b.onclick = function () {
+          b.textContent = 'Opening…';
+          intakeCall('get', { id: b.dataset.id }).then(function (r) {
+            b.textContent = 'Open';
+            if (r.error || !r.draft) { b.textContent = 'Failed'; return; }
+            intakeDraft = r.draft;
+            renderIntakeDraft();
+            const p = intakeDraft.payload || {};
+            if (p.lat == null) intakeGeocode();       // the usual reason for reopening
+            const res = document.getElementById('in-result');
+            if (res) res.scrollIntoView({ block: 'start', behavior: 'smooth' });
+          });
         };
       });
     }, function () { el.innerHTML = '<span class="ad-hint">List unavailable.</span>'; });

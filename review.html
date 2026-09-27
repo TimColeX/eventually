@@ -106,6 +106,18 @@
     var p = draft.payload || {};
     var warn = (draft.warnings || []).map(function (w) { return '<div class="note">' + esc(w) + '</div>'; }).join('');
 
+    /* A draft with no pin cannot be published, and the organiser has no way to add
+       one — there is no map on this page, deliberately. Say so plainly here rather
+       than letting them fill everything in and hit a button that always fails. */
+    if (p.lat == null || p.lon == null) {
+      main.innerHTML = '<h1>Nearly there</h1>' +
+        '<p class="lede">We’ve got your event, but we still need to place ' +
+        esc(p.venue || 'the venue') + ' on the map before it can go live.</p>' +
+        '<p class="lede">Whoever sent you this link is sorting that out — reply to them ' +
+        'and they’ll send a fresh one. Nothing you’ve done is lost.</p>';
+      return;
+    }
+
     main.innerHTML =
       '<h1>Is this right?</h1>' +
       '<p class="lede">We read this off your poster. Fix anything that’s wrong, then publish it — ' +
