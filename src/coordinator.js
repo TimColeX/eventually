@@ -446,6 +446,26 @@
       const b = e.target.closest('[data-me-act]'); if (!b) return;
       const id = b.dataset.id, act = b.dataset.meAct;
       const ev = (self._myEvents || []).find(function (x) { return x.event_id === id; });
+      /* THEIR LINK AND QR CODE. Looked up, never computed: a city slug is
+         disambiguated across the whole build (London, Canada → `london-ca`), so only
+         the generator knows an event's real path — see src/share.js. A page that is
+         not in that index yet has not been rebuilt, and saying so is better than
+         handing someone a QR code that scans to a 404 on a printed flyer. */
+      if (act === 'share') {
+        const box = container.querySelector('[data-sharefor="' + id + '"]');
+        if (!box) return;
+        if (!box.hidden) { box.hidden = true; return; }
+        box.hidden = false;
+        box.innerHTML = '<small class="an-reason">Finding your page…</small>';
+        if (!global.EventuallyShare) { box.innerHTML = '<small class="an-reason">Unavailable right now.</small>'; return; }
+        global.EventuallyShare.panel(box, { eventId: id }).then(function (url) {
+          if (!url) {
+            box.innerHTML = '<small class="an-reason">Your page is built a few times a day — ' +
+              'it should be here within a few hours of going live.</small>';
+          }
+        }, function () { box.innerHTML = '<small class="an-reason">Couldn\'t load that.</small>'; });
+        return;
+      }
       if (act === 'edit') { if (ev) { self._meClose(); self.open(); self._editEvent(ev); } }
       /* DUPLICATE — the same event on another date. Everything is carried over EXCEPT
          the date and the identity, so this becomes a new event (and a new slot), not an
@@ -1210,6 +1230,11 @@
           '<div class="an-r-actions">' +
             '<button class="an-act" data-me-act="edit" data-id="' + esc(e.event_id) + '">Edit</button>' +
             '<button class="an-act" data-me-act="duplicate" data-id="' + esc(e.event_id) + '">Duplicate</button>' +
+            // Their page and a QR for it. Only offered once the event is approved and on
+            // the globe, because only then does the page exist to point at.
+            (mod === 'approved' && pub
+              ? '<button class="an-act" data-me-act="share" data-id="' + esc(e.event_id) + '">Link &amp; QR</button>'
+              : '') +
             // "Remove from globe" replaces Delete: the listing comes off the map but the
             // record (and the posting slot it used) stays. Permanent deletion is admin-only —
             // otherwise publish → delete → publish would loop around the yearly limit.
@@ -1221,6 +1246,7 @@
                   'Registrations (' + (+e.registered || 0) + ')</button>'
               : '') +
           '</div>' +
+          '<div class="an-share" data-sharefor="' + esc(e.event_id) + '" hidden></div>' +
           (e.collect_registrations ? '<div class="an-reg" data-regfor="' + esc(e.event_id) + '" hidden></div>' : '') +
           // Live updates. Stays hidden unless this event's window is open, so a
           // publisher with ten listings sees a composer only on the one running

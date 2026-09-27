@@ -788,6 +788,7 @@ function sitemap(list, eventPages) {
   const eventsDir = path.join(OUT_ROOT, 'events');
   fs.mkdirSync(eventsDir, { recursive: true });
   const nativePages = [];        // filled per city below, then handed to the sitemap
+  const nativeIndex = {};        // event_id -> its page path, written as events/native.json
 
   publish.forEach((c) => {
     // Nearby = closest other published cities, so crawlers can walk the whole set.
@@ -814,6 +815,16 @@ function sitemap(list, eventPages) {
       fs.mkdirSync(edir, { recursive: true });
       fs.writeFileSync(path.join(edir, 'index.html'), eventPage(e, c), 'utf8');
       nativePages.push({ loc: `${SITE}/events/${c.slug}/${eventSlug(e)}/`, start: e.start_time });
+      // The id → path map the app uses to find an event's page.
+      //
+      // It exists because the path CANNOT be recomputed elsewhere: a city slug is
+      // disambiguated against every other city in the build (London, Canada becomes
+      // `london-ca`), so only the generator knows it. A client that guessed would send
+      // an organiser's QR code to a 404 for exactly the cities that need the suffix.
+      //
+      // Being absent from this file is also the honest answer to "is my page live
+      // yet?" — a just-published event is not in here until the next rebuild.
+      nativeIndex[e.event_id] = `/events/${c.slug}/${eventSlug(e)}/`;
     });
   });
 
@@ -843,6 +854,8 @@ function sitemap(list, eventPages) {
   fs.mkdirSync(path.join(OUT_ROOT, 'browse'), { recursive: true });
   fs.writeFileSync(path.join(OUT_ROOT, 'browse', 'index.html'), browseIndex(publish), 'utf8');
   fs.writeFileSync(path.join(OUT_ROOT, 'sitemap.xml'), sitemap(publish, nativePages), 'utf8');
+  // Small on purpose: native events only, which is a handful, not the 58,000 imported ones.
+  fs.writeFileSync(path.join(eventsDir, 'native.json'), JSON.stringify(nativeIndex), 'utf8');
   fs.writeFileSync(path.join(OUT_ROOT, 'robots.txt'),
     `User-agent: *\nAllow: /\n\nSitemap: ${SITE}/sitemap.xml\n`, 'utf8');
 

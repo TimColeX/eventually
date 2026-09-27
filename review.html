@@ -49,6 +49,19 @@
   .say.bad { color: #ff9b84; }
   .done { text-align: center; padding: 26px 8px; }
   .done .tick { font-size: 44px; line-height: 1; }
+  /* The share panel (src/share.js). The QR stays on white whatever the theme —
+     a dark code on a dark ground does not scan, and this one is for paper. */
+  .sh-wrap { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; text-align: left; }
+  .sh-qr { background: #fff; padding: 8px; border-radius: 10px; line-height: 0; flex: 0 0 auto; }
+  .sh-qr img, .sh-qr canvas { display: block; width: 160px; height: 160px; }
+  .sh-side { flex: 1 1 180px; min-width: 0; }
+  .sh-url { width: 100%; font-family: var(--mono); font-size: 12px; padding: 9px 10px;
+            border: 1px solid var(--line); border-radius: 9px; background: #14100c; color: var(--ink); }
+  .sh-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .sh-btn { display: inline-block; font: 600 13px var(--font); padding: 9px 14px; border-radius: 9px;
+            border: 1px solid var(--line); background: #241d16; color: var(--ink);
+            cursor: pointer; text-decoration: none; }
+  .sh-btn:hover { border-color: var(--clay); }
   a { color: var(--clay); }
   .foot { color: #6f665a; font-size: 12px; text-align: center; margin: 26px 0 0; }
 </style>
@@ -61,6 +74,7 @@
 </div>
 
 <script src="config.js"></script>
+<script src="src/share.js"></script>
 <script>
 /* The organiser's whole involvement: open a link, read it, press one button.
    No account, no password, no app. The token in the URL is a capability that opens
@@ -180,10 +194,27 @@
         '<h1 style="margin:10px 0 6px">You’re on Eventually</h1>' +
         '<p class="lede" style="margin-bottom:18px">' + esc(p.name || 'Your event') + ' is in. ' +
           'We check new listings before they appear on the globe — that’s usually quick.</p>' +
-        '<p><a href="/' + (where ? '?city=' + encodeURIComponent(where) : '') + '">See it on the globe</a></p>' +
-        (where ? '<p class="lede" style="font-size:14px">It will also show on the ' + esc(where) +
-                 ' page, which is the one Google indexes.</p>' : '') +
+        '<div id="share"><p class="lede" style="font-size:14px">Looking for your page…</p></div>' +
+        '<p style="margin-top:16px"><a href="/' + (where ? '?city=' + encodeURIComponent(where) : '') + '">See it on the globe</a></p>' +
       '</div>';
+
+    /* Their page and its QR code — the reason to have bothered. It does not exist the
+       instant they press Publish: the event waits for review, and the pages are rebuilt
+       every few hours. So say that plainly and tell them this same link will have it,
+       rather than showing a QR code that would scan to a 404 on a flyer. */
+    var box = document.getElementById('share');
+    if (!eventId || !window.EventuallyShare) { box.innerHTML = ''; return; }
+    window.EventuallyShare.panel(box, { eventId: eventId }).then(function (url) {
+      if (url) {
+        box.insertAdjacentHTML('afterbegin',
+          '<p class="lede" style="font-size:14px;text-align:left">Your page is live. ' +
+          'Share the link, or put the code on a flyer.</p>');
+      } else {
+        box.innerHTML = '<p class="lede" style="font-size:14px">We’re building your event’s own page ' +
+          '— with your poster on it, and a QR code for flyers. ' +
+          '<b>Keep this link and come back in a few hours</b> to pick them up.</p>';
+      }
+    }, function () { box.innerHTML = ''; });
   }
 })();
 </script>

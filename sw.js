@@ -22,7 +22,7 @@
  * and index.html's build stamp, which is what lets a running app notice a
  * deploy at all. Bumping this constant by hand leaves those two behind.
  */
-const CACHE = 'eventually-v247';
+const CACHE = 'eventually-v248';
 const ASSETS = [
   './', './index.html', './styles/main.css', './config.js',
   // The organiser's page. Precached too: it is a real page of the app (the publish form
@@ -31,7 +31,7 @@ const ASSETS = [
   './publish.html', './styles/publish.css', './src/publish.js',
   './src/tz.js', './src/dedup.js', './src/data.js', './src/api.js', './src/auth.js', './src/billing.js', './src/subscriptions.js', './src/signature.js', './src/geo.js', './src/hostvoice.js', './src/landdata.js', './src/profile.js', './src/reminders.js', './src/monetize.js', './src/weather.js',
   './src/i18n.js', './src/narrator.js', './src/music.js', './src/globe.js', './src/timeline.js',
-  './src/aihost.js', './src/tour.js', './src/updates.js', './src/coordinator.js', './src/app.js',
+  './src/aihost.js', './src/tour.js', './src/updates.js', './src/coordinator.js', './src/share.js', './src/app.js',
   './manifest.webmanifest', './assets/icon.svg'
 ];
 

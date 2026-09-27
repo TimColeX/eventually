@@ -1818,3 +1818,23 @@ body.no-timeline.has-ad .legend { bottom: calc(138px + env(safe-area-inset-botto
 .an-reg-t td { padding: 6px 8px 6px 0; border-bottom: 1px solid var(--line); color: var(--ink);
   word-break: break-word; }
 .an-reg-note { margin: 9px 0 0; font-size: 11px; color: var(--hint); line-height: 1.5; }
+
+/* ── THE ORGANISER'S SHARE PANEL (src/share.js) ──────────────────────────────
+   Their event's link and a QR code for it. The QR sits on white whatever the
+   theme is: a dark QR on a dark ground does not scan, and this one is meant to
+   end up on paper. */
+.sh-wrap { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
+.sh-qr { background: #fff; padding: 8px; border-radius: 10px; line-height: 0; flex: 0 0 auto; }
+.sh-qr img, .sh-qr canvas { display: block; width: 160px; height: 160px; }
+.sh-side { flex: 1 1 180px; min-width: 0; }
+.sh-url {
+  width: 100%; font-family: var(--mono); font-size: 12.5px; padding: 9px 10px;
+  border: 1px solid var(--line); border-radius: 9px; background: var(--bg2); color: var(--ink);
+}
+.sh-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.sh-btn {
+  display: inline-block; font: 600 13px var(--font); padding: 8px 13px; border-radius: 9px;
+  border: 1px solid var(--line-2); background: var(--sand); color: var(--ink);
+  cursor: pointer; text-decoration: none;
+}
+.sh-btn:hover { background: var(--tint); }
