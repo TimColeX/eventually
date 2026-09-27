@@ -73,6 +73,7 @@
   <p class="foot">Eventually · <a href="/">eventually-app.com</a></p>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
 <script src="src/share.js"></script>
 <script>
@@ -106,7 +107,10 @@
 
   if (!/^[0-9a-f]{32}$/.test(token)) { oops('The link is incomplete — it may have been cut short when it was sent.'); return; }
 
-  call('get').then(function (r) {
+  /* If they are arriving back from the emailed sign-in link, finish the handover
+     BEFORE fetching the draft — so the page they land on already says the event is
+     theirs, rather than offering again to give them something they now own. */
+  finishClaimIfSignedIn().then(function () { return call('get'); }).then(function (r) {
     if (r.error || !r.draft) {
       return oops(r.error === 'not_found' ? 'We can’t find this event. The link may have expired.' : 'Something went wrong at our end.');
     }
@@ -203,18 +207,93 @@
        every few hours. So say that plainly and tell them this same link will have it,
        rather than showing a QR code that would scan to a 404 on a flyer. */
     var box = document.getElementById('share');
-    if (!eventId || !window.EventuallyShare) { box.innerHTML = ''; return; }
-    window.EventuallyShare.panel(box, { eventId: eventId }).then(function (url) {
-      if (url) {
-        box.insertAdjacentHTML('afterbegin',
-          '<p class="lede" style="font-size:14px;text-align:left">Your page is live. ' +
-          'Share the link, or put the code on a flyer.</p>');
-      } else {
-        box.innerHTML = '<p class="lede" style="font-size:14px">We’re building your event’s own page ' +
-          '— with your poster on it, and a QR code for flyers. ' +
-          '<b>Keep this link and come back in a few hours</b> to pick them up.</p>';
+    if (!eventId || !window.EventuallyShare) { box.innerHTML = ''; }
+    else {
+      window.EventuallyShare.panel(box, { eventId: eventId }).then(function (url) {
+        if (url) {
+          box.insertAdjacentHTML('afterbegin',
+            '<p class="lede" style="font-size:14px;text-align:left">Your page is live. ' +
+            'Share the link, or put the code on a flyer.</p>');
+        } else {
+          box.innerHTML = '<p class="lede" style="font-size:14px">We’re building your event’s own page ' +
+            '— with your poster on it, and a QR code for flyers. ' +
+            '<b>Keep this link and come back in a few hours</b> to pick them up.</p>';
+        }
+      }, function () { box.innerHTML = ''; });
+    }
+    claimBlock();
+  }
+
+  /* ── TAKING OWNERSHIP ──────────────────────────────────────────────────────
+     Until this happens the event belongs to whoever ran the intake. The organiser
+     cannot edit it, it is missing from Your Events, and the "you're live" email
+     never reaches them. This is the step that makes it theirs.
+
+     The account is asked for LAST, on purpose — after the event exists and they can
+     see what they have. Asking first is the barrier that made them say "I'll do it
+     later" in the first place. */
+  function claimBlock() {
+    var host = document.createElement('div');
+    host.id = 'claim';
+    main.querySelector('.card').appendChild(host);
+
+    if (draft && draft.claimed) {
+      host.innerHTML = '<hr style="border:none;border-top:1px solid var(--line);margin:22px 0">' +
+        '<p class="lede" style="font-size:14px;margin:0">This event is yours. ' +
+        'Sign in at <a href="/publish.html">your events page</a> to edit it any time.</p>';
+      return;
+    }
+    if (!window.supabase || !cfg.supabaseUrl) return;   // no client → skip silently
+
+    host.innerHTML =
+      '<hr style="border:none;border-top:1px solid var(--line);margin:22px 0">' +
+      '<p class="lede" style="font-size:14.5px;text-align:left;margin:0 0 10px">' +
+        '<b>Want to manage it yourself?</b> Take ownership and you can edit the details, ' +
+        'swap the picture, or take it off the globe — any time.</p>' +
+      '<div class="f" style="text-align:left"><label>Your email</label>' +
+        '<input id="c-email" type="email" autocomplete="email" value="' +
+          esc((draft && draft.organiser_email) || '') + '"></div>' +
+      '<button class="go" id="c-go">Email me a sign-in link</button>' +
+      '<p class="say" id="c-say"></p>';
+
+    document.getElementById('c-go').onclick = function () {
+      var email = (document.getElementById('c-email').value || '').trim();
+      var say = document.getElementById('c-say');
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+        say.className = 'say bad'; say.textContent = 'That doesn’t look like an email address.'; return;
       }
-    }, function () { box.innerHTML = ''; });
+      this.disabled = true; say.className = 'say'; say.textContent = 'Sending…';
+      var btn = this;
+      // The link comes back to THIS page, token and all, so the claim can finish
+      // itself the moment they return. Nothing to remember, nothing to paste.
+      sb().auth.signInWithOtp({ email: email, options: { emailRedirectTo: location.href } })
+        .then(function (r) {
+          btn.disabled = false;
+          if (r && r.error) { say.className = 'say bad'; say.textContent = r.error.message; return; }
+          say.textContent = 'Check ' + email + ' — the link brings you straight back here.';
+        });
+    };
+  }
+
+  var _sb = null;
+  function sb() {
+    if (!_sb) _sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey,
+      { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+    return _sb;
+  }
+
+  // Returning from the emailed link: finish the handover without being asked twice.
+  function finishClaimIfSignedIn() {
+    if (!window.supabase || !cfg.supabaseUrl) return Promise.resolve(false);
+    return sb().auth.getSession().then(function (r) {
+      var tok = r && r.data && r.data.session && r.data.session.access_token;
+      if (!tok) return false;
+      return fetch(FN, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: cfg.supabaseAnonKey, Authorization: 'Bearer ' + tok },
+        body: JSON.stringify({ action: 'claim', token: token })
+      }).then(function (res) { return res.json(); }).then(function (j) { return !!(j && j.ok); });
+    }, function () { return false; });
   }
 })();
 </script>
