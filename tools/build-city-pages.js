@@ -592,7 +592,12 @@ function eventSlug(e) {
   return base + '-' + tail;
 }
 
-function eventPage(e, city) {
+function eventPage(e, city, cityPage) {
+  // cityPage === false when this city has no index page of its own (too few events
+  // to earn one) — see the second pass in the build. Defaults true so the main loop
+  // reads exactly as it did.
+  if (cityPage === undefined) cityPage = true;
+  const cityHref = cityPage ? `/events/${city.slug}/` : `/?city=${encodeURIComponent(e.city || '')}`;
   const url = `${SITE}/events/${city.slug}/${eventSlug(e)}/`;
   const when = fmtWhen(e.start_time, e.timezone);
   const place = [e.venue, e.address].filter(Boolean).join(', ');
@@ -693,7 +698,7 @@ ${desc ? '  <p>' + esc(desc) + '</p>\n' : ''}
 ${ticket ? `    <a class="cta" href="${esc(ticket)}" rel="noopener">Get tickets</a>\n` : ''}    <a class="cta${ticket ? ' ghost' : ''}" href="/?city=${encodeURIComponent(e.city || '')}">See it on the globe</a>
   </p>
   <hr>
-  <p class="muted">More of what's on in <a href="/events/${city.slug}/">${esc(e.city)}</a> ·
+  <p class="muted">More of what's on in <a href="${cityHref}">${esc(e.city)}</a> ·
      <a href="/browse/">All cities</a></p>
   <p class="muted">Organising something? <a href="/publish.html">Publish it on Eventually</a> — it appears on the globe
      and gets a page like this one.</p>
@@ -705,7 +710,7 @@ ${ticket ? `    <a class="cta" href="${esc(ticket)}" rel="noopener">Get tickets<
     if (isNaN(ends) || ends.getTime() > Date.now()) return;
     var o = document.getElementById('over');
     o.innerHTML = 'This event has finished. ' +
-      '<a href="/events/${city.slug}/">See what else is on in ${esc(e.city)}</a>.';
+      '<a href="${cityHref}">See what else is on in ${esc(e.city)}</a>.';
     o.hidden = false;
   })();
 </script>
@@ -824,6 +829,30 @@ function sitemap(list, eventPages) {
       //
       // Being absent from this file is also the honest answer to "is my page live
       // yet?" — a just-published event is not in here until the next rebuild.
+      nativeIndex[e.event_id] = `/events/${c.slug}/${eventSlug(e)}/`;
+    });
+  });
+
+  /* NATIVE EVENTS IN CITIES THAT DON'T HAVE A CITY PAGE.
+   *
+   * City pages are only built for places with enough events and enough venues to be
+   * worth a page — which is right for an SEO landing page and wrong for an
+   * organiser. The first real test published into Abuja, which has one event and no
+   * city page, so no event page was generated: no link, no QR, nothing to send.
+   * Their event became the one thing this feature exists to prevent.
+   *
+   * An organiser's event gets a page wherever it is. The city index above it may not
+   * exist, so `cityPage: false` points the "more in <city>" link at the globe
+   * instead of at a 404.
+   */
+  const covered = new Set(publish.map((c) => c.slug));
+  all.forEach((c) => {
+    if (covered.has(c.slug)) return;
+    c.events.filter((e) => e.is_native).forEach((e) => {
+      const edir = path.join(eventsDir, c.slug, eventSlug(e));
+      fs.mkdirSync(edir, { recursive: true });
+      fs.writeFileSync(path.join(edir, 'index.html'), eventPage(e, c, false), 'utf8');
+      nativePages.push({ loc: `${SITE}/events/${c.slug}/${eventSlug(e)}/`, start: e.start_time });
       nativeIndex[e.event_id] = `/events/${c.slug}/${eventSlug(e)}/`;
     });
   });

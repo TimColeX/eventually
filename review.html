@@ -38,6 +38,9 @@
   textarea { min-height: 96px; resize: vertical; }
   .row { display: flex; gap: 10px; }
   .row .f { flex: 1; min-width: 0; }
+  .fixed { margin: 0; padding: 11px 12px; border: 1px dashed var(--line); border-radius: 10px;
+           background: #14100c; color: var(--ink); }
+  .hint { display: block; color: var(--muted); font-size: 12.5px; margin-top: 6px; }
   .note { background: #241d16; border: 1px solid #4a3a24; border-radius: 12px;
           padding: 12px 14px; margin: 0 0 16px; color: var(--warn); font-size: 14.5px; }
   .note b { color: #f0d9a8; }
@@ -148,8 +151,15 @@
           '<div class="f"><label>Date</label><input id="f-date" type="date" value="' + esc(p.date) + '"></div>' +
           '<div class="f"><label>Starts</label><input id="f-start" type="time" value="' + esc(p.start) + '"></div>' +
         '</div>' +
-        '<div class="f"><label>Venue</label><input id="f-venue" value="' + esc(p.venue) + '"></div>' +
-        '<div class="f"><label>City</label><input id="f-city" value="' + esc(p.city) + '"></div>' +
+        /* Venue and city are SHOWN, not edited. They decide where the pin goes, and
+           there is no map on this page to move it — so editing them here would leave
+           the event at the old coordinates wearing a new label, which is exactly the
+           bug that put an "abuja" event over Saskatchewan. If they are wrong, the
+           person who sent the link has to re-pin it. */
+        '<div class="f"><label>Where</label>' +
+          '<p class="fixed">' + esc([p.venue, p.city].filter(Boolean).join(' · ') || 'Not set') + '</p>' +
+          '<span class="hint">Wrong place? Reply to whoever sent you this link and they’ll fix it — ' +
+          'it decides where your event sits on the globe.</span></div>' +
         '<div class="f"><label>What it is</label><textarea id="f-description">' + esc(p.description) + '</textarea></div>' +
         '<div class="row">' +
           '<div class="f"><label>Price</label><input id="f-price_text" value="' + esc(p.price_text) + '"></div>' +
@@ -165,7 +175,9 @@
   function publish() {
     var btn = document.getElementById('go'), say = document.getElementById('say');
     var p = Object.assign({}, draft.payload || {});
-    ['name', 'date', 'start', 'venue', 'city', 'description', 'price_text', 'ticket_url'].forEach(function (k) {
+    // venue and city are intentionally absent: they are display-only here, because
+    // this page cannot move the map pin that depends on them.
+    ['name', 'date', 'start', 'description', 'price_text', 'ticket_url'].forEach(function (k) {
       var el = document.getElementById('f-' + k);
       if (el) p[k] = el.value.trim() || null;
     });

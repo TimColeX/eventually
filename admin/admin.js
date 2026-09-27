@@ -849,6 +849,15 @@
      them. The last step is the city itself, which always resolves and puts the event
      in the right place on the globe even when the venue cannot be found at all.
      Anything approximate says so, because a silent city-centre pin is a wrong pin. */
+  // The identity of a pinned place: change either part and the old coordinates are
+  // no longer an answer to the question being asked.
+  function geoFor(p) {
+    return String((p.venue || '') + '|' + (p.city || '')).trim().toLowerCase();
+  }
+  function intakePinned(p) {
+    return p && p.lat != null && p.lon != null && p.geo_for === geoFor(p);
+  }
+
   function intakeGeoQueries(p) {
     const qs = [];
     const city = (p.city || '').trim();
@@ -896,6 +905,13 @@
           const g = window.EventuallyTZ.guess(r.countryCode);
           p.timezone = (g && g.zone) || p.timezone || null;
         }
+        /* Remember WHAT was pinned, not just where. Editing the city afterwards used to
+           leave the old coordinates in place, and the first test of this shipped an event
+           labelled "abuja" sitting at Regina's coordinates, with Canada as its country and
+           America/Regina as its timezone. It was on the globe — over Saskatchewan — so it
+           looked missing. A pin has to be invalidated when the place it was found for
+           changes. */
+        p.geo_for = geoFor(p);
         intakeDraft.payload = p;
         const cityOnly = q === (p.city || '').trim();
         out.innerHTML = (cityOnly ? '<b style="color:#8a6d1e">Approximate</b> — pinned on ' + esc(q) +
@@ -911,6 +927,11 @@
     const out = document.getElementById('in-link-out');
     const p = intakeCollect();
     if (p.lat == null) { out.textContent = 'Find the place on the map first.'; out.style.color = '#b3402a'; return; }
+    if (!intakePinned(p)) {
+      out.textContent = 'The venue or city changed since you pinned it — press "Find this place" again.';
+      out.style.color = '#b3402a';
+      return;
+    }
     out.style.color = ''; out.textContent = 'Saving…';
     intakeDraft.payload = p;
     intakeCall('save', { id: intakeDraft.id, payload: p,
@@ -945,7 +966,7 @@
         // A draft with no pin cannot be published, so its link must not be sendable.
         // The token exists from the moment of extraction, which is why this guard
         // lives here and not only on the Create button.
-        const pinned = p.lat != null && p.lon != null;
+        const pinned = intakePinned(p);   // pinned AND still pinned to what it says
         return '<div class="ad-li"><span><b>' + esc(p.name || '(unnamed)') + '</b> · ' + esc(when) +
           ' · ' + esc(p.city || '—') + ' · <b>' + esc(d.status) + '</b>' +
           (d.organiser_email ? ' · ' + esc(d.organiser_email) : '') +
