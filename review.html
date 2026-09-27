@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Review your event — Eventually</title>
+<meta name="description" content="Check your event details and publish them to Eventually.">
+<!-- A private link. It must never be indexed, and it must not leak in a referrer. -->
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap">
+<style>
+  :root {
+    color-scheme: dark;
+    --font: 'Sora', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --mono: 'Space Mono', ui-monospace, 'SFMono-Regular', monospace;
+    --bg: #14100c; --panel: #1d1812; --line: #2e2820; --ink: #ece5da;
+    --muted: #9a8f80; --clay: #CB5A3C; --warn: #e2c489;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 var(--font); }
+  .wrap { max-width: 560px; margin: 0 auto; padding: 28px 18px 64px; }
+  .brand { font-weight: 700; letter-spacing: -.02em; }
+  .brand span { color: var(--clay); }
+  h1 { font-size: 1.5rem; margin: 18px 0 6px; letter-spacing: -.02em; text-wrap: balance; }
+  .lede { color: var(--muted); margin: 0 0 22px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
+  .poster { width: 100%; border-radius: 12px; display: block; margin: 0 0 16px; }
+  label { display: block; font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em;
+          text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+  .f { margin: 0 0 14px; }
+  input, textarea, select {
+    width: 100%; background: #14100c; border: 1px solid var(--line); border-radius: 10px;
+    color: var(--ink); font: 16px/1.5 var(--font); padding: 11px 12px;   /* 16px stops iOS zooming on focus */
+  }
+  textarea { min-height: 96px; resize: vertical; }
+  .row { display: flex; gap: 10px; }
+  .row .f { flex: 1; min-width: 0; }
+  .note { background: #241d16; border: 1px solid #4a3a24; border-radius: 12px;
+          padding: 12px 14px; margin: 0 0 16px; color: var(--warn); font-size: 14.5px; }
+  .note b { color: #f0d9a8; }
+  .go { width: 100%; background: var(--clay); color: #fff; border: 0; border-radius: 12px;
+        padding: 15px; font: 700 16px var(--font); cursor: pointer; margin-top: 4px; }
+  .go:hover { background: #b94e32; }
+  .go[disabled] { opacity: .55; cursor: default; }
+  .say { text-align: center; color: var(--muted); font-size: 14px; margin: 12px 0 0; min-height: 20px; }
+  .say.bad { color: #ff9b84; }
+  .done { text-align: center; padding: 26px 8px; }
+  .done .tick { font-size: 44px; line-height: 1; }
+  a { color: var(--clay); }
+  .foot { color: #6f665a; font-size: 12px; text-align: center; margin: 26px 0 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">eventually<span>.</span></div>
+  <div id="main"><p class="lede" style="margin-top:22px">Loading your event…</p></div>
+  <p class="foot">Eventually · <a href="/">eventually-app.com</a></p>
+</div>
+
+<script src="config.js"></script>
+<script>
+/* The organiser's whole involvement: open a link, read it, press one button.
+   No account, no password, no app. The token in the URL is a capability that opens
+   exactly one draft and can do nothing else — see backend/103_intake_drafts.sql. */
+(function () {
+  'use strict';
+  var cfg = window.EVENTUALLY_CONFIG || {};
+  var FN = String(cfg.supabaseUrl || '').replace(/\/+$/, '') + '/functions/v1/intake';
+  var token = (new URLSearchParams(location.search).get('t') || '').trim();
+  var main = document.getElementById('main');
+  var draft = null;
+
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (m) {
+    return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[m]; }); }
+
+  function call(action, extra) {
+    return fetch(FN, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: cfg.supabaseAnonKey },
+      body: JSON.stringify(Object.assign({ action: action, token: token }, extra || {}))
+    }).then(function (r) { return r.json().catch(function () { return { error: 'http_' + r.status }; }); });
+  }
+
+  function oops(msg) {
+    main.innerHTML = '<h1>This link isn’t working</h1><p class="lede">' + esc(msg) + '</p>' +
+      '<p class="lede">Ask whoever sent it for a fresh one, or ' +
+      '<a href="/publish.html">publish your event yourself</a>.</p>';
+  }
+
+  if (!/^[0-9a-f]{32}$/.test(token)) { oops('The link is incomplete — it may have been cut short when it was sent.'); return; }
+
+  call('get').then(function (r) {
+    if (r.error || !r.draft) {
+      return oops(r.error === 'not_found' ? 'We can’t find this event. The link may have expired.' : 'Something went wrong at our end.');
+    }
+    draft = r.draft;
+    if (draft.status === 'published') return published(draft.event_id);
+    if (draft.status === 'expired') return oops('This link has expired.');
+    form();
+  }, function () { oops('We couldn’t reach Eventually. Check your connection and try again.'); });
+
+  function form() {
+    var p = draft.payload || {};
+    var warn = (draft.warnings || []).map(function (w) { return '<div class="note">' + esc(w) + '</div>'; }).join('');
+
+    main.innerHTML =
+      '<h1>Is this right?</h1>' +
+      '<p class="lede">We read this off your poster. Fix anything that’s wrong, then publish it — ' +
+      'it goes on the globe, gets its own page, and our AI host reads it out to people nearby.</p>' +
+      '<div class="card">' +
+        (draft.poster_url ? '<img class="poster" src="' + esc(draft.poster_url) + '" alt="">' : '') +
+        warn +
+        '<div class="f"><label>Event name</label><input id="f-name" value="' + esc(p.name) + '"></div>' +
+        '<div class="row">' +
+          '<div class="f"><label>Date</label><input id="f-date" type="date" value="' + esc(p.date) + '"></div>' +
+          '<div class="f"><label>Starts</label><input id="f-start" type="time" value="' + esc(p.start) + '"></div>' +
+        '</div>' +
+        '<div class="f"><label>Venue</label><input id="f-venue" value="' + esc(p.venue) + '"></div>' +
+        '<div class="f"><label>City</label><input id="f-city" value="' + esc(p.city) + '"></div>' +
+        '<div class="f"><label>What it is</label><textarea id="f-description">' + esc(p.description) + '</textarea></div>' +
+        '<div class="row">' +
+          '<div class="f"><label>Price</label><input id="f-price_text" value="' + esc(p.price_text) + '"></div>' +
+          '<div class="f"><label>Tickets link</label><input id="f-ticket_url" value="' + esc(p.ticket_url) + '"></div>' +
+        '</div>' +
+        '<button class="go" id="go">Publish my event</button>' +
+        '<p class="say" id="say"></p>' +
+      '</div>';
+
+    document.getElementById('go').onclick = publish;
+  }
+
+  function publish() {
+    var btn = document.getElementById('go'), say = document.getElementById('say');
+    var p = Object.assign({}, draft.payload || {});
+    ['name', 'date', 'start', 'venue', 'city', 'description', 'price_text', 'ticket_url'].forEach(function (k) {
+      var el = document.getElementById('f-' + k);
+      if (el) p[k] = el.value.trim() || null;
+    });
+    btn.disabled = true; say.className = 'say'; say.textContent = 'Publishing…';
+
+    // Saved first, then published, so what goes live is exactly what is on screen.
+    call('save', { payload: p }).then(function (r) {
+      if (r.error) throw new Error(r.error);
+      return call('publish');
+    }).then(function (r) {
+      if (r.error) {
+        btn.disabled = false;
+        say.className = 'say bad';
+        say.textContent = r.missing ? 'Still needs ' + r.missing.join(', ') + '.' : 'That didn’t work: ' + r.error;
+        return;
+      }
+      published(r.event_id, r.city);
+    }).catch(function (e) {
+      btn.disabled = false; say.className = 'say bad';
+      say.textContent = 'That didn’t work: ' + (e.message || e);
+    });
+  }
+
+  function published(eventId, city) {
+    var p = (draft && draft.payload) || {};
+    var where = city || p.city;
+    main.innerHTML =
+      '<div class="card done">' +
+        '<div class="tick">✓</div>' +
+        '<h1 style="margin:10px 0 6px">You’re on Eventually</h1>' +
+        '<p class="lede" style="margin-bottom:18px">' + esc(p.name || 'Your event') + ' is in. ' +
+          'We check new listings before they appear on the globe — that’s usually quick.</p>' +
+        '<p><a href="/' + (where ? '?city=' + encodeURIComponent(where) : '') + '">See it on the globe</a></p>' +
+        (where ? '<p class="lede" style="font-size:14px">It will also show on the ' + esc(where) +
+                 ' page, which is the one Google indexes.</p>' : '') +
+      '</div>';
+  }
+})();
+</script>
+</body>
+</html>

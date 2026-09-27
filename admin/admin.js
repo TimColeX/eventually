@@ -87,6 +87,7 @@
     main.innerHTML =
       '<div class="ad-tabs">' +
         tabBtn('overview', 'Overview') + tabBtn('review', 'Review Events') +
+        tabBtn('intake', 'Poster Intake') +
         tabBtn('affiliate', 'Affiliate') + tabBtn('host', 'AI Host') +
         tabBtn('globe', 'Globe & Display') + tabBtn('publishing', 'Publishing') +
       '</div><div id="ad-body"></div>';
@@ -98,6 +99,7 @@
     const body = document.getElementById('ad-body');
     if (tab === 'overview') renderOverview(body);
     else if (tab === 'review') renderReview(body);
+    else if (tab === 'intake') renderIntake(body);
     else if (tab === 'affiliate') renderAffiliate(body);
     else if (tab === 'host') renderHost(body);
     else if (tab === 'publishing') renderPublishing(body);
@@ -647,6 +649,265 @@
       return sb.from('app_config').update({ config: c, updated_at: new Date().toISOString() }).eq('id', 1);
     });
   }
+  /* ================= AI POSTER INTAKE =======================================
+     An organiser who already has a poster says "I'll do it later" and never comes
+     back. The form was never the obstacle — doing the work twice is. So we take the
+     poster they already have, read it once, and send them a link: check this, press
+     Publish. Their whole effort is opening a link.
+
+     Deliberately admin-only for now. That removes the account barrier entirely (the
+     organiser never signs up), and it means no public upload endpoint, no rate
+     limiting, no abuse surface — the smallest thing that tests whether organisers
+     will say yes when the work is already done for them. */
+  const INTAKE_FN = cfg.supabaseUrl.replace(/\/+$/, '') + '/functions/v1/intake';
+  const INTAKE_CATS = ['Music', 'Tech', 'Business', 'Arts', 'Food & Drink',
+                       'Sports', 'Film & Media', 'Community', 'Nightlife', 'Comedy'];
+  let intakeDraft = null;      // the draft being worked on, or null
+  let intakeShots = [];        // { url, path } for each uploaded image
+
+  // Downscale before upload. Two reasons, and the second is the one that matters:
+  // the model is billed by image size, and canvas re-encoding strips EXIF, so a
+  // phone photo's GPS coordinates never leave the device.
+  function intakeShrink(file) {
+    return new Promise(function (resolve, reject) {
+      const done = function (src, w0, h0) {
+        const s = Math.min(1, 1400 / Math.max(w0, h0));
+        const w = Math.max(1, Math.round(w0 * s)), h = Math.max(1, Math.round(h0 * s));
+        const c = document.createElement('canvas'); c.width = w; c.height = h;
+        c.getContext('2d').drawImage(src, 0, 0, w, h);
+        c.toBlob(function (b) { b ? resolve(b) : reject(new Error('encode')); }, 'image/jpeg', 0.85);
+      };
+      if (window.createImageBitmap) {
+        createImageBitmap(file, { imageOrientation: 'from-image' })
+          .then(function (bm) { done(bm, bm.width, bm.height); bm.close && bm.close(); }, function () { reject(new Error('decode')); });
+      } else {
+        const img = new Image(), u = URL.createObjectURL(file);
+        img.onload = function () { URL.revokeObjectURL(u); done(img, img.naturalWidth, img.naturalHeight); };
+        img.onerror = function () { URL.revokeObjectURL(u); reject(new Error('decode')); };
+        img.src = u;
+      }
+    });
+  }
+
+  function intakeCall(action, payload) {
+    return sb.auth.getSession().then(function (r) {
+      const tok = r && r.data && r.data.session && r.data.session.access_token;
+      return fetch(INTAKE_FN, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: cfg.supabaseAnonKey, Authorization: 'Bearer ' + tok },
+        body: JSON.stringify(Object.assign({ action: action }, payload || {}))
+      }).then(function (res) { return res.json().catch(function () { return { error: 'http_' + res.status }; }); });
+    });
+  }
+
+  function intakeField(key, label, value, type) {
+    const lo = intakeDraft && intakeDraft.confidence && +intakeDraft.confidence[key] < 0.7 && value;
+    return '<div class="ad-field"><label>' + esc(label) +
+      (lo ? ' <span style="color:#8a6d1e">· check this</span>' : '') + '</label>' +
+      '<input id="in-' + key + '" type="' + (type || 'text') + '" value="' + esc(value == null ? '' : value) + '"></div>';
+  }
+
+  function renderIntake(body) {
+    body.innerHTML =
+      '<div class="ad-sec"><h2>Poster intake</h2>' +
+      '<p class="ad-hint">Take the poster an organiser already has. AI reads it, you check it, ' +
+      'then send them one link to review and publish. They never need an account.</p>' +
+
+      '<div class="ad-field"><label>Poster, flyer, or a screenshot of their Instagram post</label>' +
+      '<input type="file" id="in-files" accept="image/*" multiple>' +
+      '<span class="ad-hint">Up to 3 images. A screenshot of the post is often better than the poster alone &mdash; ' +
+      'captions usually carry the year, the price or the ticket link the artwork leaves out.</span></div>' +
+      '<div id="in-thumbs" class="ad-hint"></div>' +
+
+      '<div class="ad-field"><label>Anything they told you (optional)</label>' +
+      '<textarea id="in-note" placeholder="e.g. &quot;it&rsquo;s the Saturday one, tickets at the door&quot;"></textarea></div>' +
+
+      '<div><button class="ad-save" id="in-read">Read the poster</button> ' +
+      '<span class="ad-saved" id="in-status"></span></div>' +
+      '<div id="in-result"></div></div>' +
+
+      '<div class="ad-sec" style="margin-top:18px"><h2>Recent intakes</h2>' +
+      '<div class="ad-list" id="in-list"><span class="ad-hint">Loading…</span></div></div>';
+
+    const fileEl = document.getElementById('in-files');
+    const thumbs = document.getElementById('in-thumbs');
+    const status = document.getElementById('in-status');
+
+    fileEl.onchange = function () {
+      const files = Array.prototype.slice.call(fileEl.files || []).slice(0, 3);
+      if (!files.length) return;
+      intakeShots = [];
+      thumbs.textContent = 'Uploading…';
+      let done = 0;
+      files.forEach(function (f, i) {
+        intakeShrink(f).then(function (blob) {
+          // First path segment is the user id: that is what the storage policies in
+          // 85_event_images.sql check, so this reuses the rules already in place.
+          const path = me.id + '/intake-' + Date.now() + '-' + i + '.jpg';
+          return sb.storage.from('event-images').upload(path, blob, { contentType: 'image/jpeg', upsert: false })
+            .then(function (r) {
+              if (r.error) throw r.error;
+              const pub = sb.storage.from('event-images').getPublicUrl(path);
+              intakeShots.push({ url: pub.data.publicUrl, path: path });
+            });
+        }).then(function () {
+          if (++done === files.length) {
+            thumbs.innerHTML = intakeShots.map(function (s) {
+              return '<img src="' + esc(s.url) + '" style="height:90px;border-radius:8px;margin:6px 6px 0 0">';
+            }).join('');
+          }
+        }, function (e) { thumbs.textContent = 'Upload failed: ' + (e.message || e); });
+      });
+    };
+
+    document.getElementById('in-read').onclick = function () {
+      const note = document.getElementById('in-note').value.trim();
+      if (!intakeShots.length && !note) { status.textContent = 'Add a poster or a note first'; status.style.color = '#b3402a'; return; }
+      status.style.color = ''; status.textContent = 'Reading…';
+      this.disabled = true;
+      const btn = this;
+      intakeCall('extract', { poster_urls: intakeShots.map(function (s) { return s.url; }),
+                              poster_path: (intakeShots[0] || {}).path, note: note })
+        .then(function (r) {
+          btn.disabled = false;
+          if (r.error) { status.textContent = 'Failed: ' + r.error + (r.detail ? ' — ' + r.detail : ''); status.style.color = '#b3402a'; return; }
+          status.textContent = 'Read it.';
+          intakeDraft = r.draft;
+          renderIntakeDraft();
+          loadIntakeList();
+        });
+    };
+
+    loadIntakeList();
+  }
+
+  /* The extracted event, as an editable form. Everything the model was unsure about
+     is marked "check this" rather than shown as a number — a number invites arguing
+     with the score instead of reading the field. */
+  function renderIntakeDraft() {
+    const box = document.getElementById('in-result');
+    if (!box || !intakeDraft) return;
+    const p = intakeDraft.payload || {};
+    const warn = (intakeDraft.warnings || []).map(function (w) {
+      return '<div class="ad-li"><span>⚠ ' + esc(w) + '</span></div>';
+    }).join('');
+
+    box.innerHTML =
+      '<hr style="border:none;border-top:1px solid var(--line);margin:18px 0">' +
+      (warn ? '<div class="ad-field"><label>Worth checking</label><div class="ad-list">' + warn + '</div></div>' : '') +
+      intakeField('name', 'Event name', p.name) +
+      '<div class="ad-row">' + intakeField('date', 'Date', p.date, 'date') +
+        intakeField('start', 'Start', p.start, 'time') + intakeField('end', 'End (optional)', p.end, 'time') + '</div>' +
+      '<div class="ad-row">' + intakeField('venue', 'Venue', p.venue) + intakeField('city', 'City', p.city) + '</div>' +
+      intakeField('address', 'Address', p.address) +
+      '<div class="ad-field"><label>Category</label><select id="in-category">' +
+        '<option value="">—</option>' +
+        INTAKE_CATS.map(function (c) { return '<option' + (c === p.category ? ' selected' : '') + '>' + c + '</option>'; }).join('') +
+      '</select></div>' +
+      '<div class="ad-field"><label>Description</label><textarea id="in-description">' + esc(p.description || '') + '</textarea></div>' +
+      '<div class="ad-row">' + intakeField('price_text', 'Price', p.price_text) + intakeField('ticket_url', 'Ticket link', p.ticket_url) + '</div>' +
+      '<div class="ad-row">' + intakeField('organiser_name', 'Organiser', p.organiser_name) +
+        intakeField('organiser_email', 'Their email', p.organiser_email) + '</div>' +
+      '<div class="ad-field"><label>Location on the map</label>' +
+        '<button class="ad-regen" id="in-geo">Find this place</button> ' +
+        '<span class="ad-hint" id="in-geo-out">' +
+          (p.lat != null ? 'Pinned at ' + (+p.lat).toFixed(3) + ', ' + (+p.lon).toFixed(3) + (p.timezone ? ' · ' + esc(p.timezone) : '') : 'Not pinned yet — needed before it can be published.') +
+        '</span></div>' +
+      '<div><button class="ad-save" id="in-link">Create the review link</button> ' +
+        '<span class="ad-saved" id="in-link-out"></span></div>';
+
+    document.getElementById('in-geo').onclick = intakeGeocode;
+    document.getElementById('in-link').onclick = intakeMakeLink;
+  }
+
+  // Read the form back into the draft payload. One place, so nothing is saved from
+  // a stale object.
+  function intakeCollect() {
+    const g = function (k) { const e = document.getElementById('in-' + k); return e ? e.value.trim() : ''; };
+    const p = Object.assign({}, intakeDraft.payload || {});
+    ['name', 'date', 'start', 'end', 'venue', 'city', 'address', 'price_text',
+     'ticket_url', 'organiser_name', 'organiser_email'].forEach(function (k) { p[k] = g(k) || null; });
+    p.category = g('category') || null;
+    p.description = g('description') || null;
+    return p;
+  }
+
+  /* The geocoder the app already uses, so a poster that says only "The Exchange,
+     Regina" ends up with the same pin, address, timezone and country a hand-filled
+     event would have had. */
+  function intakeGeocode() {
+    const out = document.getElementById('in-geo-out');
+    const p = intakeCollect();
+    const q = [p.venue, p.address, p.city].filter(Boolean).join(', ');
+    if (!q) { out.textContent = 'Add a venue or city first.'; return; }
+    if (!window.EventuallyGeo) { out.textContent = 'Geocoder not loaded.'; return; }
+    out.textContent = 'Looking…';
+    window.EventuallyGeo.forward(q).then(function (r) {
+      if (!r) { out.textContent = 'Nothing found for “' + q + '”. Try just the venue and city.'; return; }
+      p.lat = r.lat; p.lon = r.lon;
+      p.city = p.city || r.city || null;
+      p.country = r.country || p.country || null;
+      if (window.EventuallyTZ) {
+        const g = window.EventuallyTZ.guess(r.countryCode);
+        p.timezone = (g && g.zone) || p.timezone || null;
+      }
+      intakeDraft.payload = p;
+      out.textContent = 'Pinned at ' + r.lat.toFixed(3) + ', ' + r.lon.toFixed(3) +
+        (p.country ? ' · ' + p.country : '') + (p.timezone ? ' · ' + p.timezone : '');
+    }, function () { out.textContent = 'Lookup failed.'; });
+  }
+
+  function intakeMakeLink() {
+    const out = document.getElementById('in-link-out');
+    const p = intakeCollect();
+    if (p.lat == null) { out.textContent = 'Find the place on the map first.'; out.style.color = '#b3402a'; return; }
+    out.style.color = ''; out.textContent = 'Saving…';
+    intakeDraft.payload = p;
+    intakeCall('save', { id: intakeDraft.id, payload: p,
+                         organiser_email: p.organiser_email, organiser_name: p.organiser_name })
+      .then(function (r) {
+        if (r.error) { out.textContent = 'Failed: ' + r.error; out.style.color = '#b3402a'; return; }
+        const link = location.origin + '/review.html?t=' + intakeDraft.token;
+        out.innerHTML = '';
+        const box = document.createElement('div');
+        box.innerHTML = '<p class="ad-hint" style="margin:10px 0 4px">Send this to the organiser. ' +
+          'It opens on a phone, needs no account, and expires in 21 days.</p>' +
+          '<input readonly value="' + esc(link) + '" style="width:100%">' +
+          '<p class="ad-hint" style="margin:6px 0 0">Suggested message: “Hi — I’ve put your event on Eventually. ' +
+          'Have a quick look and press Publish if it’s right: ' + esc(link) + '”</p>';
+        out.parentNode.appendChild(box);
+        const inp = box.querySelector('input');
+        inp.focus(); inp.select();
+        try { navigator.clipboard.writeText(link); } catch (e) { /* select-to-copy still works */ }
+        loadIntakeList();
+      });
+  }
+
+  function loadIntakeList() {
+    const el = document.getElementById('in-list');
+    if (!el) return;
+    sb.rpc('admin_intake_drafts', { p_limit: 30 }).then(function (r) {
+      if (r.error) { el.innerHTML = '<span class="ad-hint">List unavailable — run <code>backend/103_intake_drafts.sql</code>.</span>'; return; }
+      const rows = (r.data || []).map(function (d) {
+        const p = d.payload || {};
+        const when = p.date ? (p.date + (p.start ? ' ' + p.start : '')) : 'no date';
+        const link = location.origin + '/review.html?t=' + d.token;
+        return '<div class="ad-li"><span><b>' + esc(p.name || '(unnamed)') + '</b> · ' + esc(when) +
+          ' · ' + esc(p.city || '—') + ' · <b>' + esc(d.status) + '</b>' +
+          (d.organiser_email ? ' · ' + esc(d.organiser_email) : '') + '</span><span>' +
+          (d.status === 'ready' ? '<button class="ad-regen in-copy" data-link="' + esc(link) + '">Copy link</button>' : '') +
+          '</span></div>';
+      }).join('');
+      el.innerHTML = rows || '<span class="ad-hint">Nothing yet.</span>';
+      el.querySelectorAll('.in-copy').forEach(function (b) {
+        b.onclick = function () {
+          try { navigator.clipboard.writeText(b.dataset.link); b.textContent = 'Copied'; }
+          catch (e) { prompt('Copy this link:', b.dataset.link); }
+        };
+      });
+    }, function () { el.innerHTML = '<span class="ad-hint">List unavailable.</span>'; });
+  }
+
   function tabBtn(id, label) { return '<button class="ad-tab' + (tab === id ? ' on' : '') + '" data-tab="' + id + '">' + label + '</button>'; }
 
   /* ---------------- Overview (analytics) ---------------- */
