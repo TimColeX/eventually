@@ -125,6 +125,25 @@ function cleanTitle(raw) {
     .trim();
 }
 
+/* Print the time AT THE VENUE.
+ *
+ * This used to call toLocaleTimeString with no timeZone, so it formatted in
+ * whatever zone the build machine ran in — UTC on the GitHub Action. An Adelaide
+ * gig at 19:00 local was published as "9:30", which is worse than no page: a
+ * reader who trusts it misses the event. Every event now carries an IANA zone,
+ * so use it, and fall back to UTC (labelled) only if one is somehow missing. */
+function fmtWhen(iso, zone) {
+  const d = new Date(iso);
+  const tz = zone || 'UTC';
+  try {
+    const day = new Intl.DateTimeFormat('en-GB', { timeZone: tz, weekday: 'short', day: 'numeric', month: 'short' }).format(d);
+    const time = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: 'numeric', minute: '2-digit' }).format(d);
+    return day + ' · ' + time;
+  } catch {
+    return d.toUTCString().slice(0, 16) + ' · ' + d.toUTCString().slice(17, 22) + ' UTC';
+  }
+};
+
 // ── Data ─────────────────────────────────────────────────────────────────────
 async function fetchAll(select, filter) {
   const out = [];
@@ -268,24 +287,7 @@ function page(c, prose, adsOn) {
   const title = `Events in ${c.city} — what's on | Eventually`;
   const desc = `${c.n} events happening in ${c.city}${c.country ? ', ' + c.country : ''} over the next ${DAYS_AHEAD} days. Concerts, theatre, markets and more, updated daily.`;
   const url = `${SITE}/events/${c.slug}/`;
-  /* Print the time AT THE VENUE.
-   *
-   * This used to call toLocaleTimeString with no timeZone, so it formatted in
-   * whatever zone the build machine ran in — UTC on the GitHub Action. An Adelaide
-   * gig at 19:00 local was published as "9:30", which is worse than no page: a
-   * reader who trusts it misses the event. Every event now carries an IANA zone,
-   * so use it, and fall back to UTC (labelled) only if one is somehow missing. */
-  const fmt = (iso, zone) => {
-    const d = new Date(iso);
-    const tz = zone || 'UTC';
-    try {
-      const day = new Intl.DateTimeFormat('en-GB', { timeZone: tz, weekday: 'short', day: 'numeric', month: 'short' }).format(d);
-      const time = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: 'numeric', minute: '2-digit' }).format(d);
-      return day + ' · ' + time;
-    } catch {
-      return d.toUTCString().slice(0, 16) + ' · ' + d.toUTCString().slice(17, 22) + ' UTC';
-    }
-  };
+  const fmt = fmtWhen;   // shared — see fmtWhen at module scope
 
   /* Collapse a recurring event into ONE row.
    *
@@ -450,7 +452,12 @@ ${events.map((e) => {
     // A collapsed run says so, so "one row" never reads as "one night only".
     const runs = e._more ? ` <span class="ev-runs">+ ${e._more} more date${e._more === 1 ? '' : 's'}</span>` : '';
     const meta = [e.category ? esc(e.category) : '', e.venue ? esc(e.venue) : ''].filter(Boolean).join(' · ');
-    return `    <li><span class="ev-name">${esc(e.title)}${e.is_native ? '<span class="tag">On Eventually</span>' : ''}</span><span class="ev-when">${fmt(e.start_time, e.timezone)}${runs}</span>${meta ? `<span class="ev-cat">${meta}</span>` : ''}</li>`;
+    // A native event is the only one with a page of its own to link to; everything
+    // else lives on its seller's site and already has one.
+    const name = e.is_native
+      ? `<a href="/events/${c.slug}/${eventSlug(e)}/">${esc(e.title)}</a><span class="tag">On Eventually</span>`
+      : esc(e.title);
+    return `    <li><span class="ev-name">${name}</span><span class="ev-when">${fmt(e.start_time, e.timezone)}${runs}</span>${meta ? `<span class="ev-cat">${meta}</span>` : ''}</li>`;
   }).join('\n')}
   </ul>
 ${distinct.length > MAX_LISTED ? `  <p class="muted" style="margin-top:14px">…and ${distinct.length - MAX_LISTED} more. <a href="/?city=${encodeURIComponent(c.city)}">See them all on the globe →</a></p>\n` : ''}${adUnit}
@@ -550,7 +557,163 @@ ${sections}
 </html>`;
 }
 
-function sitemap(list) {
+/* ── ONE PAGE PER NATIVE EVENT ───────────────────────────────────────────────
+ * An organiser had nothing of their own to share: the generator made city pages,
+ * and the app deep-links a city but never an event. So "here's your event on
+ * Eventually" meant sending someone to a list.
+ *
+ * Static, and deliberately not an in-app `?e=` link. The app gates a signed-out
+ * visitor's view behind a sign-in prompt, which is exactly the wrong thing to put
+ * in front of someone who just scanned a poster in a bar. A page also carries
+ * og:image, so the link unfurls with their artwork in WhatsApp and Instagram DMs,
+ * and it can be indexed — which is the SEO promise at event level rather than city.
+ *
+ * NATIVE EVENTS ONLY. 58,000 Ticketmaster pages is a different conversation about
+ * crawl budget, and those events already have a page of their own elsewhere.
+ */
+/* "Hungarian Cultural & Social Club, 1925 McAra Street, Regina, Saskatchewan. · Regina,
+   Canada" — the first draft said Regina twice, because a geocoded address already
+   carries its city. Each part is added only if it is not already in what precedes it. */
+function whereLine(e) {
+  const seen = (s) => bits.join(' ').toLowerCase().indexOf(String(s).toLowerCase()) > -1;
+  const bits = [];
+  if (e.venue) bits.push(String(e.venue).trim());
+  if (e.address) bits.push(String(e.address).trim().replace(/[.,]\s*$/, ''));
+  if (e.city && !seen(e.city)) bits.push(String(e.city).trim());
+  if (e.country && !seen(e.country)) bits.push(String(e.country).trim());
+  return bits.join(', ');
+}
+
+function eventSlug(e) {
+  const base = slugify(e.title).slice(0, 60) || 'event';
+  // Two events can share a title (a residency, a weekly night), so the id's tail
+  // keeps the URLs distinct without making them ugly.
+  const tail = String(e.event_id).replace(/[^a-z0-9]/gi, '').slice(-6).toLowerCase();
+  return base + '-' + tail;
+}
+
+function eventPage(e, city) {
+  const url = `${SITE}/events/${city.slug}/${eventSlug(e)}/`;
+  const when = fmtWhen(e.start_time, e.timezone);
+  const place = [e.venue, e.address].filter(Boolean).join(', ');
+  const ticket = (e.event_sources || []).map((s) => s.url).filter(Boolean)[0] || null;
+  const desc = (e.description || '').trim() ||
+    `${e.title} — ${when} at ${e.venue || e.city}. On Eventually.`;
+  const summary = desc.length > 155 ? desc.slice(0, 152).replace(/\s+\S*$/, '') + '…' : desc;
+  // What the "this has finished" banner compares against. An event with no end time
+  // is treated as running four hours, which is long enough for an evening and short
+  // enough that the page tells the truth the next morning.
+  const ends = e.end_time || new Date(new Date(e.start_time).getTime() + 4 * 3600000).toISOString();
+
+  const ld = {
+    '@context': 'https://schema.org', '@type': 'Event',
+    name: e.title, startDate: e.start_time, endDate: e.end_time || undefined,
+    eventStatus: 'https://schema.org/EventScheduled',
+    eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+    description: desc,
+    image: e.image_url || undefined,
+    url: url,
+    location: {
+      '@type': 'Place', name: e.venue || e.city,
+      address: { '@type': 'PostalAddress', streetAddress: e.address || undefined,
+                 addressLocality: e.city || undefined, addressCountry: e.country || undefined },
+      geo: (e.lat != null && e.lon != null)
+        ? { '@type': 'GeoCoordinates', latitude: e.lat, longitude: e.lon } : undefined,
+    },
+    offers: ticket ? { '@type': 'Offer', url: ticket, availability: 'https://schema.org/InStock' } : undefined,
+  };
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${esc(e.title)} — ${esc(e.city)} | Eventually</title>
+<meta name="description" content="${esc(summary)}">
+<link rel="canonical" href="${url}">
+<meta name="robots" content="index,follow">
+<meta property="og:type" content="website">
+<meta property="og:title" content="${esc(e.title)}">
+<meta property="og:description" content="${esc(summary)}">
+<meta property="og:url" content="${url}">
+${e.image_url ? `<meta property="og:image" content="${esc(e.image_url)}">\n<meta name="twitter:card" content="summary_large_image">` : '<meta name="twitter:card" content="summary">'}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap">
+<style>
+  :root {
+    color-scheme: dark;
+    --font: 'Sora', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --mono: 'Space Mono', ui-monospace, 'SFMono-Regular', monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:#14100c; color:#ece5da; font:16px/1.65 var(--font); }
+  .wrap { position:relative; z-index:1; max-width:640px; margin:0 auto; padding:34px 20px 70px; }
+  a { color:#f0a24a; }
+  .home { font-weight:700; letter-spacing:-.02em; text-decoration:none; color:#ece5da; }
+  .home span { color:#CB5A3C; }
+  h1 { font-size:2rem; margin:18px 0 8px; letter-spacing:-.02em; text-wrap:balance; }
+  .poster { width:100%; border-radius:14px; display:block; margin:18px 0 6px; border:1px solid #2e2820; }
+  .meta { font-family:var(--mono); font-size:.88rem; color:#ffd8a8; font-variant-numeric:tabular-nums; margin:0 0 4px; }
+  .where { color:#c9bfb2; margin:0 0 18px; }
+  .tag { display:inline-block; font-family:var(--mono); font-size:.68rem; letter-spacing:.1em;
+         text-transform:uppercase; color:#f0a24a; border:1px solid #4a3a24; border-radius:99px; padding:2px 9px; }
+  .cta { display:inline-block; background:#CB5A3C; color:#fff; text-decoration:none;
+         padding:13px 22px; border-radius:11px; font-weight:700; margin:6px 10px 6px 0; }
+  .cta.ghost { background:transparent; color:#f0a24a; border:1px solid #4a3a24; }
+  .over { background:#241d16; border:1px solid #4a3a24; border-radius:12px; padding:14px 16px;
+          margin:0 0 18px; color:#e2c489; }
+  hr { border:none; border-top:1px solid #2e2820; margin:30px 0; }
+  .muted { color:#9a8f80; font-size:.9rem; }
+  .bg { position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
+  .bg img { position:absolute; top:50%; left:50%; width:min(120vw,1100px); transform:translate(-50%,-50%);
+            filter:blur(22px) saturate(1.05); opacity:.34; }
+  .bg::after { content:""; position:absolute; inset:0;
+               background:radial-gradient(ellipse at center, rgba(20,16,12,.34) 0%, rgba(20,16,12,.76) 58%, rgba(20,16,12,.96) 100%); }
+</style>
+<script type="application/ld+json">${JSON.stringify(ld)}</script>
+</head>
+<body>
+<div class="bg"><img src="/assets/globe-blur.jpg" alt="" loading="lazy" onerror="this.remove()"></div>
+<div class="wrap">
+  <a class="home" href="/">eventually<span>.</span></a>
+
+  <!-- Swapped in by the script below once the event has finished. A printed QR code
+       outlives its event, so this page has to keep telling the truth without being
+       rebuilt — the date is in the page, so it can decide for itself. -->
+  <div class="over" id="over" hidden></div>
+
+  <span class="tag">${esc(e.category || 'Event')}</span>
+  <h1>${esc(e.title)}</h1>
+  <p class="meta">${esc(when)}</p>
+  <p class="where">${esc(whereLine(e))}</p>
+${e.image_url ? `  <img class="poster" src="${esc(e.image_url)}" alt="${esc(e.title)}">\n` : ''}
+${desc ? '  <p>' + esc(desc) + '</p>\n' : ''}
+  <p>
+${ticket ? `    <a class="cta" href="${esc(ticket)}" rel="noopener">Get tickets</a>\n` : ''}    <a class="cta${ticket ? ' ghost' : ''}" href="/?city=${encodeURIComponent(e.city || '')}">See it on the globe</a>
+  </p>
+  <hr>
+  <p class="muted">More of what's on in <a href="/events/${city.slug}/">${esc(e.city)}</a> ·
+     <a href="/browse/">All cities</a></p>
+  <p class="muted">Organising something? <a href="/publish.html">Publish it on Eventually</a> — it appears on the globe
+     and gets a page like this one.</p>
+</div>
+<script>
+  // No framework, no fetch: the page already knows when the event ends.
+  (function () {
+    var ends = new Date(${JSON.stringify(ends)});
+    if (isNaN(ends) || ends.getTime() > Date.now()) return;
+    var o = document.getElementById('over');
+    o.innerHTML = 'This event has finished. ' +
+      '<a href="/events/${city.slug}/">See what else is on in ${esc(e.city)}</a>.';
+    o.hidden = false;
+  })();
+</script>
+</body>
+</html>`;
+}
+
+function sitemap(list, eventPages) {
   const today = new Date().toISOString().slice(0, 10);
   const urls = [
     { loc: `${SITE}/`, pri: '1.0', freq: 'daily' },
@@ -566,6 +729,11 @@ function sitemap(list) {
     { loc: `${SITE}/privacy.html`, pri: '0.2', freq: 'yearly' },
     { loc: `${SITE}/terms.html`, pri: '0.2', freq: 'yearly' },
     ...list.map((c) => ({ loc: `${SITE}/events/${c.slug}/`, pri: '0.7', freq: 'daily' })),
+    // One entry per native event page. Priority sits just under a city page: a single
+    // event is a narrower answer to a search than "what is on in Regina", but it is a
+    // real page with its own content. Weekly, because an event page barely changes
+    // once written — the city page above it is the one that churns daily.
+    ...(eventPages || []).map((e) => ({ loc: e.loc, pri: '0.6', freq: 'weekly' })),
   ];
   return '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
     urls.map((u) => `  <url><loc>${u.loc}</loc><lastmod>${today}</lastmod><changefreq>${u.freq}</changefreq><priority>${u.pri}</priority></url>`).join('\n') +
@@ -619,6 +787,7 @@ function sitemap(list) {
   const publish = good.slice(0, top);
   const eventsDir = path.join(OUT_ROOT, 'events');
   fs.mkdirSync(eventsDir, { recursive: true });
+  const nativePages = [];        // filled per city below, then handed to the sitemap
 
   publish.forEach((c) => {
     // Nearby = closest other published cities, so crawlers can walk the whole set.
@@ -636,6 +805,16 @@ function sitemap(list) {
     fs.mkdirSync(dir, { recursive: true });
     const html = page(c, prose.get(c.city.toLowerCase()) || null, !noAds).replace('__NEARBY__', near);
     fs.writeFileSync(path.join(dir, 'index.html'), html, 'utf8');
+
+    // A page of its own for each native event, so an organiser has something to send.
+    // Old pages are never deleted: a printed QR outlives its event, and the page
+    // detects that for itself rather than 404ing on someone standing in a venue.
+    c.events.filter((e) => e.is_native).forEach((e) => {
+      const edir = path.join(dir, eventSlug(e));
+      fs.mkdirSync(edir, { recursive: true });
+      fs.writeFileSync(path.join(edir, 'index.html'), eventPage(e, c), 'utf8');
+      nativePages.push({ loc: `${SITE}/events/${c.slug}/${eventSlug(e)}/`, start: e.start_time });
+    });
   });
 
   /* PRUNE cities that no longer qualify.
@@ -663,7 +842,7 @@ function sitemap(list) {
 
   fs.mkdirSync(path.join(OUT_ROOT, 'browse'), { recursive: true });
   fs.writeFileSync(path.join(OUT_ROOT, 'browse', 'index.html'), browseIndex(publish), 'utf8');
-  fs.writeFileSync(path.join(OUT_ROOT, 'sitemap.xml'), sitemap(publish), 'utf8');
+  fs.writeFileSync(path.join(OUT_ROOT, 'sitemap.xml'), sitemap(publish, nativePages), 'utf8');
   fs.writeFileSync(path.join(OUT_ROOT, 'robots.txt'),
     `User-agent: *\nAllow: /\n\nSitemap: ${SITE}/sitemap.xml\n`, 'utf8');
 
