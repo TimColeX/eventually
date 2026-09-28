@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Eventually — "our AI reads your poster" (3 variations)</title>
+<!--
+  THREE A4 VARIATIONS that lead with the technology rather than the favour.
+  The companion set (poster-send-your-poster-A4) says "send it to us"; this one
+  says what happens when you do, because the reading is the interesting part.
+
+  1  Dark   — the readout. What the AI actually pulls off a poster.
+  2  Cream  — the same, for an office printer and a noticeboard.
+  3  Cream  — the comparison. Fourteen fields, or one message.
+
+  "Fourteen fields" is counted, not rhetorical: the publish form has fourteen
+  inputs (src/coordinator.js). If the form changes, change the number.
+
+  Print: browser, Ctrl+P, A4 portrait, margins None, TICK "Background graphics".
+
+  THE QR IS A mailto — scanning opens a pre-addressed email. The whole argument is
+  "send the thing you already have", and a code that opened a form would contradict
+  it. One CONTACT constant redirects all three; a wa.me link is a one-line swap.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Space+Mono:wght@400;700&display=swap">
+<style>
+  @page { size: A4 portrait; margin: 0; }
+  :root {
+    --font: 'Sora', system-ui, sans-serif;
+    --mono: 'Space Mono', ui-monospace, monospace;
+    --clay: #CB5A3C; --apricot: #E0875F;
+    --ink: #211A15; --cream: #FDF1E7; --dark: #14100c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #555; }
+  body { font-family: var(--font); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  .sheet {
+    position: relative; width: 210mm; height: 297mm; overflow: hidden;
+    margin: 12mm auto; padding: 18mm 16mm 16mm;
+    box-shadow: 0 8px 40px rgba(0,0,0,.5);
+  }
+  @media print {
+    html, body { background: #fff; }
+    .sheet { margin: 0; box-shadow: none; page-break-after: always; }
+    .sheet:last-child { page-break-after: auto; }
+  }
+  .inner { position: relative; z-index: 2; display: flex; flex-direction: column; height: 100%; }
+
+  .dark { background: var(--dark); color: var(--cream); }
+  .light { background: var(--cream); color: var(--ink); }
+  .glow {
+    position: absolute; inset: -22% -10% auto -10%; height: 92%;
+    background: radial-gradient(ellipse at 50% 36%, rgba(203,90,60,.40) 0%, rgba(203,90,60,.09) 46%, rgba(20,16,12,0) 72%);
+  }
+  .dots {
+    position: absolute; inset: 0;
+    background-image: radial-gradient(rgba(224,135,95,.20) 1.1px, transparent 1.1px);
+    background-size: 7mm 7mm;
+    mask-image: radial-gradient(ellipse at 50% 42%, #000 0%, #000 45%, transparent 78%);
+    -webkit-mask-image: radial-gradient(ellipse at 50% 42%, #000 0%, #000 45%, transparent 78%);
+  }
+  .light .dots { background-image: radial-gradient(rgba(203,90,60,.17) 1.1px, transparent 1.1px); }
+
+  .mark { display: flex; align-items: center; gap: 4mm; }
+  .mark .pips { display: flex; gap: 2mm; }
+  .mark .pips i { width: 3.4mm; height: 3.4mm; border-radius: 50%; background: var(--clay); display: block; }
+  .mark .name { font-weight: 700; font-size: 10mm; letter-spacing: -.03em; line-height: 1; }
+
+  .eyebrow {
+    font-family: var(--mono); font-size: 3.6mm; letter-spacing: .28em; text-transform: uppercase;
+    color: var(--clay); margin: 17mm 0 5mm;
+  }
+  h1 { font-size: 18mm; line-height: .99; letter-spacing: -.035em; font-weight: 800; margin: 0 0 6mm; text-wrap: balance; }
+  h1 em { font-style: normal; color: var(--clay); }
+  .sub { font-size: 5.4mm; line-height: 1.45; margin: 0 0 9mm; max-width: 158mm; }
+  .sub em { font-style: normal; font-weight: 700; color: var(--clay); }
+  .dark .sub { color: #d9cec1; }
+  .light .sub { color: #5c5147; }
+  .rule { height: .6mm; width: 26mm; background: var(--clay); margin: 0 0 6mm; }
+
+  .foot { margin-top: auto; display: flex; align-items: flex-end; gap: 8mm; }
+  .qr { background: #fff; padding: 4mm; border-radius: 4mm; line-height: 0; flex: 0 0 auto; }
+  .qr canvas, .qr img { display: block; width: 42mm; height: 42mm; }
+  .scan { padding-bottom: 1mm; }
+  .scan .big {
+    font-family: var(--mono); font-weight: 700; font-size: 5mm; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--clay); margin: 0 0 2.5mm;
+  }
+  .scan .addr { font-size: 5.2mm; font-weight: 700; margin: 0 0 2mm; word-break: break-all; }
+  .scan .tiny { font-size: 3.6mm; margin: 0; }
+  .dark .scan .tiny { color: #9a8f80; }
+  .light .scan .tiny { color: #7a6e62; }
+
+  /* ── THE READOUT ────────────────────────────────────────────────────────────
+     Not decoration: these are the fields the intake actually extracts, in the
+     order it reports them. Showing the real output is what makes the claim
+     land — a made-up screenshot would be the one thing an organiser could
+     later catch us out on. */
+  .read {
+    border-radius: 4mm; padding: 7mm 7mm 5mm; margin: 0 0 8mm;
+    border: .4mm solid rgba(203,90,60,.42);
+  }
+  .dark .read { background: rgba(255,255,255,.035); }
+  .light .read { background: #fff8f1; }
+  .read .hd {
+    font-family: var(--mono); font-size: 3.4mm; letter-spacing: .2em; text-transform: uppercase;
+    color: var(--clay); display: flex; align-items: center; gap: 3mm; margin: 0 0 5mm;
+  }
+  .read .hd i { width: 2.6mm; height: 2.6mm; border-radius: 50%; background: var(--clay); display: block; }
+  .read .row {
+    display: flex; align-items: baseline; gap: 4mm; padding: 2.6mm 0;
+    border-top: .3mm solid rgba(203,90,60,.20);
+  }
+  .read .row:first-of-type { border-top: 0; }
+  .read .k {
+    flex: 0 0 26mm; font-family: var(--mono); font-size: 3.3mm; letter-spacing: .14em;
+    text-transform: uppercase; opacity: .62;
+  }
+  .read .v { flex: 1 1 auto; font-size: 4.5mm; font-weight: 600; min-width: 0; }
+  .read .ok { flex: 0 0 auto; color: var(--clay); font-size: 4.4mm; font-weight: 700; }
+  .read .note {
+    font-family: var(--mono); font-size: 3.2mm; letter-spacing: .06em; margin: 4mm 0 0; opacity: .6;
+  }
+
+  /* ── THE COMPARISON ─────────────────────────────────────────────────────── */
+  .vs { display: flex; gap: 7mm; margin: 0 0 9mm; }
+  .col { flex: 1 1 0; min-width: 0; border-radius: 4mm; padding: 6mm 6mm 5mm; }
+  .col.old { background: rgba(33,26,21,.05); border: .4mm solid rgba(33,26,21,.14); }
+  .col.new { background: #fff8f1; border: .4mm solid rgba(203,90,60,.42); }
+  .col .lbl {
+    font-family: var(--mono); font-size: 3.2mm; letter-spacing: .18em; text-transform: uppercase;
+    margin: 0 0 4mm;
+  }
+  .col.old .lbl { color: #8b8078; }
+  .col.new .lbl { color: var(--clay); }
+  .col .num { font-size: 13mm; font-weight: 800; letter-spacing: -.04em; line-height: 1; margin: 0 0 2mm; }
+  .col.old .num { color: #6b6059; }
+  .col.new .num { color: var(--clay); }
+  .col .cap { font-size: 4.4mm; line-height: 1.35; margin: 0; color: #5c5147; }
+  .fields { margin: 4mm 0 0; padding: 0; list-style: none; }
+  .fields li {
+    font-family: var(--mono); font-size: 3.1mm; letter-spacing: .04em; color: #8b8078;
+    padding: 1.1mm 0; border-top: .3mm solid rgba(33,26,21,.10);
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════ 1 — DARK · the readout ══════════════ -->
+<section class="sheet dark">
+  <div class="glow"></div><div class="dots"></div>
+  <div class="inner">
+    <div class="mark"><span class="pips"><i></i><i></i><i></i></span><span class="name">eventually</span></div>
+    <p class="eyebrow">A new way to get listed</p>
+    <h1>Our AI reads <em>your poster.</em></h1>
+    <p class="sub">Send us the artwork you already have. It pulls out the date, the venue, the
+       price — and you get <em>a listing to check, not a form to fill.</em></p>
+
+    <div class="read">
+      <div class="hd"><i></i>Reading your poster</div>
+      <div class="row"><span class="k">Event</span><span class="v">Afrobeat Night — Lagos Calling</span><span class="ok">✓</span></div>
+      <div class="row"><span class="k">When</span><span class="v">Sat 3 October, 8:00 pm</span><span class="ok">✓</span></div>
+      <div class="row"><span class="k">Venue</span><span class="v">The Exchange, Regina</span><span class="ok">✓</span></div>
+      <div class="row"><span class="k">Price</span><span class="v">$35</span><span class="ok">✓</span></div>
+      <div class="row"><span class="k">Category</span><span class="v">Music</span><span class="ok">✓</span></div>
+      <p class="note">Then you check it and press publish.</p>
+    </div>
+
+    <div class="foot">
+      <div class="qr" id="qr1"></div>
+      <div class="scan">
+        <p class="big">Scan to send yours</p>
+        <p class="addr">info@eventually-app.com</p>
+        <p class="tiny">Free · Ten events a year · You keep your own ticketing</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ 2 — CREAM · the readout ══════════════ -->
+<section class="sheet light">
+  <div class="dots"></div>
+  <div class="inner">
+    <div class="mark"><span class="pips"><i></i><i></i><i></i></span><span class="name">eventually</span></div>
+    <p class="eyebrow">A new way to get listed</p>
+    <div class="rule"></div>
+    <h1>Our AI reads <em>your poster.</em></h1>
+    <p class="sub">Send us the artwork you already have. It pulls out the date, the venue, the
+       price — and you get <em>a listing to check, not a form to fill.</em></p>
+
+    <div class="read">
+      <div class="hd"><i></i>Reading your poster</div>
+      <div class="row"><span class="k">Event</span><span class="v">Afrobeat Night — Lagos Calling</span><span class="ok">✓</span></div>
+      <div class="row"><span class="k">When</span><span class="v">Sat 3 October, 8:00 pm</span><span class="ok">✓</span></div>
+      <div class="row"><span class="k">Venue</span><span class="v">The Exchange, Regina</span><span class="ok">✓</span></div>
+      <div class="row"><span class="k">Price</span><span class="v">$35</span><span class="ok">✓</span></div>
+      <div class="row"><span class="k">Category</span><span class="v">Music</span><span class="ok">✓</span></div>
+      <p class="note">Then you check it and press publish.</p>
+    </div>
+
+    <div class="foot">
+      <div class="qr" id="qr2"></div>
+      <div class="scan">
+        <p class="big">Scan to send yours</p>
+        <p class="addr">info@eventually-app.com</p>
+        <p class="tiny">Free · Ten events a year · You keep your own ticketing</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ 3 — CREAM · the comparison ══════════════ -->
+<section class="sheet light">
+  <div class="dots"></div>
+  <div class="inner">
+    <div class="mark"><span class="pips"><i></i><i></i><i></i></span><span class="name">eventually</span></div>
+    <p class="eyebrow">Listing an event</p>
+    <div class="rule"></div>
+    <h1>Fourteen fields, <em>or one message.</em></h1>
+    <p class="sub">Every listings site asks you to type the same thing again. We’d rather read
+       the poster you already made.</p>
+
+    <div class="vs">
+      <div class="col old">
+        <p class="lbl">The usual way</p>
+        <p class="num">14</p>
+        <p class="cap">fields to fill in, by hand, for every event.</p>
+        <ul class="fields">
+          <li>Name</li><li>Date</li><li>Start · End</li><li>Venue · Address</li>
+          <li>Category</li><li>Description</li><li>… and eight more</li>
+        </ul>
+      </div>
+      <div class="col new">
+        <p class="lbl">With Eventually</p>
+        <p class="num">1</p>
+        <p class="cap">message, with the poster you already have attached.</p>
+        <ul class="fields" style="border:0">
+          <li style="border:0;color:#5c5147">Our AI reads it</li>
+          <li style="color:#5c5147">We check it</li>
+          <li style="color:#5c5147">You press publish</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="foot">
+      <div class="qr" id="qr3"></div>
+      <div class="scan">
+        <p class="big">Scan to send yours</p>
+        <p class="addr">info@eventually-app.com</p>
+        <p class="tiny">Free · Ten events a year · You keep your own ticketing</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+  var CONTACT = 'mailto:info@eventually-app.com?subject=Our%20event%20poster';
+  ['qr1', 'qr2', 'qr3'].forEach(function (id) {
+    // Skip a missing box rather than throwing: rendering one sheet on its own is how
+    // the PNGs are made, and a throw here stops every later code from drawing — which
+    // prints as an empty white square, without complaining.
+    var box = document.getElementById(id);
+    if (!box) return;
+    new QRCode(box, {
+      text: CONTACT, width: 600, height: 600,
+      colorDark: '#211A15', colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  });
+</script>
+</body>
+</html>
