@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Eventually — "send us your poster" (4 variations)</title>
+<!--
+  FOUR A4 VARIATIONS, one concept: the organiser already has a poster and does not
+  want to fill in a form. So don't ask them to. Ask for the thing they already have.
+
+  1  Dark   — the plain statement. The lead.
+  2  Cream  — the same, for an office printer and a noticeboard.
+  3  Cream  — a message thread. Shows how short the exchange actually is.
+  4  Dark   — the three steps, for the organiser whose worry is losing control.
+
+  Print: open in a browser, Ctrl+P, A4 portrait, margins None, and TICK
+  "Background graphics" or the dark sheets come out white. Print the page you want.
+
+  THE QR IS A mailto. Scanning it opens a new email to info@eventually-app.com with
+  the subject already written — which is the point: the action is "send the thing you
+  already have", not "go and fill something in". Change CONTACT below to redirect it.
+
+  To use WhatsApp instead, set CONTACT to https://wa.me/<number in full international
+  form, digits only> and change the printed address lines to match. A wa.me link is
+  almost certainly the better channel for this audience — it just needs a real number.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Space+Mono:wght@400;700&display=swap">
+<style>
+  @page { size: A4 portrait; margin: 0; }
+  :root {
+    --font: 'Sora', system-ui, sans-serif;
+    --mono: 'Space Mono', ui-monospace, monospace;
+    --clay: #CB5A3C; --apricot: #E0875F;
+    --ink: #211A15; --cream: #FDF1E7; --dark: #14100c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #555; }
+  body { font-family: var(--font); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  .sheet {
+    position: relative; width: 210mm; height: 297mm; overflow: hidden;
+    margin: 12mm auto; padding: 18mm 16mm 16mm;
+    box-shadow: 0 8px 40px rgba(0,0,0,.5);
+  }
+  @media print {
+    html, body { background: #fff; }
+    .sheet { margin: 0; box-shadow: none; page-break-after: always; }
+    .sheet:last-child { page-break-after: auto; }
+  }
+  .inner { position: relative; z-index: 2; display: flex; flex-direction: column; height: 100%; }
+
+  .dark { background: var(--dark); color: var(--cream); }
+  .light { background: var(--cream); color: var(--ink); }
+  .glow {
+    position: absolute; inset: -22% -10% auto -10%; height: 92%;
+    background: radial-gradient(ellipse at 50% 36%, rgba(203,90,60,.40) 0%, rgba(203,90,60,.09) 46%, rgba(20,16,12,0) 72%);
+  }
+  .dots {
+    position: absolute; inset: 0;
+    background-image: radial-gradient(rgba(224,135,95,.20) 1.1px, transparent 1.1px);
+    background-size: 7mm 7mm;
+    mask-image: radial-gradient(ellipse at 50% 42%, #000 0%, #000 45%, transparent 78%);
+    -webkit-mask-image: radial-gradient(ellipse at 50% 42%, #000 0%, #000 45%, transparent 78%);
+  }
+  .light .dots { background-image: radial-gradient(rgba(203,90,60,.17) 1.1px, transparent 1.1px); }
+
+  .mark { display: flex; align-items: center; gap: 4mm; }
+  .mark .pips { display: flex; gap: 2mm; }
+  .mark .pips i { width: 3.4mm; height: 3.4mm; border-radius: 50%; background: var(--clay); display: block; }
+  .mark .name { font-weight: 700; font-size: 10mm; letter-spacing: -.03em; line-height: 1; }
+
+  .eyebrow {
+    font-family: var(--mono); font-size: 3.6mm; letter-spacing: .28em; text-transform: uppercase;
+    color: var(--clay); margin: 18mm 0 5mm;
+  }
+  h1 { font-size: 19mm; line-height: .98; letter-spacing: -.035em; font-weight: 800; margin: 0 0 7mm; text-wrap: balance; }
+  h1 em { font-style: normal; color: var(--clay); }
+  .sub { font-size: 5.6mm; line-height: 1.45; margin: 0 0 10mm; max-width: 155mm; }
+  .dark .sub { color: #d9cec1; }
+  .light .sub { color: #5c5147; }
+  .rule { height: .6mm; width: 26mm; background: var(--clay); margin: 0 0 6mm; }
+
+  /* the scan block, shared by every sheet */
+  .foot { margin-top: auto; display: flex; align-items: flex-end; gap: 8mm; }
+  .qr { background: #fff; padding: 4mm; border-radius: 4mm; line-height: 0; flex: 0 0 auto; }
+  .qr canvas, .qr img { display: block; width: 42mm; height: 42mm; }
+  .scan { padding-bottom: 1mm; }
+  .scan .big {
+    font-family: var(--mono); font-weight: 700; font-size: 5mm; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--clay); margin: 0 0 2.5mm;
+  }
+  .scan .addr { font-size: 5.2mm; font-weight: 700; margin: 0 0 2mm; word-break: break-all; }
+  .scan .tiny { font-size: 3.6mm; margin: 0; }
+  .dark .scan .tiny { color: #9a8f80; }
+  .light .scan .tiny { color: #7a6e62; }
+
+  /* ── sheet 1/2: the poster-in-hand illustration ─────────────────────────── */
+  .show { display: flex; align-items: center; gap: 9mm; margin: 0 0 8mm; }
+  .card {
+    flex: 0 0 auto; width: 46mm; height: 62mm; border-radius: 3mm; position: relative;
+    background: linear-gradient(150deg, #8A3B1E, #CB5A3C 45%, #E0875F);
+    box-shadow: 0 5mm 12mm rgba(0,0,0,.45); overflow: hidden; transform: rotate(-4deg);
+  }
+  .light .card { box-shadow: 0 4mm 10mm rgba(33,26,21,.25); }
+  .card::after {
+    content: ''; position: absolute; inset: 0;
+    background-image: radial-gradient(rgba(255,255,255,.28) 1px, transparent 1px);
+    background-size: 4mm 4mm;
+  }
+  .card .lines { position: absolute; left: 5mm; right: 5mm; bottom: 6mm; }
+  .card .lines b, .card .lines i {
+    display: block; background: rgba(255,255,255,.92); border-radius: 1mm; margin-bottom: 2.2mm;
+  }
+  .card .lines b { height: 3.2mm; width: 80%; }
+  .card .lines i { height: 1.8mm; width: 55%; background: rgba(255,255,255,.6); }
+  .arrow { font-size: 9mm; color: var(--clay); flex: 0 0 auto; }
+  .result { flex: 1 1 auto; min-width: 0; }
+  .result .chip {
+    display: inline-block; font-family: var(--mono); font-size: 3.2mm; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--clay); border: .4mm solid rgba(203,90,60,.5);
+    border-radius: 99mm; padding: 1.4mm 4mm; margin-bottom: 4mm;
+  }
+  .result p { margin: 0 0 3mm; font-size: 4.6mm; line-height: 1.4; }
+  .result p b { font-weight: 700; }
+  .dark .result p { color: #ece5da; }
+
+  /* ── sheet 3: the message thread ────────────────────────────────────────── */
+  .thread { margin: 0 0 8mm; max-width: 132mm; }
+  /* The quote is the longest headline of the four; a touch smaller buys the gap
+     that keeps the closing line off the QR. */
+  .sheet.thread-sheet h1 { font-size: 17mm; }
+  .sheet.thread-sheet .sub { margin-bottom: 7mm; }
+  .bub {
+    max-width: 88%; padding: 4mm 5.5mm; border-radius: 6mm; margin-bottom: 3.2mm;
+    font-size: 4.7mm; line-height: 1.4;
+  }
+  .bub.them { background: #efe2d4; color: #3d342c; border-bottom-left-radius: 1.5mm; }
+  .bub.us { background: var(--clay); color: #fff; margin-left: auto; border-bottom-right-radius: 1.5mm; }
+  .bub .who {
+    display: block; font-family: var(--mono); font-size: 2.9mm; letter-spacing: .12em;
+    text-transform: uppercase; opacity: .7; margin-bottom: 1.6mm;
+  }
+
+  /* ── sheet 4: the three steps ───────────────────────────────────────────── */
+  ol.steps { list-style: none; margin: 0 0 8mm; padding: 0; counter-reset: s; }
+  ol.steps li {
+    counter-increment: s; display: flex; gap: 5mm; align-items: flex-start; margin-bottom: 6mm;
+  }
+  ol.steps li::before {
+    content: counter(s); flex: 0 0 auto;
+    width: 10mm; height: 10mm; border-radius: 50%; background: var(--clay); color: #fff;
+    font-weight: 700; font-size: 5mm; display: flex; align-items: center; justify-content: center;
+  }
+  ol.steps .t { font-size: 5.4mm; font-weight: 700; margin: 1mm 0 1mm; }
+  ol.steps .d { font-size: 4.4mm; line-height: 1.4; margin: 0; }
+  .dark ol.steps .d { color: #bcb1a4; }
+  .light ol.steps .d { color: #6b6055; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════ 1 — DARK · the plain statement ══════════════ -->
+<section class="sheet dark">
+  <div class="glow"></div><div class="dots"></div>
+  <div class="inner">
+    <div class="mark"><span class="pips"><i></i><i></i><i></i></span><span class="name">eventually</span></div>
+    <p class="eyebrow">Running an event?</p>
+    <h1>You’ve already made <em>the poster.</em></h1>
+    <p class="sub">So don’t fill in a form. Send us the poster you already have — we’ll build
+       your listing, and you just check it and press publish.</p>
+
+    <div class="show">
+      <div class="card"><div class="lines"><b></b><i></i><i></i></div></div>
+      <div class="arrow">→</div>
+      <div class="result">
+        <span class="chip">On Eventually</span>
+        <p><b>On the globe</b>, where people look for what’s on tonight.</p>
+        <p><b>Your own page</b>, the one that turns up in a search.</p>
+        <p><b>Read out</b> by our AI host to people in your city.</p>
+      </div>
+    </div>
+
+    <div class="foot">
+      <div class="qr" id="qr1"></div>
+      <div class="scan">
+        <p class="big">Scan to send it</p>
+        <p class="addr">info@eventually-app.com</p>
+        <p class="tiny">Free · Ten events a year · You keep your own ticketing</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ 2 — CREAM · the same, for a cheap print ══════════════ -->
+<section class="sheet light">
+  <div class="dots"></div>
+  <div class="inner">
+    <div class="mark"><span class="pips"><i></i><i></i><i></i></span><span class="name">eventually</span></div>
+    <p class="eyebrow">Running an event?</p>
+    <div class="rule"></div>
+    <h1>You’ve already made <em>the poster.</em></h1>
+    <p class="sub">So don’t fill in a form. Send us the poster you already have — we’ll build
+       your listing, and you just check it and press publish.</p>
+
+    <div class="show">
+      <div class="card"><div class="lines"><b></b><i></i><i></i></div></div>
+      <div class="arrow">→</div>
+      <div class="result">
+        <span class="chip">On Eventually</span>
+        <p><b>On the globe</b>, where people look for what’s on tonight.</p>
+        <p><b>Your own page</b>, the one that turns up in a search.</p>
+        <p><b>Read out</b> by our AI host to people in your city.</p>
+      </div>
+    </div>
+
+    <div class="foot">
+      <div class="qr" id="qr2"></div>
+      <div class="scan">
+        <p class="big">Scan to send it</p>
+        <p class="addr">info@eventually-app.com</p>
+        <p class="tiny">Free · Ten events a year · You keep your own ticketing</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ 3 — CREAM · the message thread ══════════════ -->
+<section class="sheet light thread-sheet">
+  <div class="dots"></div>
+  <div class="inner">
+    <div class="mark"><span class="pips"><i></i><i></i><i></i></span><span class="name">eventually</span></div>
+    <p class="eyebrow">It takes one message</p>
+    <div class="rule"></div>
+    <h1>“Can you put our event up?”</h1>
+
+    <div class="thread">
+      <div class="bub them"><span class="who">You</span>Hi — we’ve got a show on the 12th. Can you put it on Eventually?</div>
+      <div class="bub us"><span class="who">Eventually</span>Of course. Send me the poster.</div>
+      <div class="bub them"><span class="who">You</span>[poster.jpg]</div>
+      <div class="bub us"><span class="who">Eventually</span>Got it. Here’s your listing — check it and press publish.</div>
+    </div>
+
+    <p class="sub">That’s the whole thing. No form, no account,
+       no waiting on us to get back to you.</p>
+
+    <div class="foot">
+      <div class="qr" id="qr3"></div>
+      <div class="scan">
+        <p class="big">Start the message</p>
+        <p class="addr">info@eventually-app.com</p>
+        <p class="tiny">Free · Ten events a year · You keep your own ticketing</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ 4 — DARK · the three steps ══════════════ -->
+<section class="sheet dark">
+  <div class="glow"></div><div class="dots"></div>
+  <div class="inner">
+    <div class="mark"><span class="pips"><i></i><i></i><i></i></span><span class="name">eventually</span></div>
+    <p class="eyebrow">Need a hand?</p>
+    <h1>We’ll put your event up <em>for you.</em></h1>
+    <p class="sub">Send whatever you already have — a poster, a flyer, a screenshot of your
+       Instagram post. We do the typing.</p>
+
+    <ol class="steps">
+      <li><div><p class="t">Send us the poster</p>
+        <p class="d">Email it, or a photo of it. A screenshot of your post works too — the caption
+           often has the price and the ticket link.</p></div></li>
+      <li><div><p class="t">We build the listing</p>
+        <p class="d">Date, time, venue, description, your picture. Usually within a day.</p></div></li>
+      <li><div><p class="t">You check it and publish</p>
+        <p class="d">We send one link. Fix anything that’s wrong, press publish. Nothing goes up
+           until you say so.</p></div></li>
+    </ol>
+
+    <div class="foot">
+      <div class="qr" id="qr4"></div>
+      <div class="scan">
+        <p class="big">Scan to send it</p>
+        <p class="addr">info@eventually-app.com</p>
+        <p class="tiny">Free · Ten events a year · You keep your own ticketing</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+  /* A mailto, not a web address. Scanning opens a new email to us with the subject
+     already written — the action is "send the thing you already have", which is the
+     whole argument of the poster. Pointing it at a form would contradict the words.
+
+     For WhatsApp: CONTACT = 'https://wa.me/1234567890' (full international number,
+     digits only) and change the printed address lines to match. */
+  var CONTACT = 'mailto:info@eventually-app.com?subject=Our%20event%20poster';
+
+  ['qr1', 'qr2', 'qr3', 'qr4'].forEach(function (id) {
+    // Skip a missing box rather than throwing: rendering ONE sheet on its own is how
+    // the PNGs are made, and a throw here would silently stop every later code from
+    // drawing — a poster printing an empty white square without complaining.
+    var box = document.getElementById(id);
+    if (!box) return;
+    new QRCode(box, {
+      text: CONTACT, width: 600, height: 600,
+      colorDark: '#211A15', colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  });
+</script>
+</body>
+</html>
