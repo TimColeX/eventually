@@ -6,6 +6,25 @@
   <meta name="theme-color" content="#F4ECE2" />
   <title>Eventually — the event directory where good things land</title>
   <meta name="description" content="The event directory where good things land — eventually." />
+
+  <!-- LINK PREVIEW. Without these a shared link arrives in WhatsApp, Messenger,
+       LinkedIn or iMessage with no picture and whatever text the platform can
+       scrape — which reads as broken to whoever receives it. og:image must be an
+       ABSOLUTE url and about 1200x630; a relative path or a portrait image is
+       silently ignored or cropped to a strip. Generated from brand/og-cards.html. -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Eventually" />
+  <meta property="og:title" content="Eventually — what’s on, everywhere, tonight" />
+  <meta property="og:description" content="A live map of events around the world, with an AI host that tells you what’s happening near you." />
+  <meta property="og:url" content="https://eventually-app.com/" />
+  <meta property="og:image" content="https://eventually-app.com/assets/og-home.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Eventually — what’s on, everywhere, tonight" />
+  <meta name="twitter:description" content="A live map of events around the world, with an AI host that tells you what’s happening near you." />
+  <meta name="twitter:image" content="https://eventually-app.com/assets/og-home.png" />
+  <link rel="canonical" href="https://eventually-app.com/" />
   <!-- Google Search Console ownership verification. Must stay in the homepage <head>:
        removing it un-verifies the property and cuts off sitemap/indexing reporting. -->
   <meta name="google-site-verification" content="udynzHHQzFopAk8UfCBUFeOyd2L_BZbLurtLJJlNF-c" />
@@ -241,7 +260,7 @@
     /* Build stamp. Must match sw.js CACHE and version.json — `node tools/bump-version.js`
        keeps all three in step. This is how a running app knows a newer one exists.
        It stays inline because this file is the one the bump script rewrites. */
-    window.EVENTUALLY_BUILD = 'v250';
+    window.EVENTUALLY_BUILD = 'v251';
   </script>
   <!-- Backend config, shared with publish.html so there is one copy of it. Safe to
        commit: the anon key is a PUBLIC key, protected by row-level security.

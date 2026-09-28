@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Eventually — link preview cards</title>
+<!--
+  THE IMAGE THAT APPEARS WHEN SOMEONE SHARES A LINK.
+  1200x630 is the size WhatsApp, Facebook, LinkedIn, iMessage and X all crop to.
+  The existing posters are portrait, so they would be cropped to a strip; these are
+  built for the aspect ratio.
+
+  Rendered to assets/og-home.png and assets/og-publish.png with headless Chrome at
+  device-scale 1 — 1200px is already the target, and these are screen assets.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Space+Mono:wght@400;700&display=swap">
+<style>
+  :root { --font: 'Sora', system-ui, sans-serif; --mono: 'Space Mono', ui-monospace, monospace;
+          --clay: #CB5A3C; --cream: #FDF1E7; --dark: #14100c; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #555; font-family: var(--font); }
+  .card { position: relative; width: 1200px; height: 630px; overflow: hidden;
+          background: var(--dark); color: var(--cream); margin: 16px auto;
+          padding: 62px 70px; display: flex; flex-direction: column; justify-content: center; }
+  .glow { position: absolute; inset: -30% -10% auto -10%; height: 130%;
+          background: radial-gradient(ellipse at 68% 42%, rgba(203,90,60,.46) 0%, rgba(203,90,60,.12) 44%, rgba(20,16,12,0) 70%); }
+  .dots { position: absolute; inset: 0;
+          background-image: radial-gradient(rgba(224,135,95,.20) 3px, transparent 3px);
+          background-size: 30px 30px;
+          mask-image: radial-gradient(ellipse at 62% 46%, #000 0%, #000 42%, transparent 76%);
+          -webkit-mask-image: radial-gradient(ellipse at 62% 46%, #000 0%, #000 42%, transparent 76%); }
+  .in { position: relative; z-index: 2; max-width: 800px; }
+  .mark { display: flex; align-items: center; gap: 15px; margin: 0 0 38px; }
+  .mark i { width: 14px; height: 14px; border-radius: 50%; background: var(--clay); display: block; }
+  .mark .pips { display: flex; gap: 8px; }
+  .mark .nm { font-weight: 700; font-size: 40px; letter-spacing: -.03em; }
+  h1 { font-size: 78px; line-height: .98; letter-spacing: -.035em; font-weight: 800; margin: 0 0 24px; }
+  h1 em { font-style: normal; color: var(--clay); }
+  p { font-size: 27px; line-height: 1.4; margin: 0; color: #d9cec1; max-width: 700px; }
+  .tag { position: absolute; right: 70px; bottom: 54px; z-index: 2;
+         font-family: var(--mono); font-size: 19px; letter-spacing: .16em;
+         text-transform: uppercase; color: var(--clay); }
+</style>
+</head>
+<body>
+
+<!-- home -->
+<section class="card">
+  <div class="glow"></div><div class="dots"></div>
+  <div class="in">
+    <div class="mark"><span class="pips"><i></i><i></i><i></i></span><span class="nm">eventually</span></div>
+    <h1>What’s on, <em>everywhere,</em><br>tonight.</h1>
+    <p>A live map of events around the world, with an AI host that tells you what’s
+       happening near you.</p>
+  </div>
+  <div class="tag">eventually-app.com</div>
+</section>
+
+<!-- publish -->
+<section class="card">
+  <div class="glow"></div><div class="dots"></div>
+  <div class="in">
+    <div class="mark"><span class="pips"><i></i><i></i><i></i></span><span class="nm">eventually</span></div>
+    <h1>Put your event <em>on the globe.</em></h1>
+    <p>Ten events a year, free. No card, no commission — and you keep your own ticketing.</p>
+  </div>
+  <div class="tag">eventually-app.com/publish</div>
+</section>
+
+</body>
+</html>
