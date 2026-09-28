@@ -171,11 +171,33 @@
     this.targetZoom = Math.max(0.75, Math.min(3.4, this.targetZoom * f));
   };
 
+  /* THE GLOBE GOES OVAL WHEN THIS DOESN'T RUN.
+   *
+   * The drawing is circular by construction — one radius for both axes, a uniform
+   * DPR transform — so a stretched globe is never the maths. It is the BITMAP being
+   * scaled to a box it no longer matches: `#globe` is `position:fixed; inset:0`, and
+   * if its height changes while `canvas.width/height` keep their old values, the
+   * browser stretches the old bitmap to fit. A circle becomes an ellipse.
+   *
+   * On iPhone that happens constantly, because the URL bar collapses and expands as
+   * you scroll and the fixed element's height changes with it — and iOS Safari and
+   * Chrome do NOT reliably fire `window.resize` for that. Desktop never sees it,
+   * which is exactly the report.
+   *
+   * `dpr` is read here rather than once at construction: dragging a window to a
+   * second monitor changes it, and a stale value blurs or stretches the same way.
+   */
   Globe.prototype.resize = function () {
     const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
-    this.canvas.width = w * this.dpr;
-    this.canvas.height = h * this.dpr;
-    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    if (!w || !h) return;                       // detached or display:none — nothing to size to
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    // A ResizeObserver can fire on every scroll frame. Re-allocating the bitmap each
+    // time clears it and costs real work on a phone, so only act on a real change.
+    if (w === this.w && h === this.h && dpr === this.dpr) return;
+    this.dpr = dpr;
+    this.canvas.width = w * dpr;
+    this.canvas.height = h * dpr;
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.w = w; this.h = h;
     this.cx = w / 2;
     this.cy = h / 2;
@@ -257,7 +279,25 @@
       e.preventDefault();
       self.zoomBy(e.deltaY < 0 ? 1.12 : 0.89);
     }, { passive: false });
+    /* Watch the ELEMENT, not the window. `window.resize` misses the case that
+       actually breaks this — an iPhone's URL bar collapsing, which changes the
+       height of a position:fixed element without a resize event. A ResizeObserver
+       fires whenever the box changes, for any reason: toolbar, rotation, keyboard,
+       split view, or a CSS change we make later. */
+    if (window.ResizeObserver) {
+      const ro = new ResizeObserver(function () { self.resize(); });
+      ro.observe(cv);
+      this._ro = ro;
+    }
+    // Kept for browsers with no ResizeObserver, and it costs nothing where there is
+    // one: resize() returns immediately when the box has not actually changed.
     window.addEventListener('resize', function () { self.resize(); });
+    // iOS reports the new size a beat AFTER this fires, so re-measure on the next
+    // frame as well as now.
+    window.addEventListener('orientationchange', function () {
+      self.resize();
+      requestAnimationFrame(function () { self.resize(); });
+    });
   };
 
   Globe.prototype._rotate = function (v) {
