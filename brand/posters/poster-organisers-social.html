@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Eventually — organiser posts (Instagram sizes)</title>
+<!--
+  THE SAME MESSAGES, AT THE SIZES THEY WILL ACTUALLY BE SEEN.
+  The A4 sheets are for a noticeboard. These are for a feed and a story — which is
+  where an organiser who already has a poster is most likely to be reached, because
+  it is where they posted theirs.
+
+  1  1080×1350  feed   · dark  · the readout
+  2  1080×1350  feed   · cream · you've already made the poster
+  3  1080×1920  story  · dark  · the readout, with room to breathe
+  4  1080×1920  story  · cream · fourteen fields, or one message
+
+  Sized in PIXELS, not millimetres — these are screen assets, not print. Render
+  with headless Chrome at device-scale 1: 1080px is already what Instagram wants.
+
+  The QR still works on a screen (people scan posts off a laptop) but the handle
+  and the address matter more here, so they are given equal weight.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Space+Mono:wght@400;700&display=swap">
+<style>
+  :root {
+    --font: 'Sora', system-ui, sans-serif;
+    --mono: 'Space Mono', ui-monospace, monospace;
+    --clay: #CB5A3C; --ink: #211A15; --cream: #FDF1E7; --dark: #14100c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #555; }
+  body { font-family: var(--font); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  .sheet { position: relative; overflow: hidden; margin: 20px auto; padding: 74px 68px 64px; box-shadow: 0 10px 46px rgba(0,0,0,.55); }
+  .feed  { width: 1080px; height: 1350px; }
+  .story { width: 1080px; height: 1920px; padding-top: 150px; padding-bottom: 150px; }
+  .inner { position: relative; z-index: 2; display: flex; flex-direction: column; height: 100%; }
+
+  .dark { background: var(--dark); color: var(--cream); }
+  .light { background: var(--cream); color: var(--ink); }
+  .glow { position: absolute; inset: -20% -10% auto -10%; height: 92%;
+          background: radial-gradient(ellipse at 50% 36%, rgba(203,90,60,.42) 0%, rgba(203,90,60,.10) 46%, rgba(20,16,12,0) 72%); }
+  .dots { position: absolute; inset: 0;
+          background-image: radial-gradient(rgba(224,135,95,.20) 4px, transparent 4px);
+          background-size: 34px 34px;
+          mask-image: radial-gradient(ellipse at 50% 42%, #000 0%, #000 45%, transparent 78%);
+          -webkit-mask-image: radial-gradient(ellipse at 50% 42%, #000 0%, #000 45%, transparent 78%); }
+  .light .dots { background-image: radial-gradient(rgba(203,90,60,.17) 4px, transparent 4px); }
+
+  .mark { display: flex; align-items: center; gap: 18px; }
+  .mark .pips { display: flex; gap: 9px; }
+  .mark .pips i { width: 16px; height: 16px; border-radius: 50%; background: var(--clay); display: block; }
+  .mark .name { font-weight: 700; font-size: 48px; letter-spacing: -.03em; line-height: 1; }
+
+  .eyebrow { font-family: var(--mono); font-size: 17px; letter-spacing: .28em; text-transform: uppercase;
+             color: var(--clay); margin: 70px 0 22px; }
+  .story .eyebrow { margin-top: 110px; }
+  h1 { font-size: 92px; line-height: .98; letter-spacing: -.035em; font-weight: 800; margin: 0 0 30px; text-wrap: balance; }
+  .story h1 { font-size: 106px; }
+  h1 em { font-style: normal; color: var(--clay); }
+  .sub { font-size: 30px; line-height: 1.45; margin: 0 0 44px; max-width: 880px; }
+  .story .sub { font-size: 34px; }
+  .sub em { font-style: normal; font-weight: 700; color: var(--clay); }
+  .dark .sub { color: #d9cec1; }
+  .light .sub { color: #5c5147; }
+  .rule { height: 3px; width: 120px; background: var(--clay); margin: 0 0 28px; }
+
+  /* the readout, at screen scale */
+  .read { border-radius: 22px; padding: 36px 38px 26px; margin: 0 0 40px; border: 2px solid rgba(203,90,60,.45); }
+  .dark .read { background: rgba(255,255,255,.04); }
+  .light .read { background: #fff8f1; }
+  .read .hd { font-family: var(--mono); font-size: 17px; letter-spacing: .2em; text-transform: uppercase;
+              color: var(--clay); display: flex; align-items: center; gap: 14px; margin: 0 0 26px; }
+  .read .hd i { width: 13px; height: 13px; border-radius: 50%; background: var(--clay); display: block; }
+  .read .row { display: flex; align-items: baseline; gap: 20px; padding: 14px 0;
+               border-top: 1px solid rgba(203,90,60,.22); }
+  .read .row:first-of-type { border-top: 0; }
+  .read .k { flex: 0 0 150px; font-family: var(--mono); font-size: 16px; letter-spacing: .14em;
+             text-transform: uppercase; opacity: .62; }
+  .read .v { flex: 1 1 auto; font-size: 26px; font-weight: 600; min-width: 0; }
+  .story .read .v { font-size: 30px; }
+  .read .ok { flex: 0 0 auto; color: var(--clay); font-size: 24px; font-weight: 700; }
+  .read .note { font-family: var(--mono); font-size: 16px; margin: 22px 0 0; opacity: .6; }
+
+  /* bullets */
+  ul.pts { list-style: none; margin: 0 0 40px; padding: 0; }
+  ul.pts li { display: flex; gap: 18px; align-items: flex-start; font-size: 28px; line-height: 1.4; margin-bottom: 22px; }
+  ul.pts li b { font-weight: 700; }
+  ul.pts .pip { flex: 0 0 auto; width: 14px; height: 14px; border-radius: 50%; background: var(--clay); margin-top: 14px; }
+  .dark ul.pts li { color: #ece5da; }
+
+  /* comparison */
+  .vs { display: flex; gap: 30px; margin: 0 0 44px; }
+  .col { flex: 1 1 0; min-width: 0; border-radius: 20px; padding: 30px 30px 26px; }
+  .col.old { background: rgba(33,26,21,.05); border: 2px solid rgba(33,26,21,.14); }
+  .col.new { background: #fff8f1; border: 2px solid rgba(203,90,60,.45); }
+  .col .lbl { font-family: var(--mono); font-size: 16px; letter-spacing: .18em; text-transform: uppercase; margin: 0 0 18px; }
+  .col.old .lbl { color: #8b8078; }
+  .col.new .lbl { color: var(--clay); }
+  .col .num { font-size: 96px; font-weight: 800; letter-spacing: -.04em; line-height: 1; margin: 0 0 10px; }
+  .col.old .num { color: #6b6059; }
+  .col.new .num { color: var(--clay); }
+  .col .cap { font-size: 24px; line-height: 1.35; margin: 0; color: #5c5147; }
+
+  /* the footer: handle and address carry more weight than the code on a screen */
+  .foot { margin-top: auto; display: flex; align-items: flex-end; gap: 32px; }
+  .qr { background: #fff; padding: 16px; border-radius: 18px; line-height: 0; flex: 0 0 auto; }
+  .qr canvas, .qr img { display: block; width: 170px; height: 170px; }
+  .scan .big { font-family: var(--mono); font-weight: 700; font-size: 20px; letter-spacing: .14em;
+               text-transform: uppercase; color: var(--clay); margin: 0 0 12px; }
+  .scan .addr { font-size: 30px; font-weight: 700; margin: 0 0 10px; }
+  .scan .tiny { font-size: 19px; margin: 0; }
+  .dark .scan .tiny { color: #9a8f80; }
+  .light .scan .tiny { color: #7a6e62; }
+</style>
+</head>
+<body>
+
+<!-- ═══════ 1 · FEED 1080×1350 · dark · the readout ═══════ -->
+<section class="sheet feed dark">
+  <div class="glow"></div><div class="dots"></div>
+  <div class="inner">
+    <div class="mark"><span class="pips"><i></i><i></i><i></i></span><span class="name">eventually</span></div>
+    <p class="eyebrow">A new way to get listed</p>
+    <h1>Our AI reads <em>your poster.</em></h1>
+    <p class="sub">Send the artwork you already have. You get <em>a listing to check, not a form to fill.</em></p>
+
+    <div class="read">
+      <div class="hd"><i></i>Reading your poster</div>
+      <div class="row"><span class="k">Event</span><span class="v">R&amp;B Night — London</span><span class="ok">✓</span></div>
+      <div class="row"><span class="k">When</span><span class="v">Sat 3 October, 8:00 pm</span><span class="ok">✓</span></div>
+      <div class="row"><span class="k">Venue</span><span class="v">Studio 45, London</span><span class="ok">✓</span></div>
+      <div class="row"><span class="k">Price</span><span class="v">£18</span><span class="ok">✓</span></div>
+      <p class="note">Then you check it and press publish.</p>
+    </div>
+
+    <div class="foot">
+      <div class="qr" id="qr1"></div>
+      <div class="scan">
+        <p class="big">Send us yours</p>
+        <p class="addr">info@eventually-app.com</p>
+        <p class="tiny">Free · Ten events a year · You keep your own ticketing</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ 2 · FEED 1080×1350 · cream · already made the poster ═══════ -->
+<section class="sheet feed light">
+  <div class="dots"></div>
+  <div class="inner">
+    <div class="mark"><span class="pips"><i></i><i></i><i></i></span><span class="name">eventually</span></div>
+    <p class="eyebrow">Running an event?</p>
+    <div class="rule"></div>
+    <h1>You’ve already made <em>the poster.</em></h1>
+    <p class="sub">So don’t fill in a form. Send it to us — <em>our AI captures it for you</em> — and you
+       just check it and press publish.</p>
+
+    <ul class="pts">
+      <li><span class="pip"></span><span><b>On the globe</b>, where people look for what’s on tonight.</span></li>
+      <li><span class="pip"></span><span><b>Your own page</b>, the one that turns up in a search.</span></li>
+      <li><span class="pip"></span><span><b>Read out</b> by our AI host to people in your city.</span></li>
+    </ul>
+
+    <div class="foot">
+      <div class="qr" id="qr2"></div>
+      <div class="scan">
+        <p class="big">Send us yours</p>
+        <p class="addr">info@eventually-app.com</p>
+        <p class="tiny">Free · Ten events a year · You keep your own ticketing</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ 3 · STORY 1080×1920 · dark · the readout ═══════ -->
+<section class="sheet story dark">
+  <div class="glow"></div><div class="dots"></div>
+  <div class="inner">
+    <div class="mark"><span class="pips"><i></i><i></i><i></i></span><span class="name">eventually</span></div>
+    <p class="eyebrow">A new way to get listed</p>
+    <h1>Our AI reads <em>your poster.</em></h1>
+    <p class="sub">Send us the artwork you already have. It pulls out the date, the venue, the price —
+       and you get <em>a listing to check, not a form to fill.</em></p>
+
+    <div class="read">
+      <div class="hd"><i></i>Reading your poster</div>
+      <div class="row"><span class="k">Event</span><span class="v">R&amp;B Night — London</span><span class="ok">✓</span></div>
+      <div class="row"><span class="k">When</span><span class="v">Sat 3 October, 8:00 pm</span><span class="ok">✓</span></div>
+      <div class="row"><span class="k">Venue</span><span class="v">Studio 45, London</span><span class="ok">✓</span></div>
+      <div class="row"><span class="k">Price</span><span class="v">£18</span><span class="ok">✓</span></div>
+      <div class="row"><span class="k">Category</span><span class="v">Music</span><span class="ok">✓</span></div>
+      <p class="note">Then you check it and press publish.</p>
+    </div>
+
+    <ul class="pts">
+      <li><span class="pip"></span><span><b>No form.</b> No account. Just the poster.</span></li>
+      <li><span class="pip"></span><span><b>Nothing goes live</b> until you say so.</span></li>
+    </ul>
+
+    <div class="foot">
+      <div class="qr" id="qr3"></div>
+      <div class="scan">
+        <p class="big">Send us yours</p>
+        <p class="addr">info@eventually-app.com</p>
+        <p class="tiny">Free · Ten events a year · You keep your own ticketing</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ 4 · STORY 1080×1920 · cream · the comparison ═══════ -->
+<section class="sheet story light">
+  <div class="dots"></div>
+  <div class="inner">
+    <div class="mark"><span class="pips"><i></i><i></i><i></i></span><span class="name">eventually</span></div>
+    <p class="eyebrow">Listing an event</p>
+    <div class="rule"></div>
+    <h1>Fourteen fields, <em>or one message.</em></h1>
+    <p class="sub">Every listings site asks you to type the same thing again. We’d rather read the
+       poster you already made.</p>
+
+    <div class="vs">
+      <div class="col old">
+        <p class="lbl">The usual way</p>
+        <p class="num">14</p>
+        <p class="cap">fields to fill in, by hand, for every event.</p>
+      </div>
+      <div class="col new">
+        <p class="lbl">With Eventually</p>
+        <p class="num">1</p>
+        <p class="cap">message, with the poster you already have attached.</p>
+      </div>
+    </div>
+
+    <ul class="pts">
+      <li><span class="pip"></span><span><b>Our AI reads it</b> — date, venue, price, description.</span></li>
+      <li><span class="pip"></span><span><b>We check it</b>, then send you one link.</span></li>
+      <li><span class="pip"></span><span><b>You press publish.</b> Nothing before that.</span></li>
+    </ul>
+
+    <div class="foot">
+      <div class="qr" id="qr4"></div>
+      <div class="scan">
+        <p class="big">Send us yours</p>
+        <p class="addr">info@eventually-app.com</p>
+        <p class="tiny">Free · Ten events a year · You keep your own ticketing</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+  var CONTACT = 'mailto:info@eventually-app.com?subject=Our%20event%20poster';
+  ['qr1', 'qr2', 'qr3', 'qr4'].forEach(function (id) {
+    var box = document.getElementById(id);
+    if (!box) return;            // one sheet rendered alone must not kill the rest
+    new QRCode(box, {
+      text: CONTACT, width: 600, height: 600,
+      colorDark: '#211A15', colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  });
+</script>
+</body>
+</html>
