@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Eventually — "it's free" (4 variations)</title>
+<!--
+  FOUR A4 VARIATIONS with the price as the hero.
+
+  1  Dark   — FREE, as big as the page allows.
+  2  Cream  — the price card. Nothing to pay, and what you get for it.
+  3  Dark   — no fee, no commission, no card. The three objections, answered.
+  4  Cream  — free while we're growing. Honest, and it creates a reason to act now.
+
+  ⚠️ "TEN EVENTS A YEAR" APPEARS ON EVERY SHEET, IN TYPE YOU CAN READ ACROSS A ROOM.
+  Free is the hook and it is true, but the free tier has a limit, and an organiser
+  who finds that out on their eleventh event will feel tricked by a poster that only
+  whispered it. Selling honestly is also cheaper than apologising later.
+
+  Every claim is lifted from publish.html: "Ten events a year, free.", "No fee, and
+  no commission on your tickets.", "free registrations.", "keep the booking.",
+  "check every event". If that page changes, these change.
+
+  QR → eventually-app.com/publish.html. Unlike the "send us your poster" set, this
+  one wants them at the form: the message is "come and list it", so the form is the
+  right destination.
+
+  Print: browser, Ctrl+P, A4 portrait, margins None, TICK "Background graphics".
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Space+Mono:wght@400;700&display=swap">
+<style>
+  @page { size: A4 portrait; margin: 0; }
+  :root {
+    --font: 'Sora', system-ui, sans-serif;
+    --mono: 'Space Mono', ui-monospace, monospace;
+    --clay: #CB5A3C; --ink: #211A15; --cream: #FDF1E7; --dark: #14100c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #555; }
+  body { font-family: var(--font); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  .sheet { position: relative; width: 210mm; height: 297mm; overflow: hidden;
+           margin: 12mm auto; padding: 18mm 16mm 16mm; box-shadow: 0 8px 40px rgba(0,0,0,.5); }
+  @media print {
+    html, body { background: #fff; }
+    .sheet { margin: 0; box-shadow: none; page-break-after: always; }
+    .sheet:last-child { page-break-after: auto; }
+  }
+  .inner { position: relative; z-index: 2; display: flex; flex-direction: column; height: 100%; }
+
+  .dark { background: var(--dark); color: var(--cream); }
+  .light { background: var(--cream); color: var(--ink); }
+  .glow { position: absolute; inset: -22% -10% auto -10%; height: 92%;
+          background: radial-gradient(ellipse at 50% 34%, rgba(203,90,60,.44) 0%, rgba(203,90,60,.10) 46%, rgba(20,16,12,0) 72%); }
+  .dots { position: absolute; inset: 0;
+          background-image: radial-gradient(rgba(224,135,95,.20) 1.1px, transparent 1.1px);
+          background-size: 7mm 7mm;
+          mask-image: radial-gradient(ellipse at 50% 42%, #000 0%, #000 45%, transparent 78%);
+          -webkit-mask-image: radial-gradient(ellipse at 50% 42%, #000 0%, #000 45%, transparent 78%); }
+  .light .dots { background-image: radial-gradient(rgba(203,90,60,.17) 1.1px, transparent 1.1px); }
+
+  .mark { display: flex; align-items: center; gap: 4mm; }
+  .mark .pips { display: flex; gap: 2mm; }
+  .mark .pips i { width: 3.4mm; height: 3.4mm; border-radius: 50%; background: var(--clay); display: block; }
+  .mark .name { font-weight: 700; font-size: 10mm; letter-spacing: -.03em; line-height: 1; }
+
+  .eyebrow { font-family: var(--mono); font-size: 3.6mm; letter-spacing: .28em; text-transform: uppercase;
+             color: var(--clay); margin: 16mm 0 4mm; }
+  h1 { font-size: 18mm; line-height: .98; letter-spacing: -.035em; font-weight: 800; margin: 0 0 6mm; text-wrap: balance; }
+  h1 em { font-style: normal; color: var(--clay); }
+  /* The hero word. 62mm is as large as A4 takes with the margins here. */
+  .huge { font-size: 66mm; line-height: .82; letter-spacing: -.05em; font-weight: 800;
+          color: var(--clay); margin: 0 0 4mm; }
+  .after { font-size: 9mm; line-height: 1.15; font-weight: 700; letter-spacing: -.02em; margin: 0 0 6mm; }
+  .sub { font-size: 5.4mm; line-height: 1.45; margin: 0 0 9mm; max-width: 158mm; }
+  .dark .sub { color: #d9cec1; }
+  .light .sub { color: #5c5147; }
+  .rule { height: .6mm; width: 26mm; background: var(--clay); margin: 0 0 6mm; }
+
+  /* The limit, stated plainly and at a readable size — never in small print. */
+  .limit { font-family: var(--mono); font-size: 4.4mm; letter-spacing: .05em; margin: 0 0 9mm; }
+  .dark .limit { color: #e2c489; }
+  .light .limit { color: #8a6d1e; }
+
+  ul.pts { list-style: none; margin: 0 0 9mm; padding: 0; }
+  ul.pts li { display: flex; gap: 4mm; align-items: flex-start; font-size: 5.3mm; line-height: 1.4; margin-bottom: 4.5mm; }
+  ul.pts li b { font-weight: 700; }
+  ul.pts .pip { flex: 0 0 auto; width: 3mm; height: 3mm; border-radius: 50%; background: var(--clay); margin-top: 2.5mm; }
+  .dark ul.pts li { color: #ece5da; }
+
+  /* the price card */
+  .price { border-radius: 5mm; padding: 9mm 9mm 7mm; margin: 0 0 9mm;
+           border: .5mm solid rgba(203,90,60,.45); background: #fff8f1; }
+  .price .lbl { font-family: var(--mono); font-size: 3.4mm; letter-spacing: .2em; text-transform: uppercase;
+                color: var(--clay); margin: 0 0 3mm; }
+  .price .amt { font-size: 40mm; line-height: .85; font-weight: 800; letter-spacing: -.05em; color: var(--clay); margin: 0 0 3mm; }
+  .price .per { font-size: 5mm; font-weight: 600; color: #5c5147; margin: 0 0 7mm; }
+  .price ul { list-style: none; margin: 0; padding: 0; }
+  .price li { display: flex; gap: 3.5mm; font-size: 4.5mm; line-height: 1.4; padding: 2.4mm 0;
+              border-top: .3mm solid rgba(203,90,60,.22); color: #3d342c; }
+  .price li:first-child { border-top: 0; }
+  .price li .tick { color: var(--clay); font-weight: 700; flex: 0 0 auto; }
+
+  /* the three nos */
+  .nos { margin: 0 0 9mm; }
+  .nos div { display: flex; align-items: baseline; gap: 5mm; padding: 4mm 0;
+             border-top: .3mm solid rgba(224,135,95,.28); }
+  .nos div:first-child { border-top: 0; }
+  .nos .no { font-family: var(--mono); font-weight: 700; font-size: 7mm; color: var(--clay); flex: 0 0 22mm; }
+  .nos .what { font-size: 5.4mm; font-weight: 600; }
+  .nos .what small { display: block; font-size: 4mm; font-weight: 400; margin-top: 1mm; }
+  .dark .nos .what small { color: #9a8f80; }
+
+  .foot { margin-top: auto; display: flex; align-items: flex-end; gap: 8mm; }
+  .qr { background: #fff; padding: 4mm; border-radius: 4mm; line-height: 0; flex: 0 0 auto; }
+  .qr canvas, .qr img { display: block; width: 42mm; height: 42mm; }
+  .scan { padding-bottom: 1mm; }
+  .scan .big { font-family: var(--mono); font-weight: 700; font-size: 5mm; letter-spacing: .14em;
+               text-transform: uppercase; color: var(--clay); margin: 0 0 2.5mm; }
+  .scan .addr { font-size: 5.2mm; font-weight: 700; margin: 0 0 2mm; }
+  .scan .tiny { font-size: 3.6mm; margin: 0; }
+  .dark .scan .tiny { color: #9a8f80; }
+  .light .scan .tiny { color: #7a6e62; }
+</style>
+</head>
+<body>
+
+<!-- ══════════ 1 — DARK · the hero word ══════════ -->
+<section class="sheet dark">
+  <div class="glow"></div><div class="dots"></div>
+  <div class="inner">
+    <div class="mark"><span class="pips"><i></i><i></i><i></i></span><span class="name">eventually</span></div>
+    <p class="eyebrow">Publish your event</p>
+    <p class="huge">FREE.</p>
+    <p class="after">On the live map of what’s on,<br>in every city.</p>
+    <p class="limit">Ten events a year · No card · No commission</p>
+
+    <ul class="pts">
+      <li><span class="pip"></span><span><b>Your own event page</b> — the one that turns up in a search.</span></li>
+      <li><span class="pip"></span><span><b>A spike on the globe</b>, where people look for tonight.</span></li>
+      <li><span class="pip"></span><span><b>Read out by our AI host</b> to people in your city.</span></li>
+    </ul>
+
+    <div class="foot">
+      <div class="qr" id="qr1"></div>
+      <div class="scan">
+        <p class="big">Scan to publish</p>
+        <p class="addr">eventually-app.com/publish</p>
+        <p class="tiny">We check every event before it appears · You keep the booking</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ 2 — CREAM · the price card ══════════ -->
+<section class="sheet light">
+  <div class="dots"></div>
+  <div class="inner">
+    <div class="mark"><span class="pips"><i></i><i></i><i></i></span><span class="name">eventually</span></div>
+    <p class="eyebrow">What it costs to list an event</p>
+    <div class="rule"></div>
+    <h1>Nothing. <em>Here’s what you get.</em></h1>
+
+    <div class="price">
+      <p class="lbl">To publish your event</p>
+      <p class="amt">0</p>
+      <p class="per">Ten events a year. No card needed.</p>
+      <ul>
+        <li><span class="tick">✓</span><span>Your own event page, indexed by Google</span></li>
+        <li><span class="tick">✓</span><span>On the globe, in your city’s listings</span></li>
+        <li><span class="tick">✓</span><span>Read out by our AI host to people nearby</span></li>
+        <li><span class="tick">✓</span><span>Free registrations, or link to your own tickets</span></li>
+        <li><span class="tick">✓</span><span>No commission on anything you sell</span></li>
+      </ul>
+    </div>
+
+    <div class="foot">
+      <div class="qr" id="qr2"></div>
+      <div class="scan">
+        <p class="big">Scan to publish</p>
+        <p class="addr">eventually-app.com/publish</p>
+        <p class="tiny">We check every event before it appears</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ 3 — DARK · the three objections ══════════ -->
+<section class="sheet dark">
+  <div class="glow"></div><div class="dots"></div>
+  <div class="inner">
+    <div class="mark"><span class="pips"><i></i><i></i><i></i></span><span class="name">eventually</span></div>
+    <p class="eyebrow">Listing your event on Eventually</p>
+    <h1>No fee. No commission. <em>No card.</em></h1>
+    <p class="sub">Put your event on the live map of what’s on — and carry on selling your
+       tickets exactly where you sell them now.</p>
+
+    <div class="nos">
+      <div><span class="no">No fee</span><span class="what">to publish
+        <small>Ten events a year, free. Nothing to pay for any of them.</small></span></div>
+      <div><span class="no">No cut</span><span class="what">of your ticket sales
+        <small>You keep the booking. Link to wherever you already sell.</small></span></div>
+      <div><span class="no">No card</span><span class="what">to get started
+        <small>An email address is the whole sign-up.</small></span></div>
+    </div>
+
+    <div class="foot">
+      <div class="qr" id="qr3"></div>
+      <div class="scan">
+        <p class="big">Scan to publish</p>
+        <p class="addr">eventually-app.com/publish</p>
+        <p class="tiny">We check every event before it appears</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ 4 — CREAM · free while we're growing ══════════ -->
+<section class="sheet light">
+  <div class="dots"></div>
+  <div class="inner">
+    <div class="mark"><span class="pips"><i></i><i></i><i></i></span><span class="name">eventually</span></div>
+    <p class="eyebrow">An open invitation</p>
+    <div class="rule"></div>
+    <h1>Free while <em>we’re growing.</em></h1>
+    <p class="sub">We’re building the live map of what’s on, city by city — and we’d rather have
+       your event on it than your money. List it now and it stays listed.</p>
+
+    <p class="limit">Ten events a year · No card · No commission</p>
+
+    <ul class="pts">
+      <li><span class="pip"></span><span><b>Two minutes</b> to add one. Less if you’ve got a poster.</span></li>
+      <li><span class="pip"></span><span><b>Your own page</b>, with your artwork, that Google can find.</span></li>
+      <li><span class="pip"></span><span><b>Our AI host</b> reads it out to people in your city.</span></li>
+      <li><span class="pip"></span><span><b>Nothing goes live</b> until we’ve checked it.</span></li>
+    </ul>
+
+    <div class="foot">
+      <div class="qr" id="qr4"></div>
+      <div class="scan">
+        <p class="big">Scan to publish</p>
+        <p class="addr">eventually-app.com/publish</p>
+        <p class="tiny">Free to list · You keep your own ticketing</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+  var TARGET = 'https://eventually-app.com/publish.html';
+  ['qr1', 'qr2', 'qr3', 'qr4'].forEach(function (id) {
+    var box = document.getElementById(id);
+    if (!box) return;          // one sheet rendered alone must not stop the rest
+    new QRCode(box, {
+      text: TARGET, width: 600, height: 600,
+      colorDark: '#211A15', colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  });
+</script>
+</body>
+</html>
