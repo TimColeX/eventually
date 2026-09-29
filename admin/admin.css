@@ -73,7 +73,7 @@ body{margin:0;background:#efe7da;color:var(--ink);font-family:var(--font);font-s
 .ad-list .ad-li{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line)}
 /* Generic two-column list row — detail on the left, actions or a stat on the right.
    Shared by the publishing roster, requests queue, credit ledger, TTS health and airings. */
-.ad-list-row{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:11px 0;border-bottom:1px solid var(--line)}
+.ad-list-row{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:14px;padding:11px 0;border-bottom:1px solid var(--line)}
 .ad-list-row:last-child{border-bottom:0}
 .ad-list-row>div{min-width:0}
 /* Long emails and pasted messages must wrap, not stretch the row off-screen. */
@@ -114,3 +114,19 @@ body{margin:0;background:#efe7da;color:var(--ink);font-family:var(--font);font-s
 .an-act{padding:8px 14px;border-radius:10px;border:1px solid var(--line-2);background:var(--paper);cursor:pointer;font-family:var(--font);font-weight:600;font-size:13px;color:var(--muted)}
 .an-danger{color:#b3402a;border-color:rgba(179,64,42,.4)}
 .an-danger:hover{background:rgba(179,64,42,.06)}
+
+/* ── the organiser's share panel (../src/share.js) ───────────────────────────
+   Their event's page link and a QR for it. The QR sits on white whatever the
+   surrounding theme is: a dark code on a tinted ground does not scan reliably,
+   and this one is meant to survive being printed on a flyer. */
+.sh-wrap{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap}
+.sh-qr{background:#fff;padding:8px;border-radius:10px;line-height:0;flex:0 0 auto;border:1px solid var(--line)}
+.sh-qr img,.sh-qr canvas{display:block;width:150px;height:150px}
+.sh-side{flex:1 1 200px;min-width:0}
+.sh-url{width:100%;font-family:var(--mono);font-size:12px;padding:9px 10px;
+        border:1px solid var(--line);border-radius:9px;background:var(--cream);color:var(--ink)}
+.sh-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.sh-btn{display:inline-block;font:600 12.5px var(--font);padding:8px 13px;border-radius:9px;
+        border:1px solid var(--line2);background:var(--paper);color:var(--ink);cursor:pointer;text-decoration:none}
+.sh-btn:hover{border-color:var(--clay)}
+.pb-share{flex:0 0 100%;width:100%;padding:12px 0 2px}

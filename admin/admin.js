@@ -294,13 +294,45 @@
             ' · ♥ ' + (+e.likes || 0) + ' · ✓ ' + (+e.attends || 0) +
             ' · ' + (+e.clicks || 0) + ' ticket clicks</span>' +
         '</div><div class="ad-row-actions">' +
+          // The organiser's own page and a QR for it — the same link the approval
+          // email now carries. Only offered once an event is approved AND on the
+          // globe, because only then does a page exist to point at.
+          (e.moderation === 'approved' && e.published !== false
+            ? '<button class="ad-btn ghost" data-pe-share="' + esc(e.event_id) + '">Link &amp; QR</button> '
+            : '') +
           '<button class="ad-btn ghost" data-pe-pub="' + esc(e.event_id) + '" data-on="' + (e.published === false ? '1' : '0') + '">' +
             (e.published === false ? 'Put back' : 'Remove from globe') + '</button>' +
           '<button class="ad-btn' + (e.sponsored ? ' ghost' : '') + '" data-pe-feat="' + esc(e.event_id) + '" data-on="' + (e.sponsored ? '0' : '1') + '">' +
             (e.sponsored ? 'Unfeature' : 'Feature') + '</button> ' +
           '<button class="ad-btn ghost" data-pe-del="' + esc(e.event_id) + '" data-title="' + esc(e.title || '') + '">Delete</button>' +
-        '</div></div>';
+        '</div>' +
+        '<div class="pb-share" data-sharefor="' + esc(e.event_id) + '" hidden></div>' +
+        '</div>';
       }).join('') + '</div>';
+
+      /* THE LINK IS LOOKED UP, NEVER BUILT FROM THE TITLE.
+         tools/build-city-pages.js disambiguates city slugs across the whole build —
+         London, Canada is `london-ca` — so only the generator knows a page's real
+         path. It publishes events/native.json for this, and src/share.js reads it.
+         An event approved since the last rebuild is simply not in that file yet,
+         and saying so is better than handing you a link that 404s. */
+      box.querySelectorAll('[data-pe-share]').forEach(function (b) {
+        b.onclick = function () {
+          const id = b.dataset.peShare;
+          const panel = box.querySelector('[data-sharefor="' + id + '"]');
+          if (!panel) return;
+          if (!panel.hidden) { panel.hidden = true; return; }
+          panel.hidden = false;
+          panel.innerHTML = '<span class="ad-hint">Finding the page…</span>';
+          if (!window.EventuallyShare) { panel.innerHTML = '<span class="ad-hint">Unavailable right now.</span>'; return; }
+          window.EventuallyShare.panel(panel, { eventId: id }).then(function (url) {
+            if (!url) {
+              panel.innerHTML = '<span class="ad-hint">No page yet. They are rebuilt every few hours — ' +
+                'this appears within four hours of the event going live.</span>';
+            }
+          }, function () { panel.innerHTML = '<span class="ad-hint">Couldn\'t load that.</span>'; });
+        };
+      });
 
       box.querySelectorAll('[data-pe-pub]').forEach(function (b) {
         b.onclick = function () {
