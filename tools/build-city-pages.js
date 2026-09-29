@@ -125,6 +125,49 @@ function cleanTitle(raw) {
     .trim();
 }
 
+/* AN OFFER IS EMITTED ONLY WHEN IT CAN BE COMPLETE AND TRUE.
+ *
+ * Search Console flagged three non-critical issues — missing `price`,
+ * `priceCurrency` and `validFrom` in "offers" — and this is where they came from:
+ * an Offer was written whenever there was a ticket LINK, and most event_sources
+ * carry no price at all. So the great majority of pages published an Offer whose
+ * only field was a url, which is exactly the shape Google complains about.
+ *
+ * A partial Offer buys nothing: Google's Event rich result does not require
+ * offers, so omitting it is strictly better than publishing an incomplete one.
+ * The ticket link is still on the page as a real anchor either way.
+ *
+ * Three rules, each of which was a wrong answer before:
+ *
+ *  1. NO `|| 'USD'`. The old default was a guess. The build emits 370 USD and 43
+ *     CAD offers, so the first Canadian event to carry a price would have been
+ *     published in the wrong currency — a factual error about money.
+ *  2. PRICE MUST BE > 0. Providers use 0 for "unknown", not "free". In schema.org
+ *     a price of 0 states the event costs nothing to attend, so passing that
+ *     through would tell a reader a ticketed gig is free entry. Unknown is
+ *     unknown: emit nothing.
+ *  3. `validFrom` IS OUR LISTING DATE. It is the one thing about this offer we
+ *     can state truthfully — when the offer became available here. We do not know
+ *     when the seller opened sales, so we do not claim to.
+ *
+ * Both templates call this, so the two can never drift apart again — they already
+ * had two copies of the same broken rule. */
+function offerFor(e, url) {
+  const srcs = Array.isArray(e.event_sources) ? e.event_sources : [];
+  const priced = srcs.find((s) => s && s.currency && s.price != null
+    && Number.isFinite(Number(s.price)) && Number(s.price) > 0);
+  if (!url || !priced) return undefined;
+  const offer = {
+    '@type': 'Offer',
+    url,
+    price: String(Number(priced.price)),
+    priceCurrency: priced.currency,
+    availability: 'https://schema.org/InStock',
+  };
+  if (e.created_at) offer.validFrom = e.created_at;
+  return offer;
+}
+
 /* Print the time AT THE VENUE.
  *
  * This used to call toLocaleTimeString with no timeZone, so it formatted in
@@ -192,7 +235,7 @@ async function analyse() {
   const rows = await fetchWithPerformers(
     // `timezone` is what makes the printed times correct — see fmt() below. description,
     // image_url, address and event_sources feed the Event structured data (ldEvent).
-    'event_id,title,city,country,start_time,end_time,category,lat,lon,is_native,timezone,venue,address,description,image_url,event_sources(url,price,currency)',
+    'event_id,title,city,country,start_time,end_time,category,lat,lon,is_native,timezone,venue,address,description,image_url,created_at,event_sources(url,price,currency)',
     `moderation=eq.approved&published=not.is.false&start_time=gte.${now}&start_time=lte.${to}&order=start_time.asc`
   );
 
@@ -345,13 +388,11 @@ function page(c, prose, adsOn) {
     };
     if (e.end_time && Date.parse(e.end_time) > Date.parse(e.start_time)) o.endDate = e.end_time;
     if (e.image_url) o.image = [e.image_url];
+    // An Offer only when it can be complete and true — see offerFor().
     const srcs = Array.isArray(e.event_sources) ? e.event_sources : [];
     const link = srcs.find((s) => s && s.url);
-    const priced = srcs.find((s) => s && s.price != null && Number.isFinite(Number(s.price)));
-    if (link) {
-      o.offers = Object.assign({ '@type': 'Offer', url: link.url },
-        priced ? { price: String(Number(priced.price)), priceCurrency: priced.currency || 'USD' } : {});
-    }
+    const offer = offerFor(e, link && link.url);
+    if (offer) o.offers = offer;
     if (Array.isArray(e.performers) && e.performers.length) {
       o.performer = e.performers.map((name) => ({ '@type': 'PerformingGroup', name }));
     }
@@ -602,6 +643,7 @@ function eventPage(e, city, cityPage) {
   const when = fmtWhen(e.start_time, e.timezone);
   const place = [e.venue, e.address].filter(Boolean).join(', ');
   const ticket = (e.event_sources || []).map((s) => s.url).filter(Boolean)[0] || null;
+  const offer = offerFor(e, ticket);   // complete Offer, or nothing at all — see offerFor()
   const desc = (e.description || '').trim() ||
     `${e.title} — ${when} at ${e.venue || e.city}. On Eventually.`;
   const summary = desc.length > 155 ? desc.slice(0, 152).replace(/\s+\S*$/, '') + '…' : desc;
@@ -625,7 +667,10 @@ function eventPage(e, city, cityPage) {
       geo: (e.lat != null && e.lon != null)
         ? { '@type': 'GeoCoordinates', latitude: e.lat, longitude: e.lon } : undefined,
     },
-    offers: ticket ? { '@type': 'Offer', url: ticket, availability: 'https://schema.org/InStock' } : undefined,
+    // Same rule as the city pages: a complete Offer or none. See the note in
+    // ldEvent — an Offer carrying only a url is what Search Console flags, and
+    // Google's Event rich result does not require offers at all.
+    offers: offer,
   };
 
   return `<!DOCTYPE html>
