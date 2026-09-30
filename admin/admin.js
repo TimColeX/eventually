@@ -1170,6 +1170,16 @@
         // The token exists from the moment of extraction, which is why this guard
         // lives here and not only on the Create button.
         const pinned = intakePinned(p);   // pinned AND still pinned to what it says
+        /* THE SAME LINK DOES TWO JOBS, AND THE SECOND ONE HAD NO BUTTON.
+           Before publishing it is a review link: check this, then publish it. After
+           publishing it is the CLAIM link — the organiser's only route to owning
+           their event. Copy link and Email organiser were shown only while the
+           draft was `ready`, so the moment an admin published on someone's behalf
+           the way to reach them disappeared, and they could never take ownership.
+           Offered now for a published draft too, until it is claimed. */
+        const claimed = !!d.claimed_at;
+        const sendable = (d.status === 'ready' && pinned) ||
+                         (d.status === 'published' && live && !claimed);
         /* WHETHER THE ORGANISER HAS ACTUALLY BEEN SENT ANYTHING.
            The address on a draft used to imply nothing: it was stored and never
            used, and the link only reached anyone if an admin copied and pasted it.
@@ -1185,14 +1195,23 @@
             ? ' · <b style="color:#8a6d1e">event deleted</b>' : '') +
           (dupe ? ' · <span style="color:#8a6d1e">duplicate ' + esc(dupe) + '</span>' : '') +
           (sent ? ' · <b style="color:#3f7d52">✓ link sent ' + esc(sent.toLocaleDateString()) + '</b>' : '') +
+          /* Who owns it. Without this the list could not answer the one question
+             the claim flow exists to settle, and an admin had no way to know
+             whether an organiser ever took their event. */
+          (claimed ? ' · <b style="color:#3f7d52">✓ claimed</b>'
+            : (d.status === 'published' && live ? ' · <span style="color:#8a6d1e">unclaimed</span>' : '')) +
           (d.status === 'ready' && !pinned ? ' <b style="color:#b3402a">⚠ not pinned</b>' : '') + '</span><span>' +
           (d.status === 'ready' ? '<button class="ad-regen in-open" data-id="' + esc(d.id) + '">Open</button> ' : '') +
-          (d.status === 'ready' && pinned
-            ? '<button class="ad-regen in-copy" data-link="' + esc(link) + '">Copy link</button> ' +
+          (sendable
+            // Named for what the link DOES at this point, so an admin knows
+            // whether they are sending "please check this" or "this is yours now".
+            ? '<button class="ad-regen in-copy" data-link="' + esc(link) + '">' +
+                (d.status === 'published' ? 'Copy claim link' : 'Copy link') + '</button> ' +
               // Only offered when there is somewhere to send it. A draft with no
               // address still gets Copy link, which is what the admin used before.
               (d.organiser_email
-                ? '<button class="ad-regen in-send" data-id="' + esc(d.id) + '" data-email="' + esc(d.organiser_email) + '">' +
+                ? '<button class="ad-regen in-send" data-id="' + esc(d.id) + '" data-email="' + esc(d.organiser_email) +
+                    '" data-published="' + (d.status === 'published' ? '1' : '') + '">' +
                     (sent ? 'Send again' : 'Email organiser') + '</button>'
                 : '')
             : '') +
@@ -1226,7 +1245,12 @@
       el.querySelectorAll('.in-send').forEach(function (b) {
         b.onclick = function () {
           const to = b.dataset.email;
-          if (!confirm('Email the review link to ' + to + '?\n\nThey can check the details and publish it themselves. Whoever opens the link becomes the owner of the event.')) return;
+          // The same link, two different promises. Saying "check the details and
+          // publish it" about an event that is already live would be a lie.
+          const msg = b.dataset.published
+            ? 'Email the claim link to ' + to + '?\n\nTheir event is already live. This link lets them take ownership so they can edit it themselves. Whoever opens it becomes the owner.'
+            : 'Email the review link to ' + to + '?\n\nThey can check the details and publish it themselves. Whoever opens the link becomes the owner of the event.';
+          if (!confirm(msg)) return;
           b.disabled = true; const was = b.textContent; b.textContent = 'Sending…';
           intakeCall('send_link', { id: b.dataset.id, email: to }).then(function (r) {
             if (r && r.ok) { b.textContent = 'Sent'; loadIntakeList(); return; }
