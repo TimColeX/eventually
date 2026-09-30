@@ -1103,10 +1103,28 @@
     this._drawMap();
   };
 
+  /* THE ROW THE EDIT FORM IS FILLED FROM HAS TO CARRY EVERY FIELD THE SAVE WRITES
+     BACK. It did not, for months: `creator_event_stats` returned a subset, these
+     six arrived `undefined`, the inputs rendered empty, and `updateEvent` wrote
+     the empties over real data. Editing a typo blanked the venue, address, end
+     time, capacity and time zone — and switched an event that collected
+     registrations to "they book somewhere else", because the entry-method
+     restore below falls through when `collect_registrations` is undefined.
+
+     113 fixed the RPC. This is the alarm, so the next person to trim that SELECT
+     finds out from a console error instead of from an organiser. It only warns —
+     blocking an edit over a missing optional field would be worse than the bug. */
+  const SAVED_BACK = ['timezone', 'end_time', 'venue', 'address', 'capacity', 'collect_registrations'];
+
   // Load an event into the form for editing.
   Coordinator.prototype._editEvent = function (ev) {
     const q = function (s) { return this.el.querySelector(s); }.bind(this);
     this.editId = ev.event_id;
+    const absent = SAVED_BACK.filter(function (k) { return !(k in ev); });
+    if (absent.length && global.console && console.error) {
+      console.error('[coordinator] creator_event_stats is not returning ' + absent.join(', ') +
+        ' — saving this event would write those away. Run backend/113_creator_stats_full_row.sql.');
+    }
     this._copiedImage = null;                // editing is not duplicating
     this.locationChosen = true;              // an existing event already has a location
     q('.f-name').value = ev.title || '';

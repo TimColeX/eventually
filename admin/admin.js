@@ -991,10 +991,33 @@
     if (!el) return;
     sb.rpc('admin_intake_drafts', { p_limit: 30 }).then(function (r) {
       if (r.error) { el.innerHTML = '<span class="ad-hint">List unavailable — run <code>backend/103_intake_drafts.sql</code>.</span>'; return; }
-      const rows = (r.data || []).map(function (d) {
+
+      /* WHICH OF THESE ARE THE SAME EVENT TWICE.
+         A few test runs leave the list mostly duplicates — three attempts at one
+         gala, two at one concert — and every row looks equally real, which is
+         what makes tidying up feel risky. Group by title + start, so a repeat can
+         say "2 of 3" instead of the admin comparing timestamps by eye. */
+      const all = r.data || [];
+      const groups = {};
+      all.forEach(function (d) {
+        const p = d.payload || {};
+        const k = String(p.name || '').trim().toLowerCase() + '|' + (p.date || '') + '|' + (p.start || '');
+        (groups[k] = groups[k] || []).push(d.id);
+      });
+
+      const rows = all.map(function (d) {
         const p = d.payload || {};
         const when = p.date ? (p.date + (p.start ? ' ' + p.start : '')) : 'no date';
         const link = location.origin + '/review.html?t=' + d.token;
+        const key = String(p.name || '').trim().toLowerCase() + '|' + (p.date || '') + '|' + (p.start || '');
+        const sibs = groups[key] || [d.id];
+        const dupe = sibs.length > 1 ? (sibs.indexOf(d.id) + 1) + ' of ' + sibs.length : null;
+        /* DELETABLE = NOT ON THE GLOBE. `event_live` comes from 114; older
+           deployments don't send it, and then this stays false so no delete
+           button appears at all — the safe way to be wrong. A live event's draft
+           holds the organiser's claim token, so it is never offered. */
+        const live = d.event_live === true;
+        const deletable = d.event_live === false;
         // A draft with no pin cannot be published, so its link must not be sendable.
         // The token exists from the moment of extraction, which is why this guard
         // lives here and not only on the Create button.
@@ -1007,6 +1030,12 @@
         return '<div class="ad-li"><span><b>' + esc(p.name || '(unnamed)') + '</b> · ' + esc(when) +
           ' · ' + esc(p.city || '—') + ' · <b>' + esc(d.status) + '</b>' +
           (d.organiser_email ? ' · ' + esc(d.organiser_email) : '') +
+          (live ? ' · <b style="color:#3f7d52">● on the globe</b>' : '') +
+          // A draft that published something which has since been deleted. Says so
+          // plainly, because "published" on its own reads as "this one is live".
+          (d.status === 'published' && deletable
+            ? ' · <b style="color:#8a6d1e">event deleted</b>' : '') +
+          (dupe ? ' · <span style="color:#8a6d1e">duplicate ' + esc(dupe) + '</span>' : '') +
           (sent ? ' · <b style="color:#3f7d52">✓ link sent ' + esc(sent.toLocaleDateString()) + '</b>' : '') +
           (d.status === 'ready' && !pinned ? ' <b style="color:#b3402a">⚠ not pinned</b>' : '') + '</span><span>' +
           (d.status === 'ready' ? '<button class="ad-regen in-open" data-id="' + esc(d.id) + '">Open</button> ' : '') +
@@ -1018,6 +1047,13 @@
                 ? '<button class="ad-regen in-send" data-id="' + esc(d.id) + '" data-email="' + esc(d.organiser_email) + '">' +
                     (sent ? 'Send again' : 'Email organiser') + '</button>'
                 : '')
+            : '') +
+          // Offered only for a draft with nothing on the globe behind it. The
+          // server re-checks, so this is a convenience, not the safeguard.
+          (deletable
+            ? ' <button class="ad-regen in-del" data-id="' + esc(d.id) + '" data-name="' +
+                esc(p.name || '(unnamed)') + '" data-status="' + esc(d.status) +
+                '" style="color:#b3402a">Delete</button>'
             : '') +
           '</span></div>';
       }).join('');
@@ -1046,6 +1082,26 @@
               : r && r.error === 'no_mail_key' ? 'Email is not configured (RESEND_API_KEY).'
               : 'Could not send it' + (r && r.error ? ' (' + r.error + ')' : '') + '.');
           }, function () { b.disabled = false; b.textContent = was; alert('Could not reach the server.'); });
+        };
+      });
+      /* DELETE A DRAFT THAT NEVER BECAME ANYTHING.
+         Named in the confirmation, because the whole difficulty with this list is
+         that duplicates look alike — "Delete this?" on the wrong one of three
+         identical rows is how the wrong draft goes. The server refuses anything
+         still on the globe, and says which event is holding it. */
+      el.querySelectorAll('.in-del').forEach(function (b) {
+        b.onclick = function () {
+          const nm = b.dataset.name, st = b.dataset.status;
+          if (!confirm('Delete the intake draft for "' + nm + '"?\n\n' +
+                       'Status: ' + st + '. Nothing is on the globe for it.\n' +
+                       'This removes the draft and its review link. It cannot be undone.')) return;
+          b.disabled = true; b.textContent = 'Deleting…';
+          intakeCall('delete_draft', { id: b.dataset.id }).then(function (r) {
+            if (r && r.ok) { loadIntakeList(); return; }
+            b.disabled = false; b.textContent = 'Delete';
+            alert(r && r.detail ? r.detail
+              : 'Could not delete it' + (r && r.error ? ' (' + r.error + ')' : '') + '.');
+          }, function () { b.disabled = false; b.textContent = 'Delete'; alert('Could not reach the server.'); });
         };
       });
       // Reopen an earlier draft — to pin one that was never placed, or to fix a
