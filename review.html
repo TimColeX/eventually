@@ -90,6 +90,7 @@
   var token = (new URLSearchParams(location.search).get('t') || '').trim();
   var main = document.getElementById('main');
   var draft = null;
+  var claimRefusal = null;        // why the server declined a claim, if it did
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (m) {
     return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[m]; }); }
@@ -255,6 +256,24 @@
         'Sign in at <a href="/publish.html">your events page</a> to edit it any time.</p>';
       return;
     }
+    /* THE ADMIN FOLLOWED THE LINK THEMSELVES.
+       Not an error the organiser should ever see phrased as a failure — it is the
+       admin checking their own link, and the right answer is to tell them what to
+       do with it. Offering the sign-in form underneath would invite the exact
+       mistake the server just refused, so it is replaced, not added to. */
+    if (claimRefusal === 'admin_cannot_claim') {
+      host.innerHTML = '<hr style="border:none;border-top:1px solid var(--line);margin:22px 0">' +
+        '<p class="lede" style="font-size:14px;margin:0">You’re signed in as the Eventually admin, ' +
+        'so this link can’t hand the event over to you. Send it to the organiser and let them ' +
+        'open it — whoever opens it becomes the owner, and it only works once.</p>';
+      return;
+    }
+    if (claimRefusal === 'already_claimed') {
+      host.innerHTML = '<hr style="border:none;border-top:1px solid var(--line);margin:22px 0">' +
+        '<p class="lede" style="font-size:14px;margin:0">This event already has an owner. ' +
+        'If that wasn’t you, reply to the email we sent and we’ll sort it out.</p>';
+      return;
+    }
     if (!window.supabase || !cfg.supabaseUrl) return;   // no client → skip silently
 
     host.innerHTML =
@@ -304,7 +323,15 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json', apikey: cfg.supabaseAnonKey, Authorization: 'Bearer ' + tok },
         body: JSON.stringify({ action: 'claim', token: token })
-      }).then(function (res) { return res.json(); }).then(function (j) { return !!(j && j.ok); });
+      }).then(function (res) { return res.json(); }).then(function (j) {
+        // A REFUSAL HAS TO BE SEEN. This used to return a bare boolean, so a claim
+        // the server declined looked identical to one that was never attempted: the
+        // page simply drew the "take ownership" block again, and the person pressed
+        // it again. The reason is kept and rendered by claimBlock().
+        if (j && j.ok) return true;
+        claimRefusal = (j && j.error) || null;
+        return false;
+      });
     }, function () { return false; });
   }
 })();

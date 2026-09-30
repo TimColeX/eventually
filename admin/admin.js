@@ -999,13 +999,25 @@
         // The token exists from the moment of extraction, which is why this guard
         // lives here and not only on the Create button.
         const pinned = intakePinned(p);   // pinned AND still pinned to what it says
+        /* WHETHER THE ORGANISER HAS ACTUALLY BEEN SENT ANYTHING.
+           The address on a draft used to imply nothing: it was stored and never
+           used, and the link only reached anyone if an admin copied and pasted it.
+           Shown here so "did I send this?" is answerable at a glance. */
+        const sent = d.link_sent_at ? new Date(d.link_sent_at) : null;
         return '<div class="ad-li"><span><b>' + esc(p.name || '(unnamed)') + '</b> · ' + esc(when) +
           ' · ' + esc(p.city || '—') + ' · <b>' + esc(d.status) + '</b>' +
           (d.organiser_email ? ' · ' + esc(d.organiser_email) : '') +
+          (sent ? ' · <b style="color:#3f7d52">✓ link sent ' + esc(sent.toLocaleDateString()) + '</b>' : '') +
           (d.status === 'ready' && !pinned ? ' <b style="color:#b3402a">⚠ not pinned</b>' : '') + '</span><span>' +
           (d.status === 'ready' ? '<button class="ad-regen in-open" data-id="' + esc(d.id) + '">Open</button> ' : '') +
           (d.status === 'ready' && pinned
-            ? '<button class="ad-regen in-copy" data-link="' + esc(link) + '">Copy link</button>'
+            ? '<button class="ad-regen in-copy" data-link="' + esc(link) + '">Copy link</button> ' +
+              // Only offered when there is somewhere to send it. A draft with no
+              // address still gets Copy link, which is what the admin used before.
+              (d.organiser_email
+                ? '<button class="ad-regen in-send" data-id="' + esc(d.id) + '" data-email="' + esc(d.organiser_email) + '">' +
+                    (sent ? 'Send again' : 'Email organiser') + '</button>'
+                : '')
             : '') +
           '</span></div>';
       }).join('');
@@ -1014,6 +1026,26 @@
         b.onclick = function () {
           try { navigator.clipboard.writeText(b.dataset.link); b.textContent = 'Copied'; }
           catch (e) { prompt('Copy this link:', b.dataset.link); }
+        };
+      });
+      /* EMAIL THE ORGANISER THEIR LINK.
+         Confirmed first, and the address is shown in the prompt, because this is
+         the one button here that contacts someone outside Eventually — and because
+         whoever opens that link becomes the owner of the event, so sending it to
+         the wrong address hands away someone else's listing. */
+      el.querySelectorAll('.in-send').forEach(function (b) {
+        b.onclick = function () {
+          const to = b.dataset.email;
+          if (!confirm('Email the review link to ' + to + '?\n\nThey can check the details and publish it themselves. Whoever opens the link becomes the owner of the event.')) return;
+          b.disabled = true; const was = b.textContent; b.textContent = 'Sending…';
+          intakeCall('send_link', { id: b.dataset.id, email: to }).then(function (r) {
+            if (r && r.ok) { b.textContent = 'Sent'; loadIntakeList(); return; }
+            b.disabled = false; b.textContent = was;
+            alert(r && r.error === 'no_organiser_email' ? 'That draft has no valid email address on it.'
+              : r && r.error === 'not_ready' ? 'That draft is not ready to send yet.'
+              : r && r.error === 'no_mail_key' ? 'Email is not configured (RESEND_API_KEY).'
+              : 'Could not send it' + (r && r.error ? ' (' + r.error + ')' : '') + '.');
+          }, function () { b.disabled = false; b.textContent = was; alert('Could not reach the server.'); });
         };
       });
       // Reopen an earlier draft — to pin one that was never placed, or to fix a
