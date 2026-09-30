@@ -85,7 +85,20 @@ const COUNTRY_NAMES = new Map(Object.entries({
   AE: 'United Arab Emirates', BR: 'Brazil', PE: 'Peru', SA: 'Saudi Arabia',
 }));
 // Short, stable suffix for disambiguating cities that share a name (London GB vs London CA).
+/* ⚠️ KEYED BY COUNTRY NAME, SO IT MUST KNOW EVERY NAME WE STORE.
+ *
+ * 121 renamed "United States Of America" → "United States" and "Great Britain" →
+ * "United Kingdom". This map still held only the old spellings, so both new names
+ * missed it and fell through to `slugify(country).slice(0, 3)` — which is **"uni"
+ * for both**. Birmingham UK and Birmingham US then wanted the same slug, and one
+ * silently overwrote the other: `birmingham-uni` was built containing 20 United
+ * States events and no British ones at all. The same collision hit Bristol,
+ * Cambridge, Lincoln, London, Oxford, Richmond, York and Washington.
+ *
+ * Both spellings are kept. The old ones cost nothing and mean a database that has
+ * not been normalised yet still gets correct slugs. */
 const COUNTRY_SLUGS = new Map(Object.entries({
+  'united states': 'us', 'united kingdom': 'uk',      // canonical, post-121
   'canada': 'ca', 'united states of america': 'us', 'great britain': 'uk', 'ireland': 'ie',
   'australia': 'au', 'new zealand': 'nz', 'mexico': 'mx', 'germany': 'de', 'spain': 'es',
   'netherlands': 'nl', 'sweden': 'se', 'norway': 'no', 'denmark': 'dk', 'finland': 'fi',
@@ -344,6 +357,22 @@ async function analyse() {
       c.slug = cc ? c.slug + '-' + cc : c.slug;
     }
   });
+
+  /* A SLUG IS A CITY'S IDENTITY. Two cities sharing one is not a cosmetic clash:
+     the second simply overwrites the first's page, and a real city vanishes from
+     the site with nothing to say it happened. That is exactly what a stale
+     COUNTRY_SLUGS map did after 121 — "uni" for both United States and United
+     Kingdom — and it went unnoticed until the directory listing was read by hand.
+     Fail loudly instead: a build that would lose a city should not finish. */
+  const after = new Map();
+  all.forEach((c) => { (after.get(c.slug) || after.set(c.slug, []).get(c.slug)).push(c); });
+  const clashes = [...after.entries()].filter(([, list]) => list.length > 1);
+  if (clashes.length) {
+    const detail = clashes.map(([slug, list]) =>
+      `  ${slug} <- ${list.map((c) => `${c.city} (${c.country || 'no country'})`).join(' AND ')}`).join('\n');
+    throw new Error('Two cities want the same slug, so one would overwrite the other:\n' + detail +
+      '\nAdd the missing country to COUNTRY_SLUGS in tools/build-city-pages.js.');
+  }
 
   return { all, total: rows.length };
 }
@@ -973,6 +1002,17 @@ function sitemap(list, eventPages) {
     if (!fs.statSync(dir).isDirectory()) continue;
     const contents = fs.readdirSync(dir);
     if (contents.length !== 1 || contents[0] !== 'index.html') continue;   // not ours — leave it
+    /* A HAND-WRITTEN REDIRECT IS NOT AN ORPHAN. This prune exists to delete city
+       pages the build no longer generates; a tombstone left behind when a URL
+       moved looks identical from the outside — one directory, one index.html —
+       and was being deleted on every run, silently reopening the 404 it was
+       written to close. `/events/washington-us/` moved to `/events/washington/`
+       when 121 merged the two spellings of United States, and that URL is in
+       Google's index. Recognise a redirect by what it does and leave it alone. */
+    try {
+      const html = fs.readFileSync(path.join(dir, 'index.html'), 'utf8');
+      if (/http-equiv=["']refresh["']/i.test(html)) continue;
+    } catch { /* unreadable — fall through and treat as ours */ }
     fs.rmSync(dir, { recursive: true, force: true });
     pruned++;
   }
