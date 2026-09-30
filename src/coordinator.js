@@ -166,7 +166,18 @@
 
   Coordinator.prototype._build = function () {
     const self = this;
-    const cats = Object.keys(global.EventuallyData.CATEGORIES).map(function (c) { return '<option>' + c + '</option>'; }).join('');
+    /* NO DEFAULT CATEGORY. It used to open on Music, because that is simply the
+       first key in CATEGORIES — not a choice anyone made. An organiser published a
+       community event without touching the dropdown, and it went out as Music: the
+       wrong colour and the wrong spike on the globe, in the wrong list, and the AI
+       host read it out as a music event. Nothing on screen looked wrong, because a
+       pre-filled answer looks exactly like an answer.
+
+       `disabled` on the placeholder means it cannot be chosen again once they have
+       picked something real, and it keeps `select.value` as '' until they do — which
+       is what _publish() checks. */
+    const cats = '<option value="" disabled selected>Choose a category…</option>' +
+      Object.keys(global.EventuallyData.CATEGORIES).map(function (c) { return '<option>' + c + '</option>'; }).join('');
     this.el.innerHTML =
       '<div class="co-backdrop"></div>' +
       '<div class="co-modal">' +
@@ -202,7 +213,11 @@
               '<input class="f-address" placeholder="Street address, city"></label>' +
             '<label>Date<input type="date" class="f-date"></label>' +
             '<div class="co-row co-row-2">' +
-              '<label>Start<input type="time" class="f-time" value="19:00"></label>' +
+              // Empty, not 19:00. Same trap as the old Music default, but worse: a
+              // wrong category is visible on the card, a wrong time is not — an
+              // afternoon event published at 7pm looks entirely normal, and the
+              // first person to find out is someone who turns up to a locked door.
+              '<label>Start<input type="time" class="f-time"></label>' +
               '<label>End <span class="co-opt">(optional)</span><input type="time" class="f-endtime"></label>' +
             '</div>' +
             // The times above are wall-clock AT THE VENUE. Without this the
@@ -301,8 +316,10 @@
               '<p class="co-hint">We check pictures before they go live. ' +
                 'Use your own artwork or a photo you have the right to use.</p>' +
             '</section>' +
+            // Starts blank, not on Music — this line naming a category the organiser
+            // never chose is part of what made the old default look deliberate.
             '<div class="co-catcolor"><span class="co-catdot"></span>' +
-              '<span class="co-catcolor-t">Shows in the <b class="co-catname">Music</b> colour on the globe &amp; card — set automatically by category.</span></div>' +
+              '<span class="co-catcolor-t"></span></div>' +
             '<label class="co-feature"><input type="checkbox" class="f-feature">' +
               '<span class="co-feature-txt"><b>✦ Ask us to feature this event</b>' +
               // Only what featuring actually does. It used to promise "a guaranteed spike"
@@ -328,13 +345,31 @@
     // We just preview it so the publisher sees what they'll get; no manual choice.
     const catSel = this.el.querySelector('.f-cat');
     const catDot = this.el.querySelector('.co-catdot');
-    const catName = this.el.querySelector('.co-catname');
+    // (.co-catname is created by syncCatColor once a category is chosen — it does
+    //  not exist in the initial markup any more, so there is nothing to cache here.)
     function syncCatColor() {
-      const cat = catSel.value, col = global.EventuallyData.CATEGORIES[cat] || '#CB5A3C';
-      if (catDot) catDot.style.background = col;
-      if (catName) catName.textContent = cat;
+      const cat = catSel.value, col = global.EventuallyData.CATEGORIES[cat];
+      const t = self.el.querySelector('.co-catcolor-t');
+      // Nothing chosen yet: say so, rather than showing a colour for a category
+      // they have not picked. The dot goes neutral so no colour reads as decided.
+      if (!cat || !col) {
+        if (catDot) catDot.style.background = 'transparent';
+        if (catDot) catDot.style.border = '1px dashed currentColor';
+        if (t) t.textContent = 'Pick a category and the colour on the globe & card is set for you.';
+        return;
+      }
+      if (catDot) { catDot.style.background = col; catDot.style.border = 'none'; }
+      if (t) {
+        t.innerHTML = 'Shows in the <b class="co-catname"></b> colour on the globe &amp; card — set automatically by category.';
+        const n = t.querySelector('.co-catname');
+        if (n) n.textContent = cat;      // textContent, so a category name is never markup
+      }
     }
     catSel.addEventListener('change', syncCatColor);
+    // Exposed because the reset and edit paths change .f-cat programmatically, and a
+    // `value =` assignment fires no 'change' event — the preview would then describe
+    // the previous event's category next to the new one's dropdown.
+    this._syncCatColor = syncCatColor;
     syncCatColor();
 
     // Only ever show the field belonging to the chosen entry method — the URL box
@@ -588,10 +623,20 @@
         return;
       }
     }
+    /* CATEGORY AND START TIME ARE ANSWERS, NOT DEFAULTS.
+       Both used to arrive pre-filled — Music, and 7:00 PM — so leaving them alone
+       was indistinguishable from choosing them. One organiser published a community
+       event as Music and the AI host read it out as a music event. Neither field can
+       be silently inherited now, so both have to be checked here. */
     const cat = q('.f-cat').value;
+    if (!cat) {
+      this._toast('Pick a category — it sets the colour and which lists the event appears in.');
+      q('.f-cat').focus(); return;
+    }
     const dateStr = q('.f-date').value;
     if (!dateStr) { this._toast('Pick a date.'); return; }
-    const timeStr = (q('.f-time').value || '19:00');
+    const timeStr = q('.f-time').value;
+    if (!timeStr) { this._toast('Add the start time.'); q('.f-time').focus(); return; }
     const TZ = global.EventuallyTZ;
     const zone = this.timezone || (TZ && TZ.local) || 'UTC';
     // `new Date('2026-09-07T19:00')` reads the string in the BROWSER's zone. That
@@ -651,7 +696,13 @@
       categoryColor: global.EventuallyData.CATEGORIES[cat],
       source: 'orbit', sourceLabel: 'Eventually Native', sourceColor: '#CB5A3C',
       banner: [global.EventuallyData.CATEGORIES[cat] || '#CB5A3C', '#211A15'],   // auto from category
-      description: q('.f-desc').value.trim() || (name + ' — published via the Eventually Coordinator portal.'),
+      /* NO FILLER DESCRIPTION. A blank box used to be published as
+         "<name> — published via the Eventually Coordinator portal." — a sentence
+         about our software, on the organiser's public page, and read aloud by the AI
+         host as though it described the event. Null instead: the event page already
+         composes a real fallback from the title, time and venue
+         (build-city-pages.js), which is both true and worth hearing. */
+      description: q('.f-desc').value.trim() || null,
       ticketUrl: url || null,
       // Blank means blank. An empty string here would be written to the column and
       // then published as an empty schema.org organizer, which is worse than none.
@@ -857,8 +908,10 @@
     const TZ = global.EventuallyTZ;
     if (!note || !TZ) return;
     const q = function (s) { return this.el.querySelector(s); }.bind(this);
-    const dateStr = q('.f-date').value, timeStr = q('.f-time').value || '19:00';
-    if (!dateStr) { note.textContent = ''; return; }
+    const dateStr = q('.f-date').value, timeStr = q('.f-time').value;
+    // Both, now that neither is pre-filled: confirming "Sat 3 Oct, 7:00 pm" for a
+    // time nobody has entered is the old default wearing a different hat.
+    if (!dateStr || !timeStr) { note.textContent = ''; return; }
     const p = dateStr.split('-'), t = timeStr.split(':');
     const zone = this.timezone || TZ.local;
     const when = TZ.fromWallClock(+p[0], +p[1], +p[2], +t[0], +t[1], zone);
@@ -1033,7 +1086,10 @@
       this._fillTzOptions(null); this._syncTzNote();
     }
     if (q('.f-venue')) q('.f-venue').value = '';
-    if (q('.f-time')) q('.f-time').value = '19:00';
+    // A fresh form asks both questions again — no 19:00, no Music. Resetting to a
+    // default here would put the trap straight back for the organiser's second event.
+    if (q('.f-time')) q('.f-time').value = '';
+    if (q('.f-cat')) { q('.f-cat').value = ''; this._syncCatColor(); }
     if (q('.f-endtime')) q('.f-endtime').value = '';
     if (q('.f-feature')) q('.f-feature').checked = false;
     this._imageExisting = null;
@@ -1054,7 +1110,10 @@
     this._copiedImage = null;                // editing is not duplicating
     this.locationChosen = true;              // an existing event already has a location
     q('.f-name').value = ev.title || '';
-    q('.f-cat').value = ev.category || q('.f-cat').value;
+    // An existing event always has a category; if one somehow doesn't, this leaves the
+    // placeholder showing and the organiser has to pick, which is the right outcome.
+    q('.f-cat').value = ev.category || '';
+    if (this._syncCatColor) this._syncCatColor();
     // Restore the zone BEFORE the clock, because the clock is read back in it.
     const TZ = global.EventuallyTZ;
     this.timezone = (TZ && TZ.valid(ev.timezone) && ev.timezone) || (TZ && TZ.local) || 'UTC';
