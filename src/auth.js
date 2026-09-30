@@ -245,7 +245,24 @@
         return sb.from('event_sources').insert({
           source_id: srcId, event_id: evt.id, source: 'native',
           url: evt.ticketUrl || null, price: null, currency: null,
-          organizer: (currentUser.email ? currentUser.email.split('@')[0] : 'Eventually'),
+          /* NO ORGANIZER. This used to write `email.split('@')[0]` — the organiser's
+           * own email username, e.g. "rotimialade", "modupeoo", "repent456".
+           *
+           * `event_sources` is readable by anon (01_schema.sql), so that handle was
+           * queryable over the public API by anybody holding the publishable key,
+           * for every event ever published here. It is half of a real email address
+           * and the domain is usually guessable, which is exactly what address
+           * harvesters collect. Nobody ever agreed to publish it: an organiser
+           * consented to publishing their EVENT.
+           *
+           * Nothing displayed it. Its only reader is dedup.js, which weights
+           * organizer at 0.10 and scores an empty string as 0 on both sides — so
+           * dropping it changes no match. It was pure leak for no feature.
+           *
+           * It must also stay out of the pages: build-city-pages.js would otherwise
+           * have published it to Google as schema.org `organizer` when we went to
+           * satisfy a Search Console suggestion. See notes/session-handoff.md. */
+          organizer: null,
           badge: '', last_updated: new Date().toISOString()
         }).then(logErr('publishEvent source'));
       });
