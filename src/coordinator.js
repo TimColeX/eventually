@@ -316,7 +316,16 @@
                  describe the PIN — moving it rewrites them. */
               '<div class="co-row co-row-2" style="margin-top:10px">' +
                 '<label>City<input class="f-city" placeholder="From the map — edit if wrong"></label>' +
-                '<label>Country<input class="f-country" placeholder="From the map — edit if wrong"></label>' +
+                /* A LIST, NOT A TEXT BOX. A misspelled country is not a cosmetic
+                   error: city pages are grouped by `slug|country`, so "nigeriii"
+                   would have given Abuja a second page of its own. The same
+                   fault, at scale, already split Washington in two. */
+                '<label>Country<select class="f-country">' +
+                  '<option value="">From the map — or choose</option>' +
+                  global.EventuallyData.COUNTRIES.map(function (c) {
+                    return '<option>' + c + '</option>';
+                  }).join('') +
+                '</select></label>' +
               '</div>' +
             '</section>' +
             // The poster. Optional — an event with no picture still gets the
@@ -390,7 +399,8 @@
     const cityIn = this.el.querySelector('.f-city');
     const countryIn = this.el.querySelector('.f-country');
     if (cityIn) cityIn.addEventListener('input', function () { self._cityTouched = true; });
-    if (countryIn) countryIn.addEventListener('input', function () { self._countryTouched = true; });
+    // A <select> fires 'change', not 'input'.
+    if (countryIn) countryIn.addEventListener('change', function () { self._countryTouched = true; });
 
     catSel.addEventListener('change', syncCatColor);
     // Exposed because the reset and edit paths change .f-cat programmatically, and a
@@ -1239,7 +1249,7 @@
        refreshed — so they are marked as touched. Without that, a stray geocode
        could overwrite a correction the organiser made last week. */
     if (q('.f-city')) q('.f-city').value = ev.city || '';
-    if (q('.f-country')) q('.f-country').value = ev.country || '';
+    if (q('.f-country')) setCountry(q('.f-country'), ev.country);
     this._cityTouched = !!ev.city; this._countryTouched = !!ev.country;
     // The end DATE, restored in the venue's zone like the times above it.
     if (q('.f-enddate')) {
@@ -1384,8 +1394,26 @@
     const cityIn = this.el.querySelector('.f-city');
     const countryIn = this.el.querySelector('.f-country');
     if (cityIn && !this._cityTouched) cityIn.value = this.city || '';
-    if (countryIn && !this._countryTouched) countryIn.value = this.country || '';
+    if (countryIn && !this._countryTouched) setCountry(countryIn, this.country);
   };
+
+  /* A <select> SILENTLY DISCARDS A VALUE IT HAS NO OPTION FOR.
+     Assigning an unknown country would leave the box on "choose" and publish the
+     event with no country at all — a worse failure than the typo the dropdown
+     exists to prevent, and a silent one. So an unrecognised name is ADDED as an
+     option and selected: a country missing from our list is a gap in the list,
+     never a reason to lose where an event actually is. */
+  function setCountry(sel, value) {
+    const v = String(value || '').trim();
+    if (!v) { sel.value = ''; return; }
+    const has = Array.prototype.some.call(sel.options, function (o) { return o.value === v || o.text === v; });
+    if (!has) {
+      const o = document.createElement('option');
+      o.textContent = v;                    // textContent, so a place name is never markup
+      sel.appendChild(o);
+    }
+    sel.value = v;
+  }
 
   Coordinator.prototype._renderAnalyticsInto = function (body) {
     const self = this;
