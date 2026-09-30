@@ -212,6 +212,14 @@
             '<label>Address <span class="co-opt">(filled in from the map — edit if needed)</span>' +
               '<input class="f-address" placeholder="Street address, city"></label>' +
             '<label>Date<input type="date" class="f-date"></label>' +
+            /* ENDS ON. Until now the end TIME was always stamped onto the start
+               DATE (or the next day if it read as earlier), so a two-day event
+               could not be said at all — The Global She Conference runs 27–28
+               October and the form could only claim one of them. Optional and
+               blank by default: almost every event ends the day it starts, and an
+               organiser who leaves it alone gets exactly the old behaviour. */
+            '<label>Ends on <span class="co-opt">(optional — only if it runs past that day)</span>' +
+              '<input type="date" class="f-enddate"></label>' +
             '<div class="co-row co-row-2">' +
               // Empty, not 19:00. Same trap as the old Music default, but worse: a
               // wrong category is visible on the card, a wrong time is not — an
@@ -297,6 +305,19 @@
                 '<div class="latlon"><strong class="ll-lat"></strong> · <strong class="ll-lon"></strong></div>' +
               '</div>' +
               '<p class="co-hint">Tap the map to move the pin.</p>' +
+              /* CITY AND COUNTRY, EDITABLE. They used to be set ONLY by the
+                 geocoder, with no way to correct them — which is how an event
+                 sitting on Regina's coordinates was published as "abuja", and how
+                 the first event in a new city can end up with no country at all.
+                 The geocoder still fills these in as the pin moves; this just
+                 means a person can disagree with it.
+
+                 They live under the map, not in the details column, because they
+                 describe the PIN — moving it rewrites them. */
+              '<div class="co-row co-row-2" style="margin-top:10px">' +
+                '<label>City<input class="f-city" placeholder="From the map — edit if wrong"></label>' +
+                '<label>Country<input class="f-country" placeholder="From the map — edit if wrong"></label>' +
+              '</div>' +
             '</section>' +
             // The poster. Optional — an event with no picture still gets the
             // category-colour block, which is what every native event had until now.
@@ -365,6 +386,12 @@
         if (n) n.textContent = cat;      // textContent, so a category name is never markup
       }
     }
+    // Typing in either box takes it out of the geocoder's hands until the pin moves.
+    const cityIn = this.el.querySelector('.f-city');
+    const countryIn = this.el.querySelector('.f-country');
+    if (cityIn) cityIn.addEventListener('input', function () { self._cityTouched = true; });
+    if (countryIn) countryIn.addEventListener('input', function () { self._countryTouched = true; });
+
     catSel.addEventListener('change', syncCatColor);
     // Exposed because the reset and edit paths change .f-cat programmatically, and a
     // `value =` assignment fires no 'change' event — the preview would then describe
@@ -418,6 +445,10 @@
       self.pin.lat = 90 - y * 180;
       self.city = null;
       self.country = null;                  // the reverse geocode below refills both
+      // Moving the pin means "look it up again", so a name typed for the OLD
+      // location stops being protected — otherwise dragging from Regina to Lagos
+      // would keep the word Regina in the box and publish it.
+      self._cityTouched = false; self._countryTouched = false;
       self.locationChosen = true;           // dropping a pin counts as choosing a location
       var m0 = self.el.querySelector('.co-loc'); if (m0) m0.classList.remove('co-need-loc');
       self._drawMap();
@@ -438,6 +469,7 @@
     function hideSuggest() { suggest.classList.remove('show'); suggest.innerHTML = ''; acResults = []; }
     function pick(res) {
       self.pin.lat = res.lat; self.pin.lon = res.lon; self.city = res.city;
+      self._cityTouched = false; self._countryTouched = false;   // a new place, a new name
       self.locationChosen = true;           // picking a searched address counts
       self._adoptPlace(res);
       var m1 = self.el.querySelector('.co-loc'); if (m1) m1.classList.remove('co-need-loc');
@@ -645,14 +677,31 @@
     const dp = dateStr.split('-'), tp = timeStr.split(':');
     const date = TZ ? TZ.fromWallClock(+dp[0], +dp[1], +dp[2], +tp[0], +tp[1], zone)
                     : new Date(dateStr + 'T' + timeStr + ':00');
+    /* WHEN IT ENDS. An explicit end DATE wins; without one the old rule stands —
+       the end time belongs to the start date, rolling to the next day if it reads
+       as earlier (a night that runs past midnight).
+
+       The date box exists because that rule could not express a two-day event at
+       all: a conference on the 27th and 28th could only ever claim one of them. */
     const endStr = q('.f-endtime').value;
+    const endDateStr = q('.f-enddate') ? q('.f-enddate').value : '';
     let endsAt = null;
-    if (endStr) {
-      const ep = endStr.split(':');
-      endsAt = TZ ? TZ.fromWallClock(+dp[0], +dp[1], +dp[2], +ep[0], +ep[1], zone)
-                  : new Date(dateStr + 'T' + endStr + ':00');
-      // An end time before the start means it runs past midnight into the next day.
-      if (endsAt <= date) endsAt = new Date(endsAt.getTime() + 86400000);
+    if (endStr || endDateStr) {
+      const ed = (endDateStr || dateStr).split('-');
+      // A date with no time means "until the end of that day", which is the only
+      // honest reading of "runs until the 28th".
+      const ep = (endStr || '23:59').split(':');
+      endsAt = TZ ? TZ.fromWallClock(+ed[0], +ed[1], +ed[2], +ep[0], +ep[1], zone)
+                  : new Date((endDateStr || dateStr) + 'T' + (endStr || '23:59') + ':00');
+      if (endsAt <= date) {
+        if (endDateStr) {
+          // They named a day and it lands before the start — that is a mistake to
+          // point out, not one to silently "fix" by adding a day.
+          this._toast('The end date is before the start. Check both dates.');
+          q('.f-enddate').focus(); return;
+        }
+        endsAt = new Date(endsAt.getTime() + 86400000);
+      }
     }
     const venue = q('.f-venue').value.trim();
     const address = q('.f-address').value.trim();
@@ -689,7 +738,13 @@
          to trg_events_city_fill (75_fill_missing_cities.sql), which borrows the nearest
          named event's city or reverse-geocodes server-side, where it is far more reliable
          than a browser call racing the publish button. */
-      id: id, name: name, city: this.city || null, country: this.country || null, venue: venue || null, endsAt: endsAt,
+      /* The typed boxes win over the geocoder's answer — that is the whole point
+         of them. Falling back to `this.city` covers the case where the fields are
+         not on screen (an older cached page) rather than being empty on purpose. */
+      id: id, name: name,
+      city: (q('.f-city') ? q('.f-city').value.trim() : '') || this.city || null,
+      country: (q('.f-country') ? q('.f-country').value.trim() : '') || this.country || null,
+      venue: venue || null, endsAt: endsAt,
       address: address || null, timezone: zone,
       lat: this.pin.lat, lon: this.pin.lon,
       date: date, dayOffset: dayOffset, category: cat,
@@ -1091,6 +1146,11 @@
     if (q('.f-time')) q('.f-time').value = '';
     if (q('.f-cat')) { q('.f-cat').value = ''; this._syncCatColor(); }
     if (q('.f-endtime')) q('.f-endtime').value = '';
+    if (q('.f-enddate')) q('.f-enddate').value = '';
+    // Blank, and back under the geocoder's control for the next pin.
+    if (q('.f-city')) q('.f-city').value = '';
+    if (q('.f-country')) q('.f-country').value = '';
+    this._cityTouched = false; this._countryTouched = false;
     if (q('.f-feature')) q('.f-feature').checked = false;
     this._imageExisting = null;
     this._clearImage(false);
@@ -1175,6 +1235,25 @@
     else q('.f-reg-none').checked = true;
     this._syncRegMode();
     this.pin = { lat: +ev.lat, lon: +ev.lon }; this.city = ev.city || null; this.country = ev.country || null;
+    /* The saved city and country are what this event IS, not a guess to be
+       refreshed — so they are marked as touched. Without that, a stray geocode
+       could overwrite a correction the organiser made last week. */
+    if (q('.f-city')) q('.f-city').value = ev.city || '';
+    if (q('.f-country')) q('.f-country').value = ev.country || '';
+    this._cityTouched = !!ev.city; this._countryTouched = !!ev.country;
+    // The end DATE, restored in the venue's zone like the times above it.
+    if (q('.f-enddate')) {
+      q('.f-enddate').value = '';
+      if (ev.end_time) {
+        const de = new Date(ev.end_time);
+        const we = TZ ? TZ.toWallClock(de, this.timezone)
+                      : { y: de.getFullYear(), mo: de.getMonth() + 1, d: de.getDate() };
+        const endDay = we.y + '-' + String(we.mo).padStart(2, '0') + '-' + String(we.d).padStart(2, '0');
+        // Only when it genuinely ends on a LATER day — filling it in for an
+        // ordinary evening event would turn an optional field into noise.
+        if (endDay !== q('.f-date').value) q('.f-enddate').value = endDay;
+      }
+    }
     // A picture waiting for review is the one to show them — it's what they last
     // chose, even though the event is still showing the old one to everyone else.
     this._showExistingImage(ev.image_pending || ev.image_url || null, !!ev.image_pending);
@@ -1298,6 +1377,14 @@
     this.el.querySelector('.ll-lon').textContent = Math.abs(lo).toFixed(2) + '° ' + (lo >= 0 ? 'E' : 'W');
     const cityEl = this.el.querySelector('.ll-city');
     if (cityEl) cityEl.textContent = this.city || '—';
+    /* Keep the editable boxes in step with the pin — but never overwrite what a
+       person typed while the geocode was still in flight. `_cityTouched` is set
+       by their first keystroke and cleared when the pin moves, so moving the pin
+       means "look it up again" and typing means "I know better than the lookup". */
+    const cityIn = this.el.querySelector('.f-city');
+    const countryIn = this.el.querySelector('.f-country');
+    if (cityIn && !this._cityTouched) cityIn.value = this.city || '';
+    if (countryIn && !this._countryTouched) countryIn.value = this.country || '';
   };
 
   Coordinator.prototype._renderAnalyticsInto = function (body) {

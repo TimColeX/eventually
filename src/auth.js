@@ -336,13 +336,14 @@
         // actually clearing it, not a value the form never loaded.
         organiser_name: evt.organiserName || null
       };
-      /* COUNTRY IS ONLY SENT WHEN WE HAVE ONE, never as a null.
-         `creator_event_stats` — the query the edit form is filled from — returns city
-         but not country, so an edit that never touched the location has `evt.country`
-         undefined. Writing that straight through would erase, on every ordinary edit,
-         the country the geocoder captured at publish. Moving the pin re-runs the
-         geocode and sets it, so a genuinely changed location still updates. */
-      if (evt.country) patch.country = evt.country;
+      /* COUNTRY IS NOW A REAL FIELD, so it is sent like any other.
+         It used to be sent only when truthy, because `creator_event_stats` did not
+         return it: the edit form never loaded it, `evt.country` was undefined, and
+         writing that through would have erased the geocoder's answer on every
+         ordinary edit. That was a guard around a missing column, not a decision.
+         113 makes the RPC return it and the form now has a visible Country box, so
+         a blank one means the organiser cleared it on purpose. */
+      patch.country = evt.country || null;
       // The image columns are only touched when the publisher actually changed the
       // picture. Taking one DOWN needs no review (removing content can't be abused
       // the way adding it can); putting one up waits for the Review queue.

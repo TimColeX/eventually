@@ -654,7 +654,20 @@ body {
 .co-opt { color: var(--faint); font-weight: 400; }
 .co-row { display: grid; gap: 12px; margin-bottom: var(--co-gap); }
 .co-row label { margin-bottom: 0; min-width: 0; }   /* let grid cells shrink → no horizontal scroll */
-.co-row-2 { grid-template-columns: 1fr 1fr; }
+/* TWO UP ONLY WHILE TWO GENUINELY FIT.
+ *
+ * This was a flat `1fr 1fr` at every width, which on a 375px phone gives each
+ * field 151px. That is fine for a text box and NOT fine for `input[type=time]`
+ * on iOS, which draws a native "12:00 AM" control with a minimum width of its
+ * own — so Start and End collided, and the same row holds Category and Venue.
+ * It never reproduced in desktop emulation because Chrome's time input is far
+ * more compact than Safari's.
+ *
+ * `auto-fit` + `minmax` means the browser stacks them when two would be cramped,
+ * measured against the space actually available rather than against a phone
+ * width someone guessed. 190px clears iOS's native pickers with room to spare,
+ * so phones get one field per line and tablets upward keep the pair. */
+.co-row-2 { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
 
 /* ONE section header, used by every group in both columns — Event details, Location,
    Picture, How people get in. There used to be three treatments side by side (mono

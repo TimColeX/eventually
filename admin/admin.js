@@ -758,7 +758,16 @@
       '<span class="ad-saved" id="in-status"></span></div>' +
       '<div id="in-result"></div></div>' +
 
+      /* TWO TOGGLES, BOTH OFF BY DEFAULT — the quiet view is the useful one.
+         A few test runs leave this list mostly repeats and dead drafts, and a
+         list you have to read past is one you stop reading. Nothing is hidden
+         permanently: both switches bring it straight back, which is why this is
+         filtering and not deleting. */
       '<div class="ad-sec" style="margin-top:18px"><h2>Recent intakes</h2>' +
+      '<div class="ad-hint" style="margin-bottom:8px">' +
+        '<label style="margin-right:14px"><input type="checkbox" id="in-show-expired"> Show expired</label>' +
+        '<label><input type="checkbox" id="in-show-dupes"> Show every repeat</label>' +
+        '<span id="in-hidden-note" style="margin-left:10px"></span></div>' +
       '<div class="ad-list" id="in-list"><span class="ad-hint">Loading…</span></div></div>';
 
     const fileEl = document.getElementById('in-files');
@@ -825,6 +834,13 @@
           loadIntakeList();
         });
     };
+
+    // The two filters re-render from the rows already fetched — no round trip, so
+    // flicking them on and off to find a draft costs nothing.
+    ['in-show-expired', 'in-show-dupes'].forEach(function (id) {
+      const box = document.getElementById(id);
+      if (box) box.onchange = function () { loadIntakeList(); };
+    });
 
     loadIntakeList();
   }
@@ -1083,13 +1099,67 @@
         (groups[k] = groups[k] || []).push(d.id);
       });
 
-      const rows = all.map(function (d) {
+      const showExpired = !!(document.getElementById('in-show-expired') || {}).checked;
+      const showDupes   = !!(document.getElementById('in-show-dupes') || {}).checked;
+      const now = Date.now();
+
+      /* EXPIRED = a draft that ran out of time without being used. Drafts carry a
+         21-day `expires_at` (103). A `published` one is history and never
+         expires out of view however old it is — hiding a real event's record
+         because a date passed would be lying by omission. */
+      const isExpired = function (d) {
+        return d.status !== 'published' && d.expires_at && Date.parse(d.expires_at) < now;
+      };
+
+      /* ONE ROW PER EVENT. The duplicates are already labelled, but each still
+         took a line, so eight rows described four events. The keeper is the one
+         that matters most: on the globe, then published, then the newest — so
+         collapsing never hides the live one behind a dead attempt. */
+      const rank = function (d) {
+        return (d.event_live === true ? 4 : 0) + (d.status === 'published' ? 2 : 0) + (d.status === 'ready' ? 1 : 0);
+      };
+      const keeper = {};
+      Object.keys(groups).forEach(function (k) {
+        const members = all.filter(function (d) {
+          const p = d.payload || {};
+          return String(p.name || '').trim().toLowerCase() + '|' + (p.date || '') + '|' + (p.start || '') === k;
+        }).sort(function (a, b) {
+          return rank(b) - rank(a) || (Date.parse(b.created_at) - Date.parse(a.created_at));
+        });
+        keeper[k] = members.length ? members[0].id : null;
+      });
+
+      let hiddenExpired = 0, hiddenDupes = 0;
+      const visible = all.filter(function (d) {
+        const p = d.payload || {};
+        const k = String(p.name || '').trim().toLowerCase() + '|' + (p.date || '') + '|' + (p.start || '');
+        if (!showExpired && isExpired(d)) { hiddenExpired++; return false; }
+        if (!showDupes && (groups[k] || []).length > 1 && keeper[k] !== d.id) { hiddenDupes++; return false; }
+        return true;
+      });
+
+      // Say what is not being shown. A filtered list that does not admit it is
+      // filtered is how someone concludes a draft has vanished.
+      const note = document.getElementById('in-hidden-note');
+      if (note) {
+        const bits = [];
+        if (hiddenExpired) bits.push(hiddenExpired + ' expired');
+        if (hiddenDupes) bits.push(hiddenDupes + ' repeat' + (hiddenDupes > 1 ? 's' : ''));
+        note.textContent = bits.length ? '· hiding ' + bits.join(' and ') : '';
+      }
+
+      const rows = visible.map(function (d) {
         const p = d.payload || {};
         const when = p.date ? (p.date + (p.start ? ' ' + p.start : '')) : 'no date';
         const link = location.origin + '/review.html?t=' + d.token;
         const key = String(p.name || '').trim().toLowerCase() + '|' + (p.date || '') + '|' + (p.start || '');
         const sibs = groups[key] || [d.id];
-        const dupe = sibs.length > 1 ? (sibs.indexOf(d.id) + 1) + ' of ' + sibs.length : null;
+        /* Collapsed, the "2 of 3" numbering would be nonsense — this IS the row
+           standing for all three. It says how many are behind it instead, and only
+           reverts to positional numbering when every repeat is on screen. */
+        const dupe = sibs.length < 2 ? null
+          : (showDupes ? (sibs.indexOf(d.id) + 1) + ' of ' + sibs.length
+                       : '+' + (sibs.length - 1) + ' more like this');
         /* DELETABLE = NOT ON THE GLOBE. `event_live` comes from 114; older
            deployments don't send it, and then this stays false so no delete
            button appears at all — the safe way to be wrong. A live event's draft
@@ -1135,7 +1205,13 @@
             : '') +
           '</span></div>';
       }).join('');
-      el.innerHTML = rows || '<span class="ad-hint">Nothing yet.</span>';
+      // "Nothing yet" and "everything is filtered out" are different states, and
+      // telling someone their intakes are gone when they are merely hidden is the
+      // worst thing a filter can do.
+      el.innerHTML = rows || (all.length
+        ? '<span class="ad-hint">Nothing to show — tick a box above to see the ' +
+          (hiddenExpired ? 'expired' : 'repeated') + ' ones.</span>'
+        : '<span class="ad-hint">Nothing yet.</span>');
       el.querySelectorAll('.in-copy').forEach(function (b) {
         b.onclick = function () {
           try { navigator.clipboard.writeText(b.dataset.link); b.textContent = 'Copied'; }
