@@ -803,6 +803,17 @@
         .then(function (r) {
           btn.disabled = false;
           if (r.error) { status.textContent = 'Failed: ' + r.error + (r.detail ? ' — ' + r.detail : ''); status.style.color = '#b3402a'; return; }
+          /* ALREADY HAVE THIS ONE?
+             The server read the poster, found something with the same title, and
+             wrote NOTHING. Nothing is created until a person looks at the list
+             below and says to. This is what stops the third attempt at one gala
+             from quietly becoming the third row. */
+          if (r.duplicate) {
+            status.textContent = 'Read it — but we may already have this.';
+            status.style.color = '#8a6d1e';
+            showIntakeDuplicate(r);
+            return;
+          }
           status.textContent = 'Read it.';
           intakeDraft = r.draft;
           renderIntakeDraft();
@@ -816,6 +827,73 @@
     };
 
     loadIntakeList();
+  }
+
+  /* WHAT WE ALREADY HAVE THAT LOOKS LIKE THIS ONE.
+     Shown INSTEAD of the form, not above it: an editable form with a warning over
+     it reads as "carry on", and carrying on is what makes the duplicate. Every
+     match names its date and city, because that is what separates a genuine
+     repeat from a recurring night — "Afro Beat Night 5" really did run three
+     times, and those three rows are correct. */
+  function showIntakeDuplicate(r) {
+    const host = document.getElementById('in-result');   // the same panel the draft form uses
+    if (!host) return;
+    const p = r.fields || {};
+    const rows = (r.similar || []).map(function (s) {
+      const where = [s.date || 'no date', s.city || '—'].join(' · ');
+      const what = s.kind === 'event'
+        ? (s.on_globe ? '<b style="color:#3f7d52">on the globe</b>' : 'an event')
+        : ('draft · <b>' + esc(s.status || '') + '</b>' +
+           (s.on_globe ? ' · <b style="color:#3f7d52">on the globe</b>' : ''));
+      return '<div class="ad-li"><span><b>' + esc(s.title) + '</b> · ' + esc(where) + ' · ' + what +
+        (s.same_date ? ' · <b style="color:#b3402a">same date</b>' : ' · <span style="color:#8a6d1e">different date</span>') +
+        '</span><span>' +
+        (s.kind === 'draft'
+          ? '<button class="ad-regen in-open" data-id="' + esc(s.id) + '">Open</button>'
+          : '') +
+        '</span></div>';
+    }).join('');
+
+    host.innerHTML =
+      '<div class="ad-card"><h3 style="margin-top:0">We may already have this one</h3>' +
+      '<p class="ad-hint">The poster reads as <b>' + esc(p.name || '(no title)') + '</b>' +
+      (p.date ? ' on <b>' + esc(p.date) + '</b>' : '') +
+      (p.city ? ' in <b>' + esc(p.city) + '</b>' : '') + '. ' +
+      'Nothing has been saved yet.</p>' +
+      rows +
+      '<p class="ad-hint" style="margin-top:12px">A recurring night is not a duplicate — check the dates above. ' +
+      'If this really is a new occurrence, make it.</p>' +
+      '<button class="ad-save" id="in-anyway">Make it anyway</button> ' +
+      '<button class="ad-regen" id="in-cancel">Cancel</button></div>';
+
+    document.getElementById('in-cancel').onclick = function () { host.innerHTML = ''; };
+    document.getElementById('in-anyway').onclick = function () {
+      const b = this; b.disabled = true; b.textContent = 'Creating…';
+      // The fields the model already read, posted straight back — no second read,
+      // so changing your mind costs nothing.
+      intakeCall('create_draft', {
+        fields: r.fields, confidence: r.confidence, warnings: r.warnings,
+        poster_url: r.poster_url, poster_path: r.poster_path
+      }).then(function (res) {
+        if (res && res.ok) {
+          intakeDraft = res.draft;
+          renderIntakeDraft();
+          intakeGeocode();
+          loadIntakeList();
+          return;
+        }
+        b.disabled = false; b.textContent = 'Make it anyway';
+        alert('Could not create it' + (res && res.error ? ' (' + res.error + ')' : '') + '.');
+      }, function () { b.disabled = false; b.textContent = 'Make it anyway'; alert('Could not reach the server.'); });
+    };
+    // "Open" on a matching draft uses the same handler the list below does.
+    host.querySelectorAll('.in-open').forEach(function (b) {
+      b.onclick = function () {
+        intakeCall('get', { id: b.dataset.id }).then(function (res) {
+          if (res && res.ok) { intakeDraft = res.draft; renderIntakeDraft(); }
+        });
+      };
+    });
   }
 
   /* The extracted event, as an editable form. Everything the model was unsure about
