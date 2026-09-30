@@ -152,6 +152,29 @@ function cleanTitle(raw) {
  *
  * Both templates call this, so the two can never drift apart again — they already
  * had two copies of the same broken rule. */
+/* WHO TO CREDIT — and why only this one column will do.
+ *
+ * Search Console asks for schema.org `organizer`. There were two columns that
+ * looked like the answer and neither was:
+ *
+ *   * `event_sources.organizer` on IMPORTED rows is provider junk. The live values
+ *     include 'MONDIAL PRICE 1', 'MONDIAL PRICE 2' and 'PROMOTED BY VENUE' — price
+ *     tiers and status strings — plus bare venue names. Publishing those would put
+ *     nonsense in Google's index to satisfy an optional field.
+ *   * The same column on NATIVE rows held the organiser's email USERNAME
+ *     ('rotimialade', 'modupeoo'), written by src/auth.js on every publish. Nobody
+ *     consented to that being on a public page. 105 cleared it; auth.js stopped
+ *     writing it; and it must never be published from here.
+ *
+ * `events.organiser_name` (106) is different in the only way that matters: an
+ * organiser typed it into a field labelled "shown publicly on your event page".
+ * That is consent. Null means they left it blank, and then no `organizer` is
+ * emitted at all — which is what every page did before this existed. */
+function organizerFor(e) {
+  const name = String(e.organiser_name || '').trim();
+  return name ? { '@type': 'Organization', name } : undefined;
+}
+
 function offerFor(e, url) {
   const srcs = Array.isArray(e.event_sources) ? e.event_sources : [];
   const priced = srcs.find((s) => s && s.currency && s.price != null
@@ -203,11 +226,34 @@ async function fetchAll(select, filter) {
   return out;
 }
 
-// `performers` arrives with backend/80_event_performers.sql. Until that has run the column
-// doesn't exist and asking for it is a 400, so fall back rather than fail the rebuild.
-async function fetchWithPerformers(select, filter) {
-  try { return await fetchAll(select + ',performers', filter); }
-  catch (e) { return fetchAll(select, filter); }
+/* OPTIONAL COLUMNS — ones that arrive with a migration the owner runs by hand.
+ *
+ * Asking PostgREST for a column that doesn't exist yet is a 400, which would fail
+ * the whole rebuild — and this runs on a 4-hourly cron, so a generator pushed
+ * before its SQL would take the city pages down until someone noticed. `performers`
+ * (80_event_performers.sql) already needed that guard; `organiser_name` (106) is the
+ * second, which is what turned it into a list.
+ *
+ * The old version dropped ALL the optional columns on any failure. With two of them
+ * that is wrong: a missing `organiser_name` would also throw away `performers`,
+ * silently stripping performer data from 3,152 items until someone ran the SQL. So
+ * on failure each column is probed once and only the absent ones are dropped.
+ *
+ * The probe is a one-row request, and it only happens on the failure path — the
+ * normal case is a single fetch, exactly as before. */
+async function fetchWithOptional(select, optional, filter) {
+  const withAll = optional.length ? select + ',' + optional.join(',') : select;
+  try { return await fetchAll(withAll, filter); } catch { /* work out which one */ }
+
+  const present = [];
+  for (const col of optional) {
+    const r = await fetch(`${SUPABASE}/rest/v1/events?select=${col}&limit=1`, {
+      headers: { apikey: ANON, Authorization: 'Bearer ' + ANON },
+    }).catch(() => null);
+    if (r && r.ok) present.push(col);
+    else console.warn(`[build] column "${col}" is not in the database yet — skipping it. Run its migration.`);
+  }
+  return fetchAll(present.length ? select + ',' + present.join(',') : select, filter);
 }
 
 async function cityProse() {
@@ -232,10 +278,11 @@ async function cityProse() {
 async function analyse() {
   const now = new Date().toISOString();
   const to = new Date(Date.now() + DAYS_AHEAD * 86400000).toISOString();
-  const rows = await fetchWithPerformers(
+  const rows = await fetchWithOptional(
     // `timezone` is what makes the printed times correct — see fmt() below. description,
     // image_url, address and event_sources feed the Event structured data (ldEvent).
     'event_id,title,city,country,start_time,end_time,category,lat,lon,is_native,timezone,venue,address,description,image_url,created_at,event_sources(url,price,currency)',
+    ['performers', 'organiser_name'],   // each needs its migration run — see fetchWithOptional
     `moderation=eq.approved&published=not.is.false&start_time=gte.${now}&start_time=lte.${to}&order=start_time.asc`
   );
 
@@ -393,6 +440,9 @@ function page(c, prose, adsOn) {
     const link = srcs.find((s) => s && s.url);
     const offer = offerFor(e, link && link.url);
     if (offer) o.offers = offer;
+    // Only ever from events.organiser_name, never event_sources.organizer — see organizerFor().
+    const org = organizerFor(e);
+    if (org) o.organizer = org;
     if (Array.isArray(e.performers) && e.performers.length) {
       o.performer = e.performers.map((name) => ({ '@type': 'PerformingGroup', name }));
     }
@@ -671,6 +721,8 @@ function eventPage(e, city, cityPage) {
     // ldEvent — an Offer carrying only a url is what Search Console flags, and
     // Google's Event rich result does not require offers at all.
     offers: offer,
+    // The credit the organiser typed on the publish form, or nothing — see organizerFor().
+    organizer: organizerFor(e),
   };
 
   return `<!DOCTYPE html>

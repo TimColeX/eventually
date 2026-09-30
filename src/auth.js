@@ -234,6 +234,10 @@
         feature_requested: !!evt.sponsored,
         collect_registrations: !!evt.collectRegistrations,
         capacity: evt.capacity || null,
+        // Who to credit publicly (106). The ONLY organiser name we may publish:
+        // it was typed into a field labelled "shown publicly", so it carries
+        // consent, unlike anything we could derive from an account or an address.
+        organiser_name: evt.organiserName || null,
         // The picture waits for review before it goes live (85_event_images.sql);
         // for a NEW event that is the same approval the event itself is waiting
         // for, so approving the event takes its poster live in one decision.
@@ -326,7 +330,11 @@
         end_time: evt.endsAt ? evt.endsAt.toISOString() : null,
         city: evt.city || null, lat: evt.lat, lon: evt.lon,
         timezone: evt.timezone || null, venue: evt.venue || null, address: evt.address || null,
-        collect_registrations: !!evt.collectRegistrations, capacity: evt.capacity || null
+        collect_registrations: !!evt.collectRegistrations, capacity: evt.capacity || null,
+        // Sent unconditionally, unlike `country` below: this one comes from a field
+        // that is always on screen during an edit, so a null here is the organiser
+        // actually clearing it, not a value the form never loaded.
+        organiser_name: evt.organiserName || null
       };
       /* COUNTRY IS ONLY SENT WHEN WE HAVE ONE, never as a null.
          `creator_event_stats` — the query the edit form is filled from — returns city

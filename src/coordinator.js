@@ -212,6 +212,25 @@
               '<select class="f-tz"></select></label>' +
             '<p class="co-tz-note" aria-live="polite"></p>' +
             '<label>Description<textarea class="f-desc" rows="3" placeholder="Tell people what to expect…"></textarea></label>' +
+            /* WHO TO CREDIT. Optional, and the hint says "shown publicly" because it
+               is: it goes onto the event's own page as schema.org `organizer`, which
+               search engines read.
+
+               This field exists because there was previously NOWHERE honest to get
+               that name from. The form never asked, `events` had no column, and the
+               two columns that looked like answers were not:
+               `event_sources.organizer` held provider junk on imported rows
+               ('MONDIAL PRICE 1', 'PROMOTED BY VENUE') and, on native ones, the
+               organiser's own email username — personal data nobody agreed to
+               publish. See 105 and 106.
+
+               So the label asks for a GROUP, and the placeholder shows one. Someone
+               who wants their own name here can still type it; the point is that
+               they choose it, knowing where it goes, rather than us deriving it
+               from their email address. Blank stays blank — the page then omits
+               `organizer` entirely, which is what it has always done. */
+            '<label>Organiser <span class="co-opt">(optional — shown publicly on your event page)</span>' +
+              '<input class="f-organiser" maxlength="120" placeholder="The group or company putting it on"></label>' +
             '</section>' +
             // How people get in. Previously one optional URL box, which left the
             // commonest native case — a free talk with no ticketing at all —
@@ -634,6 +653,9 @@
       banner: [global.EventuallyData.CATEGORIES[cat] || '#CB5A3C', '#211A15'],   // auto from category
       description: q('.f-desc').value.trim() || (name + ' — published via the Eventually Coordinator portal.'),
       ticketUrl: url || null,
+      // Blank means blank. An empty string here would be written to the column and
+      // then published as an empty schema.org organizer, which is worse than none.
+      organiserName: q('.f-organiser').value.trim().slice(0, 120) || null,
       collectRegistrations: regMode === 'eventually',
       capacity: capacity,
       sponsored: !!q('.f-feature').checked,    // a REQUEST — granted by an admin
@@ -1000,6 +1022,7 @@
     // A fresh form is not a copy of anything, and is not at a saved venue yet.
     this._copiedImage = null; this._venueId = null; this._markChosenVenue();
     q('.f-name').value = ''; q('.f-desc').value = ''; q('.f-url').value = '';
+    q('.f-organiser').value = '';
     q('.f-reg-link').checked = true; q('.f-capacity').value = '';
     this._syncRegMode();
     if (q('.f-address')) q('.f-address').value = '';
@@ -1058,6 +1081,15 @@
     if (q('.f-venue')) q('.f-venue').value = ev.venue || '';
     if (q('.f-address')) q('.f-address').value = ev.address || '';
     q('.f-desc').value = ev.description || '';
+    /* `organiser_name`, not `organiserName`: this row comes straight from
+       `creator_event_stats`, so the form reads the column names as the RPC returns
+       them — the same way it reads `start_time`, `end_time` and `image_pending`.
+
+       106 adds the column to that RPC for exactly this line. Without it the field
+       would load blank on every edit and saving would write null back, quietly
+       dropping `organizer` from the page on the next rebuild — the same trap the
+       `country` comment in auth.js describes. */
+    q('.f-organiser').value = ev.organiser_name || '';
     q('.f-url').value = ev.url || '';
     // Restore the entry method: registrations on, else a link, else nothing.
     q('.f-capacity').value = ev.capacity || '';
