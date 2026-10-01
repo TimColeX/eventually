@@ -111,7 +111,12 @@
       cheapestId: a.cheapest_source_id || null, displaySource: ds,
       // True when the payload carried only a snippet (126). The detail panel
       // fetches the rest on open; a card never needs it.
-      descTruncated: !!a.desc_truncated
+      descTruncated: !!a.desc_truncated,
+      /* How many sittings of this event the one entry stands for (127). A
+         recurring drop-in session was previously one row, one dot and one slot
+         in the 3,000 PER SITTING — 1,000 Saskatoon rows held only 90 distinct
+         titles. 1 means exactly what it says: a single occurrence. */
+      occurrences: Math.max(1, +a.occurrences || 1)
     };
   }
 

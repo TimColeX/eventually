@@ -823,7 +823,10 @@
             featured + badge +
           '</div>' +
           '<h4 class="ev-title">' + esc(ev.name) + '</h4>' +
+          // A recurring session is ONE entry now (127); say how many dates it has,
+          // so a weekly drop-in never looks like a single afternoon.
           '<p class="ev-date">' + dateLabel + (ev.city ? '  ·  ' + esc(ev.city) : '') + countdownChip(ev) +
+            (ev.occurrences > 1 ? '<span class="ev-more-dates">+' + (ev.occurrences - 1) + ' more date' + (ev.occurrences > 2 ? 's' : '') + '</span>' : '') +
             // Filled in by paintWeather() once the forecast for this place arrives — one
             // request covers every card in the list, and a card renders fine without it.
             '<span class="wx-slot" data-when="' + ev.date.getTime() + '"' +
