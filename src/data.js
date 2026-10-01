@@ -119,23 +119,75 @@
   let _loc = 0;
   let CLUSTERS = [];
 
-  // Grid-bucket clustering (~0.3° ≈ 33km cells) — O(n), so it scales to 50k+.
+  /* CLUSTER BY THE CITY'S NAME, NOT BY A GRID SQUARE.
+   *
+   * This used to bucket purely on a 0.3° grid: `round(lat/0.3) + '_' + round(lon/0.3)`.
+   * A city that straddles a cell boundary therefore became TWO dots with the same
+   * name, and the search box — which counts by name — could only open one of them.
+   * Saskatoon really did split: the NCAS gala at −106.6852 and MrP (P-Square) at
+   * −106.6352 are four kilometres apart across the line at −106.65, so searching
+   * "Saskatoon" opened a three-event cluster and the other two were unreachable.
+   * Every city near a grid line had this, and the bigger the city the likelier it is
+   * to straddle one.
+   *
+   * Three rules, and the second two exist because the first alone is wrong:
+   *
+   * 1. GROUP BY name — so one city is one dot however its venues fall.
+   *
+   * 2. INCLUDE THE COUNTRY. London GB and London CA are not one place. Cambridge
+   *    appears in three countries in the live data and separates cleanly once the
+   *    country is part of the key.
+   *
+   * 3. STILL SPLIT A GROUP THAT IS PHYSICALLY SPREAD OUT. Country is not enough:
+   *    "Portland, United States" is 184 events spanning 3,722 km — Oregon AND Maine —
+   *    and their centroid lands in empty country in eastern Oregon. Richmond (US)
+   *    spans 570 km, London (CA) 286 km. So within a name group an event joins a
+   *    sub-cluster only if it is within SPLIT_KM of that sub-cluster's centre;
+   *    otherwise it starts another. Real cities sit far below the threshold —
+   *    London GB spreads 20 km, Toronto 15 km, Saskatoon 4 km.
+   *
+   * An event with no city falls back to the old grid key, which is what it always
+   * had and the only sensible answer when there is no name to group on.
+   */
   const CELL = 0.3;
+  const SPLIT_KM = 60;        // a metro area is tens of km; two same-name cities are hundreds
+
+  function _km(aLat, aLon, bLat, bLon) {
+    const R = 6371, t = Math.PI / 180;
+    const dLat = (bLat - aLat) * t, dLon = (bLon - aLon) * t;
+    const s = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+      + Math.cos(aLat * t) * Math.cos(bLat * t) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
+  }
+
   function buildClusters() {
     _loc = 0; CLUSTERS = [];
-    const cells = {};
+    const groups = {};          // key -> array of clusters (more than one only when split)
+
     EVENTS.forEach(function (ev) {
-      const key = Math.round(ev.lat / CELL) + '_' + Math.round(ev.lon / CELL);
-      let c = cells[key];
-      if (!c) { c = cells[key] = { id: 'loc_' + (++_loc), lat: ev.lat, lon: ev.lon, city: ev.city, eventIds: [], _n: 0 }; CLUSTERS.push(c); }
-      // The first event in a cell places and names the cluster. If it has no city, take
-      // the name from the next event that does, so the cluster isn't left unnamed. The
-      // position still comes from the first event.
-      if (!c.city && ev.city) c.city = ev.city;
-      c.eventIds.push(ev.id);
-      c._n++;
-      c.lat += (ev.lat - c.lat) / c._n;             // running centroid
-      c.lon += (ev.lon - c.lon) / c._n;
+      if (ev.lat == null || ev.lon == null) return;
+      const city = String(ev.city || '').trim();
+      const key = city
+        ? 'c:' + city.toLowerCase() + '|' + String(ev.country || '').trim().toLowerCase()
+        : 'g:' + Math.round(ev.lat / CELL) + '_' + Math.round(ev.lon / CELL);
+
+      const bucket = groups[key] || (groups[key] = []);
+      // Join the nearest sub-cluster within range, or start a new one.
+      let best = null, bestKm = Infinity;
+      for (let i = 0; i < bucket.length; i++) {
+        const d = _km(bucket[i].lat, bucket[i].lon, ev.lat, ev.lon);
+        if (d < bestKm) { bestKm = d; best = bucket[i]; }
+      }
+      if (!best || bestKm > SPLIT_KM) {
+        best = { id: 'loc_' + (++_loc), lat: ev.lat, lon: ev.lon, city: city || null, eventIds: [], _n: 0 };
+        bucket.push(best); CLUSTERS.push(best);
+      }
+      // A grid-keyed cluster has no name until an event supplies one.
+      if (!best.city && ev.city) best.city = ev.city;
+      best.eventIds.push(ev.id);
+      best._n++;
+      best.lat += (ev.lat - best.lat) / best._n;     // running centroid
+      best.lon += (ev.lon - best.lon) / best._n;
     });
     return CLUSTERS;
   }

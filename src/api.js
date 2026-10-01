@@ -61,7 +61,11 @@
     });
     const ds = a.display_source || (sources[0] && sources[0].source) || 'ticketmaster';
     return {
-      id: a.event_id, name: a.title, city: a.city, lat: a.lat, lon: a.lon,
+      // `country` rides along because the clusterer needs it: grouping by city NAME
+      // alone would put London (GB) and London (CA) on one dot. It is already in
+      // every events_in_view row and was simply being dropped here.
+      id: a.event_id, name: a.title, city: a.city, country: a.country || null,
+      lat: a.lat, lon: a.lon,
       date: date, dayOffset: dayOffsetFrom(date, D.TODAY),
       category: cat, categoryColor: CATS[cat],
       source: ds, sourceLabel: SRC[ds] ? SRC[ds].label : ds, sourceColor: SRC[ds] ? SRC[ds].color : '#CB5A3C',
