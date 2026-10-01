@@ -47,7 +47,30 @@
     // event read "♥ 800 · ✓ 320". It is now a private ranking weight that keeps the
     // globe's glow exactly as it was; real counts come from event_counts() (78).
     const rank = Math.round(Math.max(0.05, Math.min(1, pop)) * 2000);
-    const sources = (a.sources || []).map(function (s) {
+    /* THE SOURCE ARRAY IS REBUILT HERE, NOT SHIPPED.
+     *
+     * `events_in_view` used to send a `sources` array per event — 0.89 MB of a
+     * 3.91 MB worldwide payload, on the call that is the app's initial load and
+     * was being cancelled by the gateway when cold. 124 replaced it with three
+     * flat fields, because the array could never have earned its weight:
+     *
+     *   • every event has exactly ONE source (3,000 of 3,000, checked live);
+     *   • app.js reads `.sources` in three places — cheapest price, and whether
+     *     anything is priced — and never lists sellers;
+     *   • only `url`, `price` and `source` are used anywhere. `badge`,
+     *     `organizer`, `last_updated`, `source_id` and `currency` were shipped
+     *     3,000 times and read zero times.
+     *
+     * Rebuilding the same shape here means app.js and dedup.js are untouched.
+     * `a.sources` is still honoured first so an older cached response, or any
+     * other caller that still sends the array, keeps working. */
+    const rawSources = (a.sources && a.sources.length) ? a.sources
+      : (a.ticket_url != null || a.ticket_price != null || a.ticket_source)
+        ? [{ source_id: null, source: a.ticket_source || a.display_source,
+             url: a.ticket_url || null, price: a.ticket_price,
+             currency: null, organizer: '', badge: '', last_updated: null }]
+        : [];
+    const sources = rawSources.map(function (s) {
       const lbl = SRC[s.source] ? SRC[s.source].label : s.source;
       const price = s.price == null ? null : Number(s.price);
       return {
