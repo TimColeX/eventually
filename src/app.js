@@ -1200,6 +1200,7 @@
       if (window.EventuallyUpdates) window.EventuallyUpdates.mount(eventScroll.querySelector('.live-updates'), ev.id);
       mountRegistration(eventScroll.querySelector('.reg-box'));
       mountCounts(ev);
+      mountDescription(ev);
     }
     paintEventWeather(eventScroll);
     M.mountAdSense(eventScroll);
@@ -1242,6 +1243,30 @@
   // Pinned bar fills in once the 120px banner has scrolled up under it (styles: .evd-bar).
   function syncEventShade() { eventEl.classList.toggle('is-scrolled', eventScroll.scrollTop > 66); }
   eventScroll.addEventListener('scroll', syncEventShade, { passive: true });
+
+  /* The rest of the description, for the event just opened.
+     The globe payload carries a 200-character snippet (126) because descriptions
+     were 47% of it, and a card clamps to about two lines — so full Ticketmaster
+     blurbs were shipped 3,000 at a time to display the first hundred characters
+     of each. The detail panel is the only place the whole thing is read, so it
+     is fetched for the one event being read.
+
+     Same guard as mountCounts: if the viewer has moved on by the time it lands,
+     the answer is dropped rather than written into whatever is on screen now.
+     Any failure simply leaves the snippet, which is a complete sentence. */
+  function mountDescription(ev) {
+    if (!ev || !ev.descTruncated) return;        // nothing was left behind
+    const API = window.EventuallyAPI;
+    if (!API || !API.fetchDescription) return;
+    const id = ev.id;
+    API.fetchDescription(id).then(function (full) {
+      if (!full || activeEventId !== id) return;
+      ev.description = full;
+      ev.descTruncated = false;                  // fetched once, kept for the session
+      const el = eventScroll.querySelector('.evd-desc');
+      if (el) el.textContent = full;             // textContent — a description is never markup
+    });
+  }
 
   /* Real like / "going" counts for the open event (event_counts, 78). Every event used
      to show invented numbers derived from its ranking score (a test event read

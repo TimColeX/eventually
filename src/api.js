@@ -108,7 +108,10 @@
       // the UI falls back to the reader's clock as it always did.
       timezone: a.timezone || null, venue: a.venue || null, address: a.address || null,
       endsAt: a.end_time ? new Date(a.end_time) : null,
-      cheapestId: a.cheapest_source_id || null, displaySource: ds
+      cheapestId: a.cheapest_source_id || null, displaySource: ds,
+      // True when the payload carried only a snippet (126). The detail panel
+      // fetches the rest on open; a card never needs it.
+      descTruncated: !!a.desc_truncated
     };
   }
 
@@ -191,6 +194,23 @@
       .catch(function () { return []; });
   }
 
+  /* The FULL description for one opened event. The globe payload carries a 200
+     character snippet (126) because descriptions were 47% of it — 1,667 kB of
+     3.48 MB — and a card clamps to about two lines, so entire Ticketmaster
+     blurbs were being shipped 3,000 at a time to show the first hundred
+     characters of each.
+
+     One event, on open, like fetchImages and event_counts. Resolves null on any
+     failure, so a detail panel keeps the snippet rather than going blank. */
+  function fetchDescription(id) {
+    if (!REMOTE || !id) return Promise.resolve(null);
+    return fetch(BASE + '/rest/v1/events?select=description&event_id=eq.' + encodeURIComponent(id),
+      { headers: headers() })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (rows) { return (rows && rows[0] && rows[0].description) || null; })
+      .catch(function () { return null; });
+  }
+
   // Event images for the cards / detail panel, by event id → url (or null when the
   // event has none). They are deliberately NOT in the globe payload: 74 dropped
   // image_url to cut ~40% off every visitor's download, and putting a URL on all 3,000
@@ -267,6 +287,7 @@
     toEvent: toEvent,
     getConfig: getConfig,
     fetchImages: fetchImages,
+    fetchDescription: fetchDescription,
     getSponsors: getSponsors,
     search: search,
     dailyBriefing: dailyBriefing
