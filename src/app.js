@@ -1436,6 +1436,37 @@
     });
     return best ? { cluster: best, km: bd } : null;
   }
+  /* THE CLUSTER FOR A SEARCHED PLACE — by NAME first, then by distance.
+   *
+   * Searching "Edmonton" opened "San Bernardino". A Ticketmaster row carries
+   * city "San Bernardino" with coordinates at 53.54, −113.51 — Edmonton,
+   * Alberta, 2,181 km from the real one — so it forms a one-event cluster
+   * sitting on top of Edmonton, 1.37 km from the centre against Edmonton's own
+   * 1.43 km. Nearest-by-distance duly picked the stray.
+   *
+   * The bad row is provider data and the ingest's country box cannot catch it:
+   * Edmonton really is inside the coarse United States box. But distance was
+   * never the right test when we KNOW the name being searched for — "Edmonton"
+   * should open the cluster called Edmonton, whatever else happens to be
+   * nearby. Distance only decides between clusters of the same name, and
+   * remains the whole answer for a map tap or a geocoder hit with no name.
+   *
+   * Ties on name go to the BIGGEST cluster, so a single stray never outranks a
+   * real city. */
+  function clusterForSearch(o) {
+    const near = nearestCluster(o.lat, o.lon);
+    const want = String(o.city || '').trim().toLowerCase();
+    if (!want) return near;
+    let best = null, bd = Infinity;
+    D.getClusters().forEach(function (c) {
+      if (String(c.city || '').trim().toLowerCase() !== want) return;
+      const km = haversineKm(o.lat, o.lon, c.lat, c.lon);
+      if (km > NEAR_OPEN_KM) return;                       // a same-name city elsewhere
+      if (!best || c.eventIds.length > best.eventIds.length ||
+          (c.eventIds.length === best.eventIds.length && km < bd)) { best = c; bd = km; }
+    });
+    return best ? { cluster: best, km: bd } : near;
+  }
   // Fly to a chosen result. When live, first load that area's events (so cities/
   // events that weren't on the loaded globe appear), then open it.
   /* Deep links from the generated city pages.
@@ -1496,7 +1527,8 @@
       globe.setHighlight(o.lat, o.lon, { color: '#ff3b30', id: o.eventId });
       setTimeout(function () {
         if (o.eventId && D.getById(o.eventId)) { openEvent(o.eventId); return; }
-        const near = nearestCluster(o.lat, o.lon);
+        // By name when we have one — see clusterForSearch().
+        const near = clusterForSearch(o);
         // Only treat a cluster as "the place you searched" when it's genuinely close.
         // Otherwise be honest: name the searched city and say there's nothing on today,
         // offering the nearest events as a clearly-labelled, opt-in choice.
