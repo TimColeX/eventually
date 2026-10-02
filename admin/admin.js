@@ -1526,9 +1526,29 @@
       box.querySelectorAll('[data-sync]').forEach(function (btn) { btn.onclick = function () { triggerSync(btn.getAttribute('data-sync'), btn); }; });
     }).catch(function () { box.innerHTML = '<h2>Event data sources — health</h2><p class="ad-hint">Unavailable.</p>'; });
   }
+  /* WHICH FUNCTION EACH PROVIDER'S "Sync now" ACTUALLY CALLS.
+   *
+   * This was a ternary that fell through to ingest-ticketmaster for anything that wasn't
+   * predicthq — so the FEEDS card's button ran the Ticketmaster importer. It reported
+   * "Syncing feeds… done", Ticketmaster's own card quietly updated, and the feeds importer
+   * never ran: it had only ever run from the cron. Found 2026-10-01 while trying to
+   * trigger the first run of the rewritten feed ingest.
+   *
+   * A map, not a chain, and an unknown provider says so instead of silently running
+   * somebody else's ingest — a wrong sync is worse than no sync, because it looks like it
+   * worked. Add a provider here when you add one to the health card. */
+  const SYNC_FN = {
+    ticketmaster: 'ingest-ticketmaster',
+    predicthq: 'ingest-predicthq',
+    feeds: 'ingest-feeds',
+  };
   function triggerSync(provider, btn) {
-    const fn = provider === 'predicthq' ? 'ingest-predicthq' : 'ingest-ticketmaster';
     const msg = document.getElementById('sync-msg-' + provider);
+    const fn = SYNC_FN[provider];
+    if (!fn) {
+      if (msg) { msg.textContent = 'No sync function is wired up for “' + provider + '”.'; msg.style.color = '#b3402a'; }
+      return;
+    }
     btn.disabled = true; if (msg) { msg.textContent = 'Syncing ' + provider + '… (up to a minute)'; msg.style.color = ''; }
     sb.functions.invoke(fn, { body: {} }).then(function (r) {
       btn.disabled = false;
