@@ -1683,15 +1683,51 @@
             byCity[k].n++;
             byCity[k].lats.push(e.lat); byCity[k].lons.push(e.lon);
           });
+          const mid = function (a) {
+            const s = a.slice().sort(function (x, y) { return x - y; });
+            return s[Math.floor(s.length / 2)];
+          };
+          /* FOLD THE REGIONLESS ROWS BACK IN.
+             `regionOf` only finds a region when the address writes it as its own
+             comma-separated token, and the provider is not consistent about that:
+
+               "1700 Elphinstone Street, Regina, SK, S4P 2Z6"  -> SK
+               "2810 Dewdney Avenue, Regina SK"                -> ''   (no comma)
+
+             Keying on the region alone therefore split ONE REAL PLACE INTO TWO ROWS —
+             "Regina, SK, Canada" (24) above "Regina, Canada" (29), and the same for
+             Toronto and Portland. The region still has to stay in the key, because it
+             is what keeps Portland OR apart from Portland ME.
+
+             So merge afterwards, on the evidence that decides it anyway: WHERE THE
+             EVENTS ACTUALLY ARE. A regionless group joins the nearest group for the
+             same city and country when their median points are within 100 km. Portland's
+             five regionless events sit on top of Portland OR and 4,081 km from Portland
+             ME, so they land correctly; London UK has no regioned sibling (UK addresses
+             carry postcodes) and is left exactly as it was. */
+          Object.keys(byCity).forEach(function (k) {
+            const c = byCity[k];
+            if (c.region) return;                        // only regionless groups move
+            const prefix = c.city.toLowerCase() + '|' + c.country.toLowerCase() + '|';
+            let best = null, bestKm = Infinity;
+            Object.keys(byCity).forEach(function (k2) {
+              const o = byCity[k2];
+              if (k2 === k || !o.region || k2.indexOf(prefix) !== 0) return;
+              const d = haversineKm(mid(c.lats), mid(c.lons), mid(o.lats), mid(o.lons));
+              if (d < bestKm) { bestKm = d; best = o; }
+            });
+            if (!best || bestKm > 100) return;           // too far apart to be one place
+            best.n += c.n;
+            best.lats = best.lats.concat(c.lats);
+            best.lons = best.lons.concat(c.lons);
+            delete byCity[k];
+          });
           /* The MEDIAN point of the group, not the first event's. One mis-geocoded
              listing — and there are 867 of those — would otherwise drag the whole
              city's pin, which is exactly how "Signing/Spelling Bee" ended up 236 km
              from Abuja (141). */
           Object.keys(byCity).forEach(function (k) {
-            const c = byCity[k], mid = function (a) {
-              const s = a.slice().sort(function (x, y) { return x - y; });
-              return s[Math.floor(s.length / 2)];
-            };
+            const c = byCity[k];
             c.lat = mid(c.lats); c.lon = mid(c.lons);
             delete c.lats; delete c.lons;
           });
