@@ -1581,6 +1581,30 @@
         }).catch(finish);
     } else { finish(); }
   }
+  /* THE STATE OR PROVINCE, read out of the address a listing already carries.
+   *
+   *   "315 SE 3rd Ave, Portland, OR, 97214"        -> OR
+   *   "239 Park Avenue, Portland, ME, 04102"       -> ME
+   *   "295 Ainslie Street S, Cambridge, ON, N1R…"  -> ON
+   *   "Wheeler Street, Cambridge, CB2 3QB"         -> ''   (a postcode, not a region)
+   *
+   * The token immediately AFTER the city, accepted only when it is two or three
+   * letters — which is what keeps a UK postcode out. Returns '' when there is
+   * nothing trustworthy, and '' simply groups as before rather than guessing.
+   */
+  function regionOf(address, city) {
+    if (!address || !city) return '';
+    const parts = String(address).split(',').map(function (s) { return s.trim(); });
+    const ck = String(city).toLowerCase().trim();
+    for (let i = 0; i < parts.length - 1; i++) {
+      if (parts[i].toLowerCase() === ck) {
+        const next = parts[i + 1];
+        return /^[A-Za-z]{2,3}$/.test(next) ? next.toUpperCase() : '';
+      }
+    }
+    return '';
+  }
+
   function renderSearchResults(cities, events) {
     let html = cities.map(function (c) {
       // `explore` cities come from the geocoder (any place on Earth, even with no
@@ -1591,7 +1615,9 @@
          name alone was ambiguous AND the two were grouped together, so tapping it
          flew you to whichever one happened to come first. Naming the country is
          the whole fix on this side; the grouping fix is below. */
-      const label = esc(c.city) + (c.country ? ', ' + esc(c.country) : '');
+      const label = esc(c.city)
+        + (c.region ? ', ' + esc(c.region) : '')
+        + (c.country ? ', ' + esc(c.country) : '');
       return '<button class="sr-city' + (c.explore ? ' sr-explore' : '') + '" data-lat="' + c.lat + '" data-lon="' + c.lon +
         '" data-city="' + esc(c.city) + '"' + (c.explore ? ' data-explore="1"' : '') + '><span class="dot city">📍</span>' +
         label + '<small>' + sub + '</small></button>';
@@ -1641,16 +1667,33 @@
         window.EventuallyAPI.search(q).then(function (rows) {
           rows = (rows || []).filter(function (e) { return !RT._hidEv[e.event_id] && !RT._hidCity[(e.city || '').toLowerCase()]; });
           const byCity = {};
-          /* GROUP BY CITY **AND COUNTRY**. Keyed on the name alone, London UK and
-             London Ontario became one row with a combined count and one pair of
-             coordinates — so the count was wrong and the tap went to the wrong
-             continent. `country` arrives from search_events as of 140; an older
-             response without it still groups by name, exactly as before. */
+          /* ONE ROW PER REAL PLACE — city, REGION and country.
+             Keyed on the name alone, London UK and London Ontario were one row with
+             a combined count and one pair of coordinates, so the count was wrong and
+             the tap went to the wrong continent (140 added `country`). Country is not
+             enough on its own: Portland OR and Portland ME are both "United States"
+             and 4,081 km apart, and there are three Springfields. `regionOf` reads the
+             state from the address (142). An older response without `address` simply
+             yields no region and groups as it did before. */
           rows.forEach(function (e) {
-            const k = (e.city || '').toLowerCase() + '|' + (e.country || '').toLowerCase();
             if (!(e.city || '').trim()) return;
-            if (!byCity[k]) byCity[k] = { city: e.city, country: e.country || '', lat: e.lat, lon: e.lon, n: 0 };
+            const region = regionOf(e.address, e.city);
+            const k = (e.city || '').toLowerCase() + '|' + (e.country || '').toLowerCase() + '|' + region.toLowerCase();
+            if (!byCity[k]) byCity[k] = { city: e.city, country: e.country || '', region: region, lats: [], lons: [], n: 0 };
             byCity[k].n++;
+            byCity[k].lats.push(e.lat); byCity[k].lons.push(e.lon);
+          });
+          /* The MEDIAN point of the group, not the first event's. One mis-geocoded
+             listing — and there are 867 of those — would otherwise drag the whole
+             city's pin, which is exactly how "Signing/Spelling Bee" ended up 236 km
+             from Abuja (141). */
+          Object.keys(byCity).forEach(function (k) {
+            const c = byCity[k], mid = function (a) {
+              const s = a.slice().sort(function (x, y) { return x - y; });
+              return s[Math.floor(s.length / 2)];
+            };
+            c.lat = mid(c.lats); c.lon = mid(c.lons);
+            delete c.lats; delete c.lons;
           });
           const cities = Object.keys(byCity).map(function (k) { return byCity[k]; }).sort(function (a, b) { return b.n - a.n; }).slice(0, 4);
           const events = rows.slice(0, 6).map(function (e) { return { id: e.event_id, name: e.title, city: e.city, lat: e.lat, lon: e.lon, color: D.CATEGORIES[e.category] || '#CB5A3C' }; });
