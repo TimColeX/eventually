@@ -65,7 +65,7 @@
      * `a.sources` is still honoured first so an older cached response, or any
      * other caller that still sends the array, keeps working. */
     const rawSources = (a.sources && a.sources.length) ? a.sources
-      : (a.ticket_url != null || a.ticket_price != null || a.ticket_source)
+      : (a.ticket_url != null || a.has_ticket || a.ticket_price != null || a.ticket_source)
         ? [{ source_id: null, source: a.ticket_source || a.display_source,
              url: a.ticket_url || null, price: a.ticket_price,
              currency: null, organizer: '', badge: '', last_updated: null }]
@@ -96,6 +96,16 @@
       // 132 live listings have no city; this used to read "<title> in null — …".
       description: a.description || (a.title + (a.city ? ' in ' + a.city : '') + ' — pulled live onto the Eventually globe.'),
       ticketUrl: (sources[0] && sources[0].url) || null,
+      /* DOES A BOOKING LINK EXIST? The URL itself is no longer in the globe payload
+         — it was 307 kB of 2.09 MB (15%), and after 133 the payload is what decides
+         whether the worldwide call survives the statement timeout (≈950 ms per MB).
+         So the payload carries this flag instead and the URL is fetched when an event
+         is OPENED, exactly as 126 does for `description`.
+         🔑 The CTA never needed the URL anyway: it goes through /go, which resolves
+         `events.ticket_url` server-side. The raw URL is only used to NAME the
+         destination ("You'll be taken to …"), which falls back to the source label
+         until mountTicketDest() fills it in. */
+      hasTicket: !!(a.has_ticket || (sources[0] && sources[0].url)),
       likes: 0, attending: 0, clicks: 0, _rank: rank,      // real counts load when the event opens
       sponsored: !!a.sponsored,
       // Real minutes until it starts (was an invented number between 5 and 240).
@@ -216,6 +226,21 @@
       .catch(function () { return null; });
   }
 
+  /* The booking URL for ONE opened event. Same shape and the same reason as
+     fetchDescription above: the globe payload carries a flag, not 3,000 URLs.
+     Read from `events.ticket_url` — the column /go itself resolves — rather than
+     from event_sources, so the link named here and the link the button follows can
+     never disagree. Measured on 2026-10-02: populated for 55,741 of 55,801 upcoming
+     events, and identical to event_sources.url wherever both exist. */
+  function fetchTicketUrl(id) {
+    if (!REMOTE || !id) return Promise.resolve(null);
+    return fetch(BASE + '/rest/v1/events?select=ticket_url&event_id=eq.' + encodeURIComponent(id),
+      { headers: headers() })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (rows) { return (rows && rows[0] && rows[0].ticket_url) || null; })
+      .catch(function () { return null; });
+  }
+
   // Event images for the cards / detail panel, by event id → url (or null when the
   // event has none). They are deliberately NOT in the globe payload: 74 dropped
   // image_url to cut ~40% off every visitor's download, and putting a URL on all 3,000
@@ -293,6 +318,7 @@
     getConfig: getConfig,
     fetchImages: fetchImages,
     fetchDescription: fetchDescription,
+    fetchTicketUrl: fetchTicketUrl,
     getSponsors: getSponsors,
     search: search,
     dailyBriefing: dailyBriefing

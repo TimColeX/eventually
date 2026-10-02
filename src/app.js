@@ -1115,13 +1115,19 @@
       avail = '<div class="evd-section"><div class="evd-sec-h">Published on Eventually</div>' +
         (ev.collectRegistrations
           ? '<div class="reg-box" data-reg="' + esc(ev.id) + '"><div class="reg-loading">Checking places…</div></div>'
-          : ev.ticketUrl
-            ? '<a class="native-cta" href="' + esc(ev.ticketUrl) + '" target="_blank" rel="noopener">' +
+          /* Through /go, like every other ticket link, rather than the raw URL.
+             The URL is no longer in the globe payload (it was 15% of it), and /go
+             resolves `events.ticket_url` server-side — verified present for exactly
+             the native events that have a booking link. It also means an organiser's
+             click-outs are finally counted in ticket_clicks like everyone else's;
+             the raw href bypassed that. */
+          : (ev.ticketUrl || ev.hasTicket)
+            ? '<a class="native-cta" href="' + esc(ticketUrl(ev)) + '" target="_blank" rel="noopener">' +
                 'Book with the organiser ↗</a>' +
               '<p class="evd-note">Booking is handled by the organiser — Eventually doesn\'t sell or hold tickets for this event.</p>'
             : '<p class="evd-note">No booking needed — just turn up. Tap <b>✓</b> above to say you\'re going.</p>') +
         '</div>';
-    } else if (ev.ticketUrl) {
+    } else if (ev.ticketUrl || ev.hasTicket) {
       // Single, clean CTA → the official provider via the /go redirect (affiliate
       // resolved server-side). No prices, no "buy through Eventually". The LABEL adapts:
       // "Get Tickets" only for ticketed events (a price, or a known ticket seller); free /
@@ -1135,10 +1141,15 @@
       // the host of that URL is the site the visitor lands on. The source label
       // ("Ticketmaster") is only the fallback: it named Ticketmaster for listings
       // whose booking link opens a different site entirely.
+      /* `dest` starts as the SOURCE LABEL ("Ticketmaster") and is upgraded to the
+         real host once mountTicketDest() has fetched the URL. The exact host is
+         better — it named Ticketmaster for listings whose booking link opens a
+         different site entirely — but it is not worth 307 kB on every globe load,
+         so it arrives a moment later. `data-dest` is where it lands. */
       var dest = siteOf(ev.ticketUrl) || ev.sourceLabel;
       var note = ticketed
-        ? "You'll be taken to " + esc(dest || 'the official provider') + " to book."
-        : "You'll be taken to " + esc(dest || 'the source') + " for details.";
+        ? "You'll be taken to <span data-dest=\"" + esc(ev.id) + "\">" + esc(dest || 'the official provider') + "</span> to book."
+        : "You'll be taken to <span data-dest=\"" + esc(ev.id) + "\">" + esc(dest || 'the source') + "</span> for details.";
       avail = '<div class="evd-section">' +
         '<a class="evd-tickets" data-tickets="' + esc(ev.id) + '" href="' + esc(ticketUrl(ev)) + '" target="_blank" rel="noopener nofollow">' + cta + '</a>' +
         '<p class="evd-note">' + note + '</p></div>';
@@ -1204,6 +1215,7 @@
       mountRegistration(eventScroll.querySelector('.reg-box'));
       mountCounts(ev);
       mountDescription(ev);
+      mountTicketDest(ev);
     }
     paintEventWeather(eventScroll);
     M.mountAdSense(eventScroll);
@@ -1268,6 +1280,27 @@
       ev.descTruncated = false;                  // fetched once, kept for the session
       const el = eventScroll.querySelector('.evd-desc');
       if (el) el.textContent = full;             // textContent — a description is never markup
+    });
+  }
+
+  /* NAME THE DESTINATION ONCE IT IS KNOWN. The booking URL is not in the globe
+     payload any more (307 kB of 2.09 MB), so the note first says the source label
+     and this upgrades it to the real host — "ticketweb.co.uk" rather than
+     "Ticketmaster" — which is the whole reason the exact URL was ever shown.
+     Same guard as mountDescription: if the viewer has moved on, drop it. */
+  function mountTicketDest(ev) {
+    if (!ev || ev.ticketUrl || !ev.hasTicket) return;   // already known, or nothing to fetch
+    const API = window.EventuallyAPI;
+    if (!API || !API.fetchTicketUrl) return;
+    const id = ev.id;
+    API.fetchTicketUrl(id).then(function (url) {
+      if (!url || activeEventId !== id) return;
+      ev.ticketUrl = url;                               // fetched once, kept for the session
+      if (ev.sources && ev.sources[0] && !ev.sources[0].url) ev.sources[0].url = url;
+      const host = siteOf(url);
+      if (!host) return;
+      const el = eventScroll.querySelector('[data-dest="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
+      if (el) el.textContent = host;                    // textContent — a hostname is never markup
     });
   }
 
