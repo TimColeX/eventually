@@ -358,7 +358,11 @@
                  They live under the map, not in the details column, because they
                  describe the PIN — moving it rewrites them. */
               '<div class="co-row co-row-2" style="margin-top:10px">' +
-                '<label>City<input class="f-city" placeholder="From the map — edit if wrong"></label>' +
+                /* The placeholder used to read "From the map — edit if wrong", which was
+                   true and misleading: editing it changed the NAME and left the pin where
+                   it was, so the two could disagree by hundreds of kilometres. Now the
+                   field moves the pin, and the copy says so. */
+                '<label>City<input class="f-city" placeholder="From the map — type a city to move the pin"></label>' +
                 /* A LIST, NOT A TEXT BOX. A misspelled country is not a cosmetic
                    error: city pages are grouped by `slug|country`, so "nigeriii"
                    would have given Abuja a second page of its own. The same
@@ -442,6 +446,37 @@
     const cityIn = this.el.querySelector('.f-city');
     const countryIn = this.el.querySelector('.f-country');
     if (cityIn) cityIn.addEventListener('input', function () { self._cityTouched = true; });
+    /* THE CITY FIELD MOVES THE PIN, instead of quietly disagreeing with it.
+     *
+     * Until now `city` and `lat/lon` were independent inputs: the field said one thing,
+     * the pin said another, and nothing reconciled them. That is how "Signing/Spelling
+     * Bee" came to say Abuja while sitting 236 km away — invisible in the Abuja panel,
+     * because the panel fetches a BOX around the city.
+     *
+     * Now the city is an INSTRUCTION. Type one and, if the pin is nowhere near it, the
+     * pin follows. The organiser named the city, so the city is what they meant.
+     *
+     * ⚠️ ONLY WHEN IT IS MORE THAN 100 km OUT. A venue legitimately sits outside a city
+     * centre — an airport, a festival field — and a precise pin is a few km from its
+     * city, so correcting a spelling never drags a good pin. Same threshold as the
+     * publish-time guard, which stays as the backstop for anything this misses.
+     *
+     * On BLUR, not on input: moving the map on every keystroke would be unusable. */
+    if (cityIn) cityIn.addEventListener('blur', function () {
+      const city = cityIn.value.trim();
+      if (!city || !self.locationChosen) return;
+      const country = (countryIn && countryIn.value.trim()) || self.country || '';
+      // Free first: the events already on the globe know where most cities are.
+      const known = knownCityPoint(city, country);
+      if (known) { self._snapToCity(known.lat, known.lon, city); return; }
+      // Otherwise ask the geocoder — one call, only when the city is new to us.
+      if (!Geo) return;
+      Geo.forward(country ? city + ', ' + country : city).then(function (res) {
+        // The organiser may have typed on; only act on what is still in the box.
+        if (!res || cityIn.value.trim() !== city) return;
+        self._snapToCity(res.lat, res.lon, city);
+      }).catch(function () { /* no geocoder, no snap — the publish guard still runs */ });
+    });
     // A <select> fires 'change', not 'input'.
     if (countryIn) countryIn.addEventListener('change', function () { self._countryTouched = true; });
 
@@ -989,6 +1024,19 @@
     if (pub) pub.textContent = 'Publish event ✦';
     const cancel = this.el.querySelector('.co-cancel-edit'); if (cancel) cancel.style.display = 'none';
     this._toast('Copied — pick the new date' + (live ? '. The picture comes with it.' : '.'));
+  };
+
+  /* Move the pin to a city, but only when it is far enough away to be a mistake.
+     Returns true when it moved. Says so out loud — silently relocating someone's event
+     would be worse than the bug it prevents. */
+  Coordinator.prototype._snapToCity = function (lat, lon, cityName) {
+    if (lat == null || lon == null) return false;
+    const off = kmBetween(this.pin.lat, this.pin.lon, lat, lon);
+    if (!(off > 100)) return false;
+    this.pin = { lat: lat, lon: lon };
+    this._drawMap();
+    this._toast('📍 Moved the pin to ' + cityName + ' — it was ' + Math.round(off) + ' km away');
+    return true;
   };
 
   Coordinator.prototype._adoptPlace = function (res) {

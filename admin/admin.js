@@ -580,6 +580,40 @@
   }
 
   /* ---------------- Review / moderate pending events ---------------- */
+  /* DOES THIS EVENT SIT WHERE IT SAYS IT DOES?
+   *
+   * The publish form guards this at source now, but the form is one client and the
+   * review queue is the last point where a human sees the event before it reaches the
+   * globe. "Signing/Spelling Bee" arrived saying Abuja and sitting 236 km east of it,
+   * and the queue gave the reviewer no hint — it was approved, and the Abuja panel then
+   * showed 2 events instead of 3 because the panel fetches a BOX around the city.
+   *
+   * Measured against the IMPORTED events that already claim that city — their median
+   * point, which one bad row cannot drag. Returns null when we have nothing to compare
+   * with, because a city we do not cover yet is not evidence of an error.
+   */
+  const kmApart = function (aLat, aLon, bLat, bLon) {
+    const R = 6371, t = function (x) { return x * Math.PI / 180; };
+    const dLat = t(bLat - aLat), dLon = t(bLon - aLon);
+    const h = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+            + Math.cos(t(aLat)) * Math.cos(t(bLat)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+  };
+  function cityPoints(cities) {
+    // One small query per distinct city — there are rarely more than a handful pending.
+    return Promise.all(cities.map(function (c) {
+      return sb.from('events').select('lat,lon').eq('city', c).eq('is_native', false).limit(60)
+        .then(function (r) {
+          const rows = (r.data || []).filter(function (x) { return x.lat != null; });
+          if (!rows.length) return [c, null];
+          const mid = function (a) { const s = a.slice().sort(function (x, y) { return x - y; }); return s[Math.floor(s.length / 2)]; };
+          return [c, { lat: mid(rows.map(function (x) { return x.lat; })), lon: mid(rows.map(function (x) { return x.lon; })), n: rows.length }];
+        }).catch(function () { return [c, null]; });
+    })).then(function (pairs) {
+      const m = {}; pairs.forEach(function (p) { m[p[0]] = p[1]; }); return m;
+    });
+  }
+
   function renderReview(body) {
     body.innerHTML = '<div class="ad-center">Loading pending events…</div>';
     sb.rpc('pending_events').then(function (r) {
@@ -642,6 +676,36 @@
           '<div class="rv-actions" style="flex:0 1 auto;flex-wrap:wrap;justify-content:flex-end;max-width:290px">' + actions + '</div></div>';
       });
       body.innerHTML = html + '</div>';
+
+      /* LOCATION CHECK, filled in after the cards are drawn. Deliberately not blocking
+         the render: a reviewer should never wait on it, and if the lookup fails the queue
+         still works exactly as before — it just offers no opinion. */
+      (function () {
+        const byCity = {};
+        rows.forEach(function (e) { if (e.city && e.lat != null) byCity[e.city] = 1; });
+        const cities = Object.keys(byCity);
+        if (!cities.length) return;
+        cityPoints(cities).then(function (points) {
+          rows.forEach(function (e) {
+            const p = e.city && points[e.city];
+            if (!p || e.lat == null) return;
+            const off = kmApart(e.lat, e.lon, p.lat, p.lon);
+            if (off <= 100) return;
+            const row = body.querySelector('.rv-row[data-id="' + (window.CSS && CSS.escape ? CSS.escape(e.event_id) : e.event_id) + '"]');
+            const slot = row && row.querySelector('.rv-main > div');
+            if (!slot) return;
+            const warn = document.createElement('span');
+            warn.style.cssText = 'display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;'
+              + 'border-radius:999px;margin:0 6px 4px 0;background:#FBE9E7;color:#B3402A';
+            warn.textContent = '📍 ' + Math.round(off) + ' km from ' + e.city;
+            warn.title = 'This event is stored ' + Math.round(off) + ' km from where the other '
+              + p.n + ' events in ' + e.city + ' are. It will not show in that city’s panel, '
+              + 'which fetches a box around the city. Worth checking before approving.';
+            slot.appendChild(warn);
+          });
+        });
+      })();
+
       body.querySelectorAll('.rv-act').forEach(function (b) {
         b.onclick = function () {
           let reason = null;
