@@ -224,9 +224,23 @@ function fmtWhen(iso, zone) {
 };
 
 // ── Data ─────────────────────────────────────────────────────────────────────
+/* ⚠️ THE PAGE CAP IS REACHED, AND IT USED TO BE SILENT.
+ *
+ * 30 pages x 1,000 = 30,000 rows, and the 90-day window held 60,370 upcoming events on
+ * 2026-10-01. The filter orders by start_time ascending, so the generator sees roughly the
+ * NEAREST HALF of the window and has no idea the rest exists: city counts are understated,
+ * and a city whose events sit near the cut-off appears and disappears between builds for
+ * no visible reason. Three pages moved on exactly that boundary while the cancelled-event
+ * filter was being added, which is how this was found — the filter was blamed first.
+ *
+ * Raising the cap is one number, but it changes WHICH cities qualify and would publish or
+ * prune pages in bulk, so it is the owner's call, not a quiet edit. Until then this at
+ * least says so out loud. */
+const MAX_PAGES = 30;
 async function fetchAll(select, filter) {
   const out = [];
-  for (let page = 0; page < 30; page++) {
+  let truncated = true;
+  for (let page = 0; page < MAX_PAGES; page++) {
     const from = page * 1000;
     const r = await fetch(`${SUPABASE}/rest/v1/events?select=${select}&${filter}`, {
       headers: { apikey: ANON, Authorization: 'Bearer ' + ANON, Range: `${from}-${from + 999}`, 'Range-Unit': 'items' },
@@ -234,7 +248,12 @@ async function fetchAll(select, filter) {
     if (!r.ok) throw new Error('events fetch ' + r.status);
     const batch = await r.json();
     out.push(...batch);
-    if (batch.length < 1000) break;
+    if (batch.length < 1000) { truncated = false; break; }
+  }
+  if (truncated) {
+    console.warn(`⚠️  TRUNCATED at ${out.length} rows (${MAX_PAGES} pages). There are more upcoming ` +
+      `events than this build can see, so city counts are understated and marginal cities will ` +
+      `flicker between builds. Raise MAX_PAGES to take the whole window.`);
   }
   return out;
 }
@@ -296,7 +315,17 @@ async function analyse() {
     // image_url, address and event_sources feed the Event structured data (ldEvent).
     'event_id,title,city,country,start_time,end_time,category,lat,lon,is_native,timezone,venue,address,description,image_url,created_at,event_sources(url,price,currency)',
     ['performers', 'organiser_name'],   // each needs its migration run — see fetchWithOptional
-    `moderation=eq.approved&published=not.is.false&start_time=gte.${now}&start_time=lte.${to}&order=start_time.asc`
+    /* A CANCELLED EVENT MUST NOT KEEP A SEARCH-INDEXED PAGE. 719 upcoming events were
+       marked cancelled on 2026-10-01 and every one of them still had a page inviting a
+       crawler and a reader to it. `status` has been stored since 81_event_changes.sql.
+       🔴 The filter has to be the `or=` form. `status=not.in.(cancelled,canceled)` looks
+       equivalent and is not: `status` is NULL for 8,715 upcoming events (the importer only
+       writes it for Ticketmaster) and NULL NOT IN (...) is NULL, not true, so the naive
+       form silently drops every one of them. Measured: baseline 61,089 rows, correct
+       filter 60,370 (= 61,089 − 719), naive filter 51,655 — short by exactly the 8,715
+       NULLs. 128_hide_cancelled.sql carries the same trap in SQL. */
+    `moderation=eq.approved&published=not.is.false&or=(status.is.null,status.not.in.(cancelled,canceled))`
+    + `&start_time=gte.${now}&start_time=lte.${to}&order=start_time.asc`
   );
 
   const byCity = new Map();
