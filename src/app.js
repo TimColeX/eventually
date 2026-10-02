@@ -1586,9 +1586,15 @@
       // `explore` cities come from the geocoder (any place on Earth, even with no
       // events yet) — jump there on the globe instead of showing an event count.
       const sub = c.explore ? 'Explore on the map' : (c.n + ' event' + (c.n === 1 ? '' : 's'));
+      /* WHICH London? There are two in the inventory (United Kingdom and Canada),
+         and the same goes for Cambridge, Birmingham, Richmond and Newcastle. The
+         name alone was ambiguous AND the two were grouped together, so tapping it
+         flew you to whichever one happened to come first. Naming the country is
+         the whole fix on this side; the grouping fix is below. */
+      const label = esc(c.city) + (c.country ? ', ' + esc(c.country) : '');
       return '<button class="sr-city' + (c.explore ? ' sr-explore' : '') + '" data-lat="' + c.lat + '" data-lon="' + c.lon +
         '" data-city="' + esc(c.city) + '"' + (c.explore ? ' data-explore="1"' : '') + '><span class="dot city">📍</span>' +
-        esc(c.city) + '<small>' + sub + '</small></button>';
+        label + '<small>' + sub + '</small></button>';
     }).join('');
     html += events.map(function (e) {
       return '<button data-ev="' + esc(e.id) + '" data-lat="' + e.lat + '" data-lon="' + e.lon + '" data-city="' + esc(e.city || '') + '"><span class="dot" style="background:' +
@@ -1635,7 +1641,17 @@
         window.EventuallyAPI.search(q).then(function (rows) {
           rows = (rows || []).filter(function (e) { return !RT._hidEv[e.event_id] && !RT._hidCity[(e.city || '').toLowerCase()]; });
           const byCity = {};
-          rows.forEach(function (e) { const k = (e.city || '').toLowerCase(); if (!k) return; if (!byCity[k]) byCity[k] = { city: e.city, lat: e.lat, lon: e.lon, n: 0 }; byCity[k].n++; });
+          /* GROUP BY CITY **AND COUNTRY**. Keyed on the name alone, London UK and
+             London Ontario became one row with a combined count and one pair of
+             coordinates — so the count was wrong and the tap went to the wrong
+             continent. `country` arrives from search_events as of 140; an older
+             response without it still groups by name, exactly as before. */
+          rows.forEach(function (e) {
+            const k = (e.city || '').toLowerCase() + '|' + (e.country || '').toLowerCase();
+            if (!(e.city || '').trim()) return;
+            if (!byCity[k]) byCity[k] = { city: e.city, country: e.country || '', lat: e.lat, lon: e.lon, n: 0 };
+            byCity[k].n++;
+          });
           const cities = Object.keys(byCity).map(function (k) { return byCity[k]; }).sort(function (a, b) { return b.n - a.n; }).slice(0, 4);
           const events = rows.slice(0, 6).map(function (e) { return { id: e.event_id, name: e.title, city: e.city, lat: e.lat, lon: e.lon, color: D.CATEGORIES[e.category] || '#CB5A3C' }; });
           renderSearchResults(cities, events);
