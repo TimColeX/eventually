@@ -74,7 +74,22 @@
     'Film & Media':  '#7C5230',  // Bronze
     'Community':     '#C18A5C',  // Tan
     'Nightlife':     '#9B4A52',  // Warm brick-rose
-    'Comedy':        '#E8A24C'   // Warm amber
+    'Comedy':        '#E8A24C',  // Warm amber
+    /* FAMILY — added 2026-10-02, on evidence rather than a hunch.
+     *
+     * `Community` was the else branch of the Ticketmaster mapping, and once 129 stored
+     * what the provider actually said, 58% of what was left in it came back with the
+     * genre `Family` — 18.2% of ALL events, more than Sports or Comedy. Those events had
+     * nowhere to go: no rule could rescue them because the destination did not exist.
+     *
+     * The colour was measured, not chosen by eye. These colour the dots on the globe, so
+     * a new one has to be at least as separable as the existing palette already is: the
+     * closest existing pair (Business / Film & Media) is deltaE 6.8 apart, and warm sand
+     * is 23.0 from its nearest neighbour (Community). Keep that bar if another is added.
+     *
+     * ⚠️ LAST ON PURPOSE. Object.keys() of this map drives the filter chips AND the
+     * publish form's options, so inserting mid-list silently reorders both. */
+    'Family':        '#DCC09A'   // Warm sand
   };
 
   // The loaded events — live from the backend, plus any the user publishes this session.

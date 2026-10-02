@@ -693,7 +693,7 @@
      will say yes when the work is already done for them. */
   const INTAKE_FN = cfg.supabaseUrl.replace(/\/+$/, '') + '/functions/v1/intake';
   const INTAKE_CATS = ['Music', 'Tech', 'Business', 'Arts', 'Food & Drink',
-                       'Sports', 'Film & Media', 'Community', 'Nightlife', 'Comedy'];
+                       'Sports', 'Film & Media', 'Community', 'Nightlife', 'Comedy', 'Family'];
   let intakeDraft = null;      // the draft being worked on, or null
   let intakeShots = [];        // { url, path } for each uploaded image
 
@@ -3011,7 +3011,7 @@
       document.getElementById('pin-add').onclick = function () { pinRow({ city: '', type: 'priority' }); };
 
       // ---- Event feeds (iCal / RSS) ----
-      const FEED_CATS = ['Music', 'Tech', 'Business', 'Arts', 'Food & Drink', 'Sports', 'Film & Media', 'Community', 'Nightlife', 'Comedy'];
+      const FEED_CATS = ['Music', 'Tech', 'Business', 'Arts', 'Food & Drink', 'Sports', 'Film & Media', 'Community', 'Nightlife', 'Comedy', 'Family'];
       const feedList = document.getElementById('feed-list');
       function feedRow(f) {
         f = f || {};

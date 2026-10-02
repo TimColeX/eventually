@@ -2581,7 +2581,8 @@
       'Business': 'networking, talks, expos', 'Arts': 'exhibitions, theatre, galleries',
       'Food & Drink': 'tastings, markets, pop-ups', 'Sports': 'games, matches, races',
       'Film & Media': 'screenings, premieres', 'Community': 'fairs, local gatherings',
-      'Nightlife': 'clubs, DJ sets, parties', 'Comedy': 'stand-up, improv shows'
+      'Nightlife': 'clubs, DJ sets, parties', 'Comedy': 'stand-up, improv shows',
+      'Family': 'kids’ shows, all-ages, days out'
     };
     const colours = Object.keys(D.CATEGORIES).map(function (c) {
       return '<span class="help-cat"><span class="help-sw" style="background:' + D.CATEGORIES[c] + '"></span>' +

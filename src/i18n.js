@@ -18,14 +18,14 @@
   const LOCALE = { en: 'en-US', es: 'es-ES', fr: 'fr-FR', de: 'de-DE', tr: 'tr-TR', pl: 'pl-PL', ar: 'ar-EG', zh: 'zh-CN' };
   const DEFAULT_NAME = { en: 'there', es: 'amigo', fr: 'cher visiteur', de: 'zusammen', tr: 'arkadaşlar', pl: 'przyjacielu', ar: 'صديقي', zh: '朋友' };
   const CAT = {
-    en: { 'Music': 'music', 'Tech': 'tech', 'Business': 'business', 'Arts': 'arts', 'Food & Drink': 'food & drink', 'Sports': 'sports', 'Film & Media': 'film & media', 'Community': 'community', 'Nightlife': 'nightlife', 'Comedy': 'comedy' },
-    es: { 'Music': 'música', 'Tech': 'tecnología', 'Business': 'negocios', 'Arts': 'arte', 'Food & Drink': 'gastronomía', 'Sports': 'deportes', 'Film & Media': 'cine y medios', 'Community': 'comunidad', 'Nightlife': 'vida nocturna', 'Comedy': 'comedia' },
-    fr: { 'Music': 'musique', 'Tech': 'tech', 'Business': 'affaires', 'Arts': 'art', 'Food & Drink': 'gastronomie', 'Sports': 'sport', 'Film & Media': 'cinéma et médias', 'Community': 'communauté', 'Nightlife': 'vie nocturne', 'Comedy': 'comédie' },
-    de: { 'Music': 'Musik', 'Tech': 'Technik', 'Business': 'Business', 'Arts': 'Kunst', 'Food & Drink': 'Essen & Trinken', 'Sports': 'Sport', 'Film & Media': 'Film & Medien', 'Community': 'Community', 'Nightlife': 'Nachtleben', 'Comedy': 'Comedy' },
-    tr: { 'Music': 'müzik', 'Tech': 'teknoloji', 'Business': 'iş dünyası', 'Arts': 'sanat', 'Food & Drink': 'yeme içme', 'Sports': 'spor', 'Film & Media': 'film ve medya', 'Community': 'topluluk', 'Nightlife': 'gece hayatı', 'Comedy': 'komedi' },
-    pl: { 'Music': 'muzyka', 'Tech': 'technologia', 'Business': 'biznes', 'Arts': 'sztuka', 'Food & Drink': 'jedzenie i picie', 'Sports': 'sport', 'Film & Media': 'film i media', 'Community': 'społeczność', 'Nightlife': 'życie nocne', 'Comedy': 'komedia' },
-    ar: { 'Music': 'موسيقى', 'Tech': 'تقنية', 'Business': 'أعمال', 'Arts': 'فنون', 'Food & Drink': 'طعام وشراب', 'Sports': 'رياضة', 'Film & Media': 'أفلام وإعلام', 'Community': 'مجتمع', 'Nightlife': 'حياة ليلية', 'Comedy': 'كوميديا' },
-    zh: { 'Music': '音乐', 'Tech': '科技', 'Business': '商业', 'Arts': '艺术', 'Food & Drink': '美食', 'Sports': '体育', 'Film & Media': '影视', 'Community': '社区', 'Nightlife': '夜生活', 'Comedy': '喜剧' }
+    en: { 'Music': 'music', 'Tech': 'tech', 'Business': 'business', 'Arts': 'arts', 'Food & Drink': 'food & drink', 'Sports': 'sports', 'Film & Media': 'film & media', 'Community': 'community', 'Nightlife': 'nightlife', 'Comedy': 'comedy', 'Family': 'family' },
+    es: { 'Music': 'música', 'Tech': 'tecnología', 'Business': 'negocios', 'Arts': 'arte', 'Food & Drink': 'gastronomía', 'Sports': 'deportes', 'Film & Media': 'cine y medios', 'Community': 'comunidad', 'Nightlife': 'vida nocturna', 'Comedy': 'comedia', 'Family': 'familia' },
+    fr: { 'Music': 'musique', 'Tech': 'tech', 'Business': 'affaires', 'Arts': 'art', 'Food & Drink': 'gastronomie', 'Sports': 'sport', 'Film & Media': 'cinéma et médias', 'Community': 'communauté', 'Nightlife': 'vie nocturne', 'Comedy': 'comédie', 'Family': 'famille' },
+    de: { 'Music': 'Musik', 'Tech': 'Technik', 'Business': 'Business', 'Arts': 'Kunst', 'Food & Drink': 'Essen & Trinken', 'Sports': 'Sport', 'Film & Media': 'Film & Medien', 'Community': 'Community', 'Nightlife': 'Nachtleben', 'Comedy': 'Comedy', 'Family': 'Familie' },
+    tr: { 'Music': 'müzik', 'Tech': 'teknoloji', 'Business': 'iş dünyası', 'Arts': 'sanat', 'Food & Drink': 'yeme içme', 'Sports': 'spor', 'Film & Media': 'film ve medya', 'Community': 'topluluk', 'Nightlife': 'gece hayatı', 'Comedy': 'komedi', 'Family': 'aile' },
+    pl: { 'Music': 'muzyka', 'Tech': 'technologia', 'Business': 'biznes', 'Arts': 'sztuka', 'Food & Drink': 'jedzenie i picie', 'Sports': 'sport', 'Film & Media': 'film i media', 'Community': 'społeczność', 'Nightlife': 'życie nocne', 'Comedy': 'komedia', 'Family': 'rodzina' },
+    ar: { 'Music': 'موسيقى', 'Tech': 'تقنية', 'Business': 'أعمال', 'Arts': 'فنون', 'Food & Drink': 'طعام وشراب', 'Sports': 'رياضة', 'Film & Media': 'أفلام وإعلام', 'Community': 'مجتمع', 'Nightlife': 'حياة ليلية', 'Comedy': 'كوميديا', 'Family': 'عائلي' },
+    zh: { 'Music': '音乐', 'Tech': '科技', 'Business': '商业', 'Arts': '艺术', 'Food & Drink': '美食', 'Sports': '体育', 'Film & Media': '影视', 'Community': '社区', 'Nightlife': '夜生活', 'Comedy': '喜剧', 'Family': '亲子' }
   };
   const GREET = {
     en: { morning: 'Good morning', afternoon: 'Good afternoon', evening: 'Good evening' },
