@@ -12,6 +12,49 @@
     [90,58,58,18],[100,38,38,14],[78,23,13,12],[46,36,15,10],[108,16,13,10],
     [120,-2,18,7],[142,-5,8,6],[134,-25,21,13],[172,-42,5,8],[138,38,6,8]
   ];
+  /* HOW FAR IS THE PIN FROM THE CITY IT CLAIMS?
+   *
+   * The mini-map is an equirectangular WORLD map and a click maps straight through:
+   *   lon = x * 360 - 180 ;  lat = 90 - y * 180
+   * so one pixel on a ~350px canvas is more than a degree — over 100 km. Clicking
+   * "on Abuja" can easily land 200 km away, the reverse geocode still names the
+   * nearest city "Abuja", and the event is stored where the pixel fell.
+   *
+   * That is not hypothetical: "Signing/Spelling Bee" was published at 9.63°E, 235 km
+   * east of Abuja (141). Its own page worked, but the city panel fetches a BOX around
+   * the city and never found it, so Abuja showed 2 events instead of 3 — and the globe
+   * drew a second "Abuja" dot out in Plateau State.
+   *
+   * Measured against the events already loaded on the globe, so it costs nothing and
+   * no network call: the MEDIAN point of other events in the same city, which is
+   * robust to one bad peer. Returns null when the city is unknown to us — then we say
+   * nothing rather than guess.
+   */
+  function kmBetween(aLat, aLon, bLat, bLon) {
+    const R = 6371, t = function (x) { return x * Math.PI / 180; };
+    const dLat = t(bLat - aLat), dLon = t(bLon - aLon);
+    const h = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+            + Math.cos(t(aLat)) * Math.cos(t(bLat)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+  }
+  function knownCityPoint(city, country) {
+    const D = global.EventuallyData;
+    if (!D || !D.getEvents || !city) return null;
+    const ck = String(city).toLowerCase().trim();
+    const kk = String(country || '').toLowerCase().trim();
+    const peers = D.getEvents().filter(function (e) {
+      if (String(e.city || '').toLowerCase().trim() !== ck) return false;
+      // Only insist on the country when we have one on both sides — otherwise a
+      // missing country on either would reject a perfectly good match.
+      if (kk && e.country) return String(e.country).toLowerCase().trim() === kk;
+      return true;
+    });
+    if (!peers.length) return null;
+    const mid = function (a) { const s = a.slice().sort(function (x, y) { return x - y; }); return s[Math.floor(s.length / 2)]; };
+    return { lat: mid(peers.map(function (e) { return e.lat; })),
+             lon: mid(peers.map(function (e) { return e.lon; })), n: peers.length };
+  }
+
   function isLand(lat, lon) {
     if (lat < -78) return true;
     for (const s of LAND) {
@@ -665,6 +708,29 @@
         return;
       }
     }
+    /* DOES THE PIN MATCH THE CITY IT NAMES? Sibling of the sea check above, and the
+       same judgement: ASK, never block. A venue can legitimately sit well outside a
+       city centre — an airport, a festival field — so 100 km is deliberately generous;
+       it only catches a mis-tap on the world map, which is what put "Signing/Spelling
+       Bee" 235 km from Abuja and hid it from the city panel entirely.
+       Offering to MOVE the pin is the point: the organiser typed the city, so the city
+       is what they meant. */
+    const cityNamed = (q('.f-city') ? q('.f-city').value.trim() : '') || this.city || '';
+    const countryNamed = (q('.f-country') ? q('.f-country').value.trim() : '') || this.country || '';
+    const known = knownCityPoint(cityNamed, countryNamed);
+    if (known) {
+      const off = kmBetween(this.pin.lat, this.pin.lon, known.lat, known.lon);
+      if (off > 100) {
+        if (confirm('The pin is ' + Math.round(off) + ' km from ' + cityNamed + '.\n\n' +
+                    'A tap on the small world map is easily a hundred kilometres out, and an ' +
+                    'event stored away from its city will not show up when someone opens that ' +
+                    'city.\n\nMove the pin to ' + cityNamed + '?')) {
+          this.pin.lat = known.lat; this.pin.lon = known.lon;
+          this._drawMap();
+        }
+      }
+    }
+
     /* CATEGORY AND START TIME ARE ANSWERS, NOT DEFAULTS.
        Both used to arrive pre-filled — Music, and 7:00 PM — so leaving them alone
        was indistinguishable from choosing them. One organiser published a community
