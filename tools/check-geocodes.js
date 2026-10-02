@@ -103,7 +103,11 @@ async function fetchAll() {
       const d = km(e.lat, e.lon, mLat, mLon);
       if (d <= FAR_KM) return;
       // Condition 3: the address must name the city, or this is just a place we cannot judge.
-      const addressAgrees = String(e.address || '').toLowerCase().includes(String(e.city).toLowerCase());
+      // ⚠️ TRIM the city. Some rows carry a trailing space ("Łódź "), and without the trim
+      // this looked for "łódź " — with the space — in an address reading "Łódź, Łódzkie".
+      // It never matched, so three events stored in WARSAW were silently passed over.
+      const addressAgrees = String(e.address || '').toLowerCase()
+        .includes(String(e.city).toLowerCase().trim());
       if (!addressAgrees) return;
       suspect.push({ ...e, d, mLat, mLon, peers: g.length });
     });
@@ -138,6 +142,53 @@ async function fetchAll() {
     console.log('        e.g.    ' + String(e.title).slice(0, 60));
   });
   if (!SHOW_ALL && places.length > 12) console.log('\n  … and ' + (places.length - 12) + ' more locations (--all to see them)');
+
+  /* ---------------------------------------------------------------------------
+   * SPLIT CITIES — the case the test above is structurally BLIND to.
+   *
+   * The test flags rows far from their city's median. It cannot flag rows that ARE the
+   * median. Swansea proved this: 15 of its 21 events carried London's coordinates, which
+   * dragged the computed "centre of Swansea" to London, so the test flagged the SIX rows
+   * that were genuinely right and said nothing about the fifteen that were wrong.
+   * **When the majority is wrong, the test inverts.**
+   *
+   * So also report any city whose rows fall into two or more clusters more than FAR_KM
+   * apart. That shows the whole split and leaves the judgement to a person — which is the
+   * point, because a split is sometimes correct (a province capital and its districts).
+   * ------------------------------------------------------------------------- */
+  const splits = [];
+  for (const [key, g] of groups) {
+    if (g.length < MIN_PEERS) continue;
+    const clusters = [];
+    g.forEach((e) => {
+      const c = clusters.find((c) => km(e.lat, e.lon, c.lat, c.lon) <= FAR_KM);
+      if (c) c.rows.push(e); else clusters.push({ lat: e.lat, lon: e.lon, rows: [e] });
+    });
+    const big = clusters.filter((c) => c.rows.length >= 2).sort((a, b) => b.rows.length - a.rows.length);
+    if (big.length < 2) continue;
+    if (km(big[0].lat, big[0].lon, big[1].lat, big[1].lon) <= FAR_KM) continue;
+    splits.push({ key, big, total: g.length });
+  }
+  splits.sort((a, b) => b.big[1].rows.length - a.big[1].rows.length);
+
+  console.log('\n\n  ───────────────────────────────────────────────────────────────');
+  console.log('  SPLIT CITIES: ' + splits.length + ' cities whose events sit in two or more places '
+    + 'more than ' + FAR_KM + ' km apart.');
+  console.log('  The check above cannot see these when the WRONG group is the bigger one.');
+  console.log('  A split is not automatically an error — a Turkish province capital and its');
+  console.log('  districts split legitimately. Read the venue and address before acting.\n');
+  splits.slice(0, SHOW_ALL ? splits.length : 10).forEach(({ key, big, total }) => {
+    const [city, country] = key.split('|');
+    console.log('  ' + city + ', ' + country + '   (' + total + ' events)');
+    big.slice(0, 3).forEach((c, i) => {
+      const venues = [...new Set(c.rows.map((e) => e.venue || '(no venue)'))];
+      console.log('     ' + (i === 0 ? 'largest ' : '   then ') + String(c.rows.length).padStart(4)
+        + ' at ' + c.lat.toFixed(4) + ', ' + c.lon.toFixed(4)
+        + '   ' + venues.slice(0, 2).join(' / ').slice(0, 64)
+        + (venues.length > 2 ? ' +' + (venues.length - 2) + ' more' : ''));
+    });
+  });
+  if (!SHOW_ALL && splits.length > 10) console.log('\n  … and ' + (splits.length - 10) + ' more (--all)');
 
   console.log('\n  Nothing was changed. These are the provider’s own coordinates.');
 })();
