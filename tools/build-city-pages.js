@@ -224,19 +224,24 @@ function fmtWhen(iso, zone) {
 };
 
 // ── Data ─────────────────────────────────────────────────────────────────────
-/* ⚠️ THE PAGE CAP IS REACHED, AND IT USED TO BE SILENT.
+/* THE PAGE CAP — a runaway guard, not a budget.
  *
- * 30 pages x 1,000 = 30,000 rows, and the 90-day window held 60,370 upcoming events on
- * 2026-10-01. The filter orders by start_time ascending, so the generator sees roughly the
- * NEAREST HALF of the window and has no idea the rest exists: city counts are understated,
- * and a city whose events sit near the cut-off appears and disappears between builds for
- * no visible reason. Three pages moved on exactly that boundary while the cancelled-event
- * filter was being added, which is how this was found — the filter was blamed first.
+ * It was 30 pages x 1,000 = 30,000 rows while the 90-day window held 48,485 events, so a
+ * build saw 62% of it: the nearest two-thirds by start_time, with no idea the rest existed.
+ * City counts were understated, and a city whose events sat near the cut-off appeared and
+ * disappeared between builds for no visible reason. Three pages moved on exactly that
+ * boundary while the cancelled-event filter was being added, and the filter was blamed first.
  *
- * Raising the cap is one number, but it changes WHICH cities qualify and would publish or
- * prune pages in bulk, so it is the owner's call, not a quiet edit. Until then this at
- * least says so out loud. */
-const MAX_PAGES = 30;
+ * Raised to 100 (100,000 rows) on 2026-10-02. ⚠️ Measured before raising it, because deep
+ * OFFSET paging is usually the thing that falls over: it does not here. Page 0 took 750 ms
+ * and page 47 (offset 47,000) took 391 ms — flat, not degrading — so the whole window costs
+ * about 20 seconds. If that ever changes, switch to keyset paging on (start_time, event_id)
+ * rather than lowering the cap and going back to a partial view.
+ *
+ * The loop still stops as soon as a short page arrives, so the cap costs nothing in the
+ * normal case. It exists only so a broken filter cannot spin forever — and if it is ever
+ * reached again, the warning says so out loud instead of quietly truncating. */
+const MAX_PAGES = 100;
 async function fetchAll(select, filter) {
   const out = [];
   let truncated = true;
@@ -245,7 +250,15 @@ async function fetchAll(select, filter) {
     const r = await fetch(`${SUPABASE}/rest/v1/events?select=${select}&${filter}`, {
       headers: { apikey: ANON, Authorization: 'Bearer ' + ANON, Range: `${from}-${from + 999}`, 'Range-Unit': 'items' },
     });
-    if (!r.ok) throw new Error('events fetch ' + r.status);
+    if (!r.ok) {
+      /* Carry the status and body, because fetchWithOptional has to tell a missing column
+         (400 / 42703) from a timeout. It used to catch everything alike. */
+      const body = await r.text().catch(() => '');
+      const err = new Error('events fetch ' + r.status + ' ' + body.slice(0, 200));
+      err.status = r.status;
+      err.pgCode = (body.match(/"code":"([^"]+)"/) || [, ''])[1];
+      throw err;
+    }
     const batch = await r.json();
     out.push(...batch);
     if (batch.length < 1000) { truncated = false; break; }
@@ -275,15 +288,34 @@ async function fetchAll(select, filter) {
  * normal case is a single fetch, exactly as before. */
 async function fetchWithOptional(select, optional, filter) {
   const withAll = optional.length ? select + ',' + optional.join(',') : select;
-  try { return await fetchAll(withAll, filter); } catch { /* work out which one */ }
+  try { return await fetchAll(withAll, filter); }
+  catch (e) {
+    /* ONLY a missing column may take the probe path. This used to be a bare `catch`, so a
+       timeout on any one page was read as "a column is missing" — and because the probe
+       below dropped a column whenever its one-row request failed for ANY reason, a second
+       transient failure would strip `performers` or `organiser_name` from every page and
+       the build would still report success. PostgREST is specific about this: an unknown
+       column is 400 with code 42703, and nothing else is. Raising MAX_PAGES to cover the
+       whole window means ~49 requests instead of 30, so the odds of a transient failure
+       went up and this had to stop being a guess. */
+    if (e.status !== 400 || e.pgCode !== '42703') throw e;
+  }
 
   const present = [];
   for (const col of optional) {
     const r = await fetch(`${SUPABASE}/rest/v1/events?select=${col}&limit=1`, {
       headers: { apikey: ANON, Authorization: 'Bearer ' + ANON },
     }).catch(() => null);
-    if (r && r.ok) present.push(col);
-    else console.warn(`[build] column "${col}" is not in the database yet — skipping it. Run its migration.`);
+    if (r && r.ok) { present.push(col); continue; }
+    // Absent is 42703. Anything else is a bad moment, not a missing migration — keep the
+    // column and let the refetch fail loudly rather than silently publishing without it.
+    const body = r ? await r.text().catch(() => '') : '';
+    if (r && r.status === 400 && /42703/.test(body)) {
+      console.warn(`[build] column "${col}" is not in the database yet — skipping it. Run its migration.`);
+    } else {
+      console.warn(`[build] could not check column "${col}" (${r ? r.status : 'network'}) — keeping it.`);
+      present.push(col);
+    }
   }
   return fetchAll(present.length ? select + ',' + present.join(',') : select, filter);
 }
