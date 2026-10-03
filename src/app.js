@@ -657,6 +657,7 @@
     openAuth(reason);
   }
   let pendingAction = null;
+  let _askedSaveSignin = false;      // the post-save sign-in nudge fires once a session
 
   function openAuth(reason) {
     if (authSubEl) authSubEl.textContent = reason || AUTH_SUB_DEFAULT;
@@ -1118,7 +1119,10 @@
        modal opens, because both sign-in routes (Google, emailed link) RELOAD the page —
        see tryPendingEvent(), which reopens it afterwards. */
     const gated = !user;
-    track(gated ? 'event_gate_view' : 'event_open', ev.city || null);
+    // Always an open now. `event_open_anon` keeps the signed-out share visible, so the
+    // effect of removing the wall can be measured against the old `event_gate_view`.
+    track('event_open', ev.city || null);
+    if (gated) track('event_open_anon', ev.city || null);
     ensureImages([ev], function () {          // banner picture, if this event has one
       if (activeEventId !== id || !ev.image) return;
       const b = eventScroll.querySelector('.evd-banner');
@@ -1222,38 +1226,37 @@
         '<p class="evd-wx" data-when="' + ev.date.getTime() + '"' +
           (ev.lat != null ? ' data-lat="' + ev.lat + '" data-lon="' + ev.lon + '"' : '') + ' hidden></p>' +
         transparency +
-        (gated
-          ? '<div class="evd-gate">' +
-              /* ⚠️ COPY ONLY — the gate's SHAPE is an open question, see the handoff.
-                 It used to promise "read the full description", which stopped being
-                 true the moment imported listings became a snippet: 55% of them have
-                 no description at all. A gate that promises something that does not
-                 exist teaches people the sign-up was not worth it. This now names only
-                 what signing in actually does. */
-              '<div class="evd-gate-h">Keep this event</div>' +
-              '<p class="evd-gate-p">Sign in to save it, get a reminder before it starts, and let the AI host build your area\'s briefing around what you like.</p>' +
-              '<button class="evd-gate-cta" type="button">Sign up or log in</button>' +
-              '<p class="evd-gate-fine">It takes seconds — and you\'ll come straight back to this event.</p>' +
-            '</div>'
-          /* NATIVE EVENTS GET THEIR ORGANISER'S FULL TEXT; AN IMPORTED ONE GETS A
-             SNIPPET. We host and promote a native listing, so reproducing it is the
-             point. For an imported listing the job is "what is this, and is it for
-             me?" — the rest lives on the source's own page, which the CTA below goes
-             to. `.is-external` clamps to three lines as a guard; the snippet is
-             already ~140 characters cut at a word boundary (143), and
-             mountDescription no longer fetches the remainder for these. */
-          : (ev.description
-              ? '<p class="evd-desc' + (ev.is_native ? '' : ' is-external') + '">' + esc(ev.description) + '</p>'
-              : '') +
-            '<div class="evd-actions">' +
-              // Counts are REAL (event_counts, 78) and fill in once the panel is open. Until
-              // then — or when there are none — no number is shown, never an invented one.
-              '<button class="ev-like' + (ev.userLiked ? ' on' : '') + '" data-act="like">♥ <span class="n">' + (ev.likes > 0 ? ev.likes.toLocaleString() : '') + '</span></button>' +
-              '<button class="ev-attend' + (ev.userAttending ? ' on' : '') + '" data-act="attend">✓ <span class="n">' + (ev.attending > 0 ? ev.attending.toLocaleString() : '') + '</span></button>' +
-              '<button class="ev-save' + (P.isSaved(ev.id) ? ' on' : '') + '" data-act="save">' + (P.isSaved(ev.id) ? '★' : '☆') + '</button>' +
-            '</div>' +
-            '<div class="live-updates" hidden></div>' +
-            avail) +
+        /* 🔴 THE WALL IS GONE (v278). `gated = !user` used to replace the description,
+           the actions AND `avail` — the Get Tickets / View event button. **So a
+           signed-out visitor could not click through to the source at all**, and the
+           gate was blocking the one revenue action on 99.9% of events in order to
+           protect a 140-character snippet. Its copy also promised "read the full
+           description", which stopped being true the moment imported listings became a
+           snippet — 55% of them have no description at all, and a gate that promises
+           something that does not exist teaches people the sign-up was not worth it.
+           Now: ANYONE MAY SEE AN EVENT. Signing in is asked for when someone tries to
+           KEEP one — save, going, ♥ — which is honest (those genuinely need an account)
+           and far better timed. ⚠️ `event_open_anon` is tracked separately so this can
+           be compared against the old `event_gate_view` rate.
+           NATIVE EVENTS GET THEIR ORGANISER'S FULL TEXT; AN IMPORTED ONE GETS A
+           SNIPPET. We host and promote a native listing, so reproducing it is the
+           point. For an imported listing the job is "what is this, and is it for me?" —
+           the rest lives on the source's own page, which the CTA below goes to.
+           `.is-external` clamps to three lines as a guard; the snippet is already ~140
+           characters cut at a word boundary (143), and mountDescription no longer
+           fetches the remainder for these. */
+        (ev.description
+          ? '<p class="evd-desc' + (ev.is_native ? '' : ' is-external') + '">' + esc(ev.description) + '</p>'
+          : '') +
+        '<div class="evd-actions">' +
+          // Counts are REAL (event_counts, 78) and fill in once the panel is open. Until
+          // then — or when there are none — no number is shown, never an invented one.
+          '<button class="ev-like' + (ev.userLiked ? ' on' : '') + '" data-act="like">♥ <span class="n">' + (ev.likes > 0 ? ev.likes.toLocaleString() : '') + '</span></button>' +
+          '<button class="ev-attend' + (ev.userAttending ? ' on' : '') + '" data-act="attend">✓ <span class="n">' + (ev.attending > 0 ? ev.attending.toLocaleString() : '') + '</span></button>' +
+          '<button class="ev-save' + (P.isSaved(ev.id) ? ' on' : '') + '" data-act="save">' + (P.isSaved(ev.id) ? '★' : '☆') + '</button>' +
+        '</div>' +
+        '<div class="live-updates" hidden></div>' +
+        avail +
         // The in-app half of the event disclaimer (full text: terms.html#event-disclaimer).
         '<p class="evd-disclaimer">Event details come from ' +
           (ev.is_native ? 'the organiser' : 'the organiser or ticket seller') +
@@ -1469,16 +1472,10 @@
   }
 
   eventEl.addEventListener('click', function (e) {
-    // Signed-out preview → the one prompt. Remember the event first: signing in reloads.
-    if (e.target.closest('.evd-gate-cta')) {
-      const ev0 = D.getById(activeEventId);
-      if (activeEventId) rememberPendingEvent(activeEventId);
-      track('event_gate_signin', (ev0 && ev0.city) || null);
-      const back = activeEventId;
-      requireLogin(function () { if (back) openEvent(back); },
-        'Sign in to see the full details, get tickets, and save events to your list.');
-      return;
-    }
+    /* The `.evd-gate-cta` handler lived here. It is gone with the wall (v278) — the
+       button is no longer rendered, so this was dead code. Its one good idea survives
+       in the post-save nudge below: remember the event first, because signing in
+       RELOADS the page and tryPendingEvent() reopens it afterwards. */
     if (e.target.closest('.evd-back')) { closeEvent(); return; }                 // back to the list
     if (e.target.closest('.evd-x')) { closeEvent(); place.classList.remove('open'); activeClusterId = null; return; }
     const tix = e.target.closest('[data-tickets]');
@@ -1494,7 +1491,20 @@
       const on = P.toggleSaved(ev.id, snapOf(ev)); act.classList.toggle('on', on); act.textContent = on ? '★' : '☆';
       if (acctEnabled()) A.setUserEvent('save', ev.id, snap(ev), on);
       syncReminders(); refreshSaved();
-      window.EventuallyToast(on ? 'Saved to your events.' : 'Removed from saved.'); return;
+      window.EventuallyToast(on ? 'Saved to your events.' : 'Removed from saved.');
+      /* ASK AFTER THE ACTION, NEVER INSTEAD OF IT. Saving works signed out — it is kept
+         on this device — so the save above has already happened and this prompt costs
+         nothing to dismiss. Once per session, and only on the FIRST save: the moment
+         someone keeps an event is when an account becomes worth something to them, and
+         it is a far better moment to ask than a wall in front of the event. */
+      if (on && !user && !_askedSaveSignin) {
+        _askedSaveSignin = true;
+        track('save_signin_prompt', ev.city || null);
+        // Signing in RELOADS the page; tryPendingEvent() reopens this event afterwards.
+        rememberPendingEvent(ev.id);
+        openAuth('Saved on this device. Sign in to keep your events across devices and get a reminder before this one starts.');
+      }
+      return;
     }
     requireLogin(function () {
       if (act.dataset.act === 'like') {

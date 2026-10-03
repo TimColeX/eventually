@@ -1406,6 +1406,9 @@ body.no-timeline.has-ad .legend { bottom: calc(138px + env(safe-area-inset-botto
 .evd-actions { display: flex; gap: 8px; margin-bottom: 18px; }
 /* Signed-out preview: what the event IS stays visible above; the description, actions
    and ticket link sit behind this one prompt (see openEvent's `gated`). */
+/* ⚠️ UNUSED SINCE v278 — the sign-in wall was removed from the event panel and the
+   ask moved onto save / going / ♥. Kept, not deleted, because a soft wall ("three
+   events, then ask") is the agreed fallback if sign-ups drop, and this is its styling. */
 .evd-gate { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 16px; display: grid; gap: 8px; }
 .evd-gate-h { font-size: 16px; font-weight: 800; letter-spacing: -0.015em; }
 .evd-gate-p { margin: 0; font-size: 13px; line-height: 1.55; color: var(--muted); max-width: 46ch; }
