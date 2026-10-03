@@ -1397,6 +1397,12 @@ body.no-timeline.has-ad .legend { bottom: calc(138px + env(safe-area-inset-botto
 .evd-dedup { background: var(--tint); border: 1px solid var(--line); border-radius: 12px; padding: 10px 13px; margin-bottom: 14px; font-family: var(--mono); font-size: 11.5px; color: var(--ember); display: flex; flex-direction: column; gap: 4px; }
 .evd-dedup small { font-family: var(--font); font-size: 11.5px; color: var(--muted); letter-spacing: 0; }
 .evd-desc { margin: 0 0 16px; font-size: 13px; line-height: 1.6; color: var(--muted); }
+/* Imported listings only. A guard, not the main mechanism — the snippet served to the
+   panel is already ~140 characters, and the full text is no longer fetched for these.
+   A native event has no clamp: we host it, so its organiser's text is the page. */
+.evd-desc.is-external {
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
 .evd-actions { display: flex; gap: 8px; margin-bottom: 18px; }
 /* Signed-out preview: what the event IS stays visible above; the description, actions
    and ticket link sit behind this one prompt (see openEvent's `gated`). */

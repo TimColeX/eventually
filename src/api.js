@@ -93,8 +93,15 @@
       category: cat, categoryColor: CATS[cat],
       source: ds, sourceLabel: SRC[ds] ? SRC[ds].label : ds, sourceColor: SRC[ds] ? SRC[ds].color : '#CB5A3C',
       banner: [CATS[cat], '#211A15'],
-      // 132 live listings have no city; this used to read "<title> in null — …".
-      description: a.description || (a.title + (a.city ? ' in ' + a.city : '') + ' — pulled live onto the Eventually globe.'),
+      /* NULL WHEN THE SOURCE GAVE US NOTHING — no invented sentence.
+         This used to fall back to "<title> in <city> — pulled live onto the Eventually
+         globe." Measured 2026-10-03: **55% of Ticketmaster events (and 81% of the
+         library feed) carry no description**, so that line was the single most common
+         thing on a card — and it READ like content while containing none.
+         A card with four true facts and no paragraph looks deliberate; a sentence
+         describing our own plumbing looks broken. Every consumer already guards with
+         `|| ''` or `|| null`; the two renderers now simply omit the element. */
+      description: a.description || null,
       ticketUrl: (sources[0] && sources[0].url) || null,
       /* DOES A BOOKING LINK EXIST? The URL itself is no longer in the globe payload
          — it was 307 kB of 2.09 MB (15%), and after 133 the payload is what decides

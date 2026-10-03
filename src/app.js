@@ -869,7 +869,9 @@
             '<span class="wx-slot" data-when="' + ev.date.getTime() + '"' +
               (ev.lat != null ? ' data-lat="' + ev.lat + '" data-lon="' + ev.lon + '"' : '') + '></span>' +
           '</p>' +
-          '<p class="ev-desc">' + esc(ev.description) + '</p>' +
+          // Omitted entirely when there is nothing to say — see api.js. The row below
+          // carries the source and "View ›", so the card never looks unfinished.
+          (ev.description ? '<p class="ev-desc">' + esc(ev.description) + '</p>' : '') +
           '<div class="ev-foot">' + srcs + '<span class="ev-view">View ›</span></div>' +
         '</div>' +
       '</button>';
@@ -1222,12 +1224,27 @@
         transparency +
         (gated
           ? '<div class="evd-gate">' +
-              '<div class="evd-gate-h">See the full details</div>' +
-              '<p class="evd-gate-p">Sign in to read the full description, get tickets, and save this event to your list.</p>' +
+              /* ⚠️ COPY ONLY — the gate's SHAPE is an open question, see the handoff.
+                 It used to promise "read the full description", which stopped being
+                 true the moment imported listings became a snippet: 55% of them have
+                 no description at all. A gate that promises something that does not
+                 exist teaches people the sign-up was not worth it. This now names only
+                 what signing in actually does. */
+              '<div class="evd-gate-h">Keep this event</div>' +
+              '<p class="evd-gate-p">Sign in to save it, get a reminder before it starts, and let the AI host build your area\'s briefing around what you like.</p>' +
               '<button class="evd-gate-cta" type="button">Sign up or log in</button>' +
               '<p class="evd-gate-fine">It takes seconds — and you\'ll come straight back to this event.</p>' +
             '</div>'
-          : '<p class="evd-desc">' + esc(ev.description) + '</p>' +
+          /* NATIVE EVENTS GET THEIR ORGANISER'S FULL TEXT; AN IMPORTED ONE GETS A
+             SNIPPET. We host and promote a native listing, so reproducing it is the
+             point. For an imported listing the job is "what is this, and is it for
+             me?" — the rest lives on the source's own page, which the CTA below goes
+             to. `.is-external` clamps to three lines as a guard; the snippet is
+             already ~140 characters cut at a word boundary (143), and
+             mountDescription no longer fetches the remainder for these. */
+          : (ev.description
+              ? '<p class="evd-desc' + (ev.is_native ? '' : ' is-external') + '">' + esc(ev.description) + '</p>'
+              : '') +
             '<div class="evd-actions">' +
               // Counts are REAL (event_counts, 78) and fill in once the panel is open. Until
               // then — or when there are none — no number is shown, never an invented one.
@@ -1308,6 +1325,10 @@
      Any failure simply leaves the snippet, which is a complete sentence. */
   function mountDescription(ev) {
     if (!ev || !ev.descTruncated) return;        // nothing was left behind
+    // ⚠️ IMPORTED EVENTS NO LONGER HYDRATE. Their panel shows the snippet and sends
+    // the reader to the source for the rest, so fetching the full text would be a
+    // request per event open for text nobody is shown. Native text IS the page.
+    if (!ev.is_native) return;
     const API = window.EventuallyAPI;
     if (!API || !API.fetchDescription) return;
     const id = ev.id;
