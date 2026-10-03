@@ -207,7 +207,44 @@
 
   // A spike tap is the one place people hop quickly between cities, so it is the one place
   // the host waits to see whether they stay before paying for a new briefing.
-  globe.onMarkerClick = function (id) { openPlace(id, null, { dwell: true }); };
+  /* TAPPING A SPIKE USED TO SHOW A DIFFERENT NUMBER FROM SEARCHING THE SAME CITY.
+   *
+   * The worldwide payload caps a city at 10 entries (SQL 139), so a spike only ever
+   * held a SAMPLE — Chicago's showed 2. Searching "Chicago" went through
+   * goToSearchResult, which fetches that area's own box first, and showed 298. Same
+   * city, same panel, two numbers, decided purely by how you got there.
+   *
+   * So fetch the box here too. The panel opens IMMEDIATELY with what is already
+   * loaded — waiting half a second on a tap would be worse than the bug — and fills
+   * in when the box lands. */
+  globe.onMarkerClick = function (id) {
+    openPlace(id, null, { dwell: true });
+    hydrateCluster(id);
+  };
+  const _hydrated = {};
+  function hydrateCluster(id) {
+    const c = clusterById(id);
+    if (!c || c.lat == null || c.lon == null) return;
+    // Once per city per session: a second tap must not re-fetch.
+    const key = String(c.city || '').toLowerCase() + '|' + c.lat.toFixed(1) + ',' + c.lon.toFixed(1);
+    if (_hydrated[key]) return;
+    _hydrated[key] = true;
+    if (!(window.EventuallyAPI && window.EventuallyAPI.config.remote && window.EventuallyAPI.fetchEvents)) return;
+    const wantCity = c.city, wantLat = c.lat, wantLon = c.lon;
+    window.EventuallyAPI.fetchEvents({ minLat: wantLat - 0.4, maxLat: wantLat + 0.4, minLon: wantLon - 0.6, maxLon: wantLon + 0.6 })
+      .then(function (evs) {
+        if (!evs || !evs.length) return;
+        // Merging rebuilds the clusters, so the id we opened with is now stale —
+        // re-resolve by name and proximity, exactly as the search path does.
+        if (activeClusterId !== id) return;              // user moved on; leave them alone
+        D.mergeEvents(evs); markMine();
+        globe.setClusters(D.getClusters()); refreshMarkers(); updateStats();
+        if (!place.classList.contains('open')) return;   // panel closed meanwhile
+        const near = clusterForSearch({ city: wantCity, lat: wantLat, lon: wantLon });
+        if (near && near.cluster && near.km <= NEAR_OPEN_KM) openPlace(near.cluster.id);
+      })
+      .catch(function () { _hydrated[key] = false; });   // a failed fetch may be retried
+  }
   // Hovering only shows the label now. It used to pre-generate the hovered city's briefing
   // (up to 12 a session, desktop only). That was pure speculation: it paid for cities the
   // pointer merely passed over. The popular cities are now made each morning instead
@@ -1664,7 +1701,26 @@
     if (window.EventuallyAPI && window.EventuallyAPI.config.remote && window.EventuallyAPI.search) {
       // Backend search: finds ANY approved event in the database (not just loaded).
       _searchTimer = setTimeout(function () {
-        window.EventuallyAPI.search(q).then(function (rows) {
+        const _cityRows = window.EventuallyAPI.searchCities
+          ? window.EventuallyAPI.searchCities(q) : Promise.resolve([]);
+        Promise.all([window.EventuallyAPI.search(q), _cityRows]).then(function (both) {
+          let rows = both[0];
+          /* THE CITY ROWS COME FROM THE SERVER NOW, WITH A TRUE COUNT (SQL 153).
+             Grouping the event rows gave a count of whatever fell inside
+             `search_events`' `limit 80` — "Chicago, IL — 49 events" when the real
+             figure was 298. The server counts over the whole match set, collapses
+             repeat dates with the same key the globe uses (so it agrees with the
+             card), and derives the region itself, which is what keeps Portland OR
+             apart from Portland ME.
+             Admin-hidden cities are still filtered here: the server does not know
+             about them. An empty result falls through to the old grouping below, so
+             the dropdown still works if 153 is not deployed. */
+          const served = (both[1] || []).filter(function (c) {
+            return !RT._hidCity[String(c.city || '').toLowerCase()];
+          }).map(function (c) {
+            return { city: c.city, country: c.country || '', region: c.region || '',
+                     n: c.n, lat: c.lat, lon: c.lon };
+          });
           rows = (rows || []).filter(function (e) { return !RT._hidEv[e.event_id] && !RT._hidCity[(e.city || '').toLowerCase()]; });
           const byCity = {};
           /* ONE ROW PER REAL PLACE — city, REGION and country.
@@ -1731,7 +1787,9 @@
             c.lat = mid(c.lats); c.lon = mid(c.lons);
             delete c.lats; delete c.lons;
           });
-          const cities = Object.keys(byCity).map(function (k) { return byCity[k]; }).sort(function (a, b) { return b.n - a.n; }).slice(0, 4);
+          const cities = (served.length ? served
+            : Object.keys(byCity).map(function (k) { return byCity[k]; }).sort(function (a, b) { return b.n - a.n; })
+          ).slice(0, 4);
           const events = rows.slice(0, 6).map(function (e) { return { id: e.event_id, name: e.title, city: e.city, lat: e.lat, lon: e.lon, color: D.CATEGORIES[e.category] || '#CB5A3C' }; });
           renderSearchResults(cities, events);
           // Geocoder fallback: when the DB has few/no matches for this query, let the

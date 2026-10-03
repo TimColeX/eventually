@@ -284,6 +284,24 @@
       .catch(function () { return []; });
   }
 
+  /* The CITY rows of the dropdown, with a real count (SQL 153).
+   *
+   * These used to be derived by grouping whatever `search_events` returned — but that
+   * ends in `limit 80`, so "Chicago — 49 events" meant "49 of the 80 rows I happened
+   * to return are in Chicago". A truncation artefact presented as a count; the true
+   * figure was 298.
+   *
+   * Resolves [] on ANY failure, including the function not existing yet, so the
+   * caller falls back to the old grouping and the dropdown never goes blank. */
+  function searchCities(q) {
+    if (!REMOTE || !q) return Promise.resolve([]);
+    return fetch(BASE + '/rest/v1/rpc/search_cities', {
+      method: 'POST', headers: headers(), body: JSON.stringify({ q: q })
+    }).then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (rows) { return Array.isArray(rows) ? rows : []; })
+      .catch(function () { return []; });
+  }
+
   // Free "Today's briefing" — LLM-authored spoken script SHARED per cluster cell,
   // delivered by the device's own voice. The briefing is keyed server-side by the
   // grid cell of {lat,lon} (not the geocoded city), so everyone in an area hears
@@ -321,6 +339,7 @@
     fetchTicketUrl: fetchTicketUrl,
     getSponsors: getSponsors,
     search: search,
+    searchCities: searchCities,
     dailyBriefing: dailyBriefing
   };
 })(window);
