@@ -422,16 +422,93 @@ async function analyse() {
     venueCount: c.venues.size,
   })).sort((a, b) => b.distinctN - a.distinctN);           // rank by real variety
 
-  // Disambiguate collisions (there is more than one London, Springfield, Cambridge…).
-  const slugCount = new Map();
-  all.forEach((c) => slugCount.set(c.slug, (slugCount.get(c.slug) || 0) + 1));
+  /* ───────────────────────────────────────────────────────────────────────────
+     STICKY SLUGS — A PUBLISHED URL IS A PROMISE.
+
+     🔴 WHAT THIS REPLACES, AND WHY. The old rule was "if two cities share a base slug,
+     suffix BOTH with their country code". It is stable only while the data is: the
+     moment a second Manchester crossed the threshold, Manchester UK's slug changed from
+     `manchester` to `manchester-uk` and an indexed URL stopped existing. **Search
+     Console reported exactly nine "Not found (404)" pages on 2026-10-07 and they were
+     exactly those nine renames** — including the three biggest city pages on the site
+     (Manchester 269 events, Melbourne 209, Birmingham 205). Worse, it is reversible: if
+     the newcomer later drops out, the suffix is removed and the URL breaks a SECOND time.
+
+     🔑 THE RULE NOW: the first city to publish under a base slug KEEPS it for good, and
+     later arrivals take the country suffix. Assignments live in `events/_slugs.json`,
+     committed by the workflow (`git add events` already covers it), so every run makes
+     the same decision.
+
+     ⚠️ SEEDING IS THE DANGEROUS PART, and it is why the registry is seeded from DISK.
+     Writing a fresh registry from this build alone would re-decide all 249 live URLs
+     from scratch and could break every one of them. Instead, a city whose page ALREADY
+     EXISTS on disk is recorded with the slug it already has. The live site is the source
+     of truth for what has been promised; the registry only has to remember it.
+     ─────────────────────────────────────────────────────────────────────────── */
+  const SLUG_REGISTRY = path.join(OUT_ROOT, 'events', '_slugs.json');
+  const ccFor = (c) => COUNTRY_SLUGS.get((c.country || '').toLowerCase())
+    || slugify(c.country || '').slice(0, 3);
+  const cityKey = (c) => slugify(c.city) + '|' + (c.country || '').toLowerCase().trim();
+
+  let registry = {};
+  try { registry = JSON.parse(fs.readFileSync(SLUG_REGISTRY, 'utf8')) || {}; }
+  catch { /* first run, or unreadable — seeded below */ }
+  const registrySizeBefore = Object.keys(registry).length;
+
+  // What the OLD rule would produce for this build. Used only for seeding: for a city
+  // whose page is already on disk, that directory IS its published slug.
+  const oldCount = new Map();
+  all.forEach((c) => oldCount.set(c.slug, (oldCount.get(c.slug) || 0) + 1));
+  const legacySlug = (c) => {
+    if (oldCount.get(c.slug) <= 1) return c.slug;
+    const cc = ccFor(c);
+    return cc ? c.slug + '-' + cc : c.slug;
+  };
+
+  let seeded = 0;
   all.forEach((c) => {
-    if (slugCount.get(c.slug) > 1) {
-      // A short ISO-style code, never a truncated country name ("london-great-britai").
-      const cc = COUNTRY_SLUGS.get(c.country.toLowerCase()) || slugify(c.country).slice(0, 3);
-      c.slug = cc ? c.slug + '-' + cc : c.slug;
+    const k = cityKey(c);
+    if (registry[k]) return;
+    const candidate = legacySlug(c);
+    // Only adopt it if that page is genuinely published — otherwise this is a new city
+    // and it should go through the assignment below like any other.
+    if (fs.existsSync(path.join(OUT_ROOT, 'events', candidate, 'index.html'))) {
+      registry[k] = candidate; seeded++;
     }
   });
+  if (seeded) console.log(`Slug registry: adopted ${seeded} slug(s) from pages already on disk.`);
+
+  /* ⚠️ ONLY CITIES THAT WILL ACTUALLY GET A PAGE ARE GIVEN A SLUG. The first draft
+     registered all 1,693 cities in the data, which both bloated the file and let a
+     one-event town squat on a bare slug a real city might later deserve. A slug is a
+     promise about a published URL, so it is made when the page is published — any city
+     already holding one keeps it whether it qualifies today or not. */
+  const taken = new Set(Object.values(registry));
+  let assigned = 0;
+  all.forEach((c) => {
+    const k = cityKey(c);
+    if (registry[k]) { c.slug = registry[k]; return; }        // sticky: never changes
+    if (!qualifies(c)) return;                                 // no page → no promise yet
+    let want = c.slug;
+    if (taken.has(want)) {                                     // someone else holds the base
+      const cc = ccFor(c);
+      want = cc ? c.slug + '-' + cc : c.slug;
+    }
+    // Still clashing (two new cities, same name, same country code) — number it rather
+    // than overwrite. Rare, and far better than losing a city silently.
+    if (taken.has(want)) { let i = 2; while (taken.has(want + '-' + i)) i++; want = want + '-' + i; }
+    registry[k] = want; taken.add(want); c.slug = want; assigned++;
+  });
+  if (assigned) console.log(`Slug registry: assigned ${assigned} new slug(s).`);
+
+  /* ⚠️ ENTRIES ARE NEVER REMOVED. A city that drops below the bar and returns months
+     later gets its original URL back, which is the whole point. The file grows by one
+     short line per city, for ever, and that is the cheapest possible price for it. */
+  if (seeded || assigned || !registrySizeBefore) {
+    fs.mkdirSync(path.dirname(SLUG_REGISTRY), { recursive: true });
+    const sorted = Object.fromEntries(Object.keys(registry).sort().map((k) => [k, registry[k]]));
+    fs.writeFileSync(SLUG_REGISTRY, JSON.stringify(sorted, null, 1) + '\n');
+  }
 
   /* A SLUG IS A CITY'S IDENTITY. Two cities sharing one is not a cosmetic clash:
      the second simply overwrites the first's page, and a real city vanishes from
@@ -439,8 +516,12 @@ async function analyse() {
      COUNTRY_SLUGS map did after 121 — "uni" for both United States and United
      Kingdom — and it went unnoticed until the directory listing was read by hand.
      Fail loudly instead: a build that would lose a city should not finish. */
+  /* ⚠️ CHECKED OVER THE CITIES THAT GET A PAGE, not every city in the data. Since slugs
+     are only assigned to qualifying cities (above), two non-publishing towns can share a
+     base slug harmlessly — nothing is written for either. Checking `all` here would fail
+     the build on a collision that cannot overwrite anything. */
   const after = new Map();
-  all.forEach((c) => { (after.get(c.slug) || after.set(c.slug, []).get(c.slug)).push(c); });
+  all.filter(qualifies).forEach((c) => { (after.get(c.slug) || after.set(c.slug, []).get(c.slug)).push(c); });
   const clashes = [...after.entries()].filter(([, list]) => list.length > 1);
   if (clashes.length) {
     const detail = clashes.map(([slug, list]) =>
