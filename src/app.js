@@ -481,17 +481,25 @@
        on.** Asking closes that and makes the briefing about their own week.
        Once per session and only while there is genuinely no home area: a host that asks
        twice is a host people turn off. */
+    /* ⚠️ THE "ONCE" IS SPENT WHEN IT SPEAKS, NOT WHEN IT IS FETCHED — and that
+       distinction is the whole reason this works. The host AUTO-STARTS on load, before
+       any user gesture, so its first run is routinely blocked by the browser's autoplay
+       policy. Burning the flag here meant the one ask was consumed by a run that never
+       made a sound, and pressing Play afterwards got null: wired correctly, clip
+       resolving, never heard. Setting it in `onLocationAsk` — which fires immediately
+       before `_audioSpeak` — ties it to the words actually playing.
+       Re-fetching in the meantime is free: the clip is content-hash cached (≈1s). */
     getLocationAsk: function () {
       if (_locationAsked || homeLoc()) return Promise.resolve(null);
       const API = window.EventuallyAPI;
       if (!API || !API.askClip) return Promise.resolve(null);
-      _locationAsked = true;
-      track('host_location_ask');
       return API.askClip('location', P.get().language || 'en');
     },
-    // Draw the eye to the button the host just mentioned. Pure decoration — if the clip
-    // failed this never fires, so the pulse can't appear without the words.
+    // Fires as the clip starts. Spends the once-per-session, and draws the eye to the
+    // button the host just named — so the hint can't appear without the words.
     onLocationAsk: function () {
+      _locationAsked = true;
+      track('host_location_ask');
       const b = document.getElementById('nav-location');
       if (!b) return;
       b.classList.add('ask-pulse');
