@@ -445,6 +445,13 @@ async function analyse() {
      EXISTS on disk is recorded with the slug it already has. The live site is the source
      of truth for what has been promised; the registry only has to remember it.
      ─────────────────────────────────────────────────────────────────────────── */
+  /* ℹ️ THE LEADING UNDERSCORE MEANS THIS FILE IS NOT SERVED, AND THAT IS FINE.
+     GitHub Pages runs Jekyll (there is no `.nojekyll` here), and Jekyll skips anything
+     beginning with `_` — so https://eventually-app.com/events/_slugs.json is a 404 even
+     though the file is committed and present. **Nothing reads it over HTTP**: the
+     builder reads it from the checkout, which is why the CI run works. Don't go hunting
+     when the URL 404s, and don't "fix" it by renaming — it is internal build state and
+     keeping it off the public site is the right outcome. */
   const SLUG_REGISTRY = path.join(OUT_ROOT, 'events', '_slugs.json');
   const ccFor = (c) => COUNTRY_SLUGS.get((c.country || '').toLowerCase())
     || slugify(c.country || '').slice(0, 3);
