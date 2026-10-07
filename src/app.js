@@ -94,6 +94,10 @@
   // aggregate popularity, colour, a priority score, continent, and zoom LOD. Then
   // pick the budgeted spike set. Designed to stay clean from 500 to 50,000 events.
   const WEEK_MS = 7 * 86400000;
+  // How many events a cluster needs before it may spike without something being live.
+  // See the long note at `_eligible` — this must stay reachable for the payload we
+  // actually ship, or the globe's spikes become a clock instead of a map.
+  const SPIKE_MIN_EVENTS = 2;
   function continentOf(lat, lon) {
     if (lon >= -170 && lon < -30 && lat >= 7) return 'NA';
     if (lon >= -92 && lon < -30 && lat < 7) return 'SA';
@@ -138,7 +142,20 @@
       // Only pulse a spike when EVERY event under it was published on Eventually. A mixed
       // cluster (1 native among 40 imported) would over-signal and make the marker a lie.
       c._allNative = vis > 0 && natCount === vis;
-      c._eligible = featured || editor || live > 0 || vis >= 10;
+      /* 🔴 THIS THRESHOLD MUST STAY REACHABLE — it was `vis >= 10` and had become DEAD.
+         It was written when the payload concentrated many events into few cities. `139`
+         then deliberately spread the 3,000 entries across EVERY city, to stop Europe
+         vanishing from the globe — which fixed that, and silently killed this branch.
+         Measured 2026-10-07: the largest cluster in the entire payload holds **3**
+         events, and **0 of 1,812 clusters reach 10**.
+         With the only other route being `live > 0`, eligibility collapsed into a CLOCK:
+         at 01:20 UTC — the middle of Europe's night — Europe had 757 clusters, 0 live
+         and therefore 0 spikes, while North America had 63. The owner reported the
+         globe going dark over Europe twice, and this was why the second time.
+         ⚠️ 2 is the faithful translation of the original intent ("more than one thing
+         on") against the payload we actually ship: 1,153 of 1,812 clusters qualify,
+         against 0 before. If the payload shape changes again, re-check this number. */
+      c._eligible = featured || editor || live > 0 || vis >= SPIKE_MIN_EVENTS;
       // Native (Eventually-published) clusters always show their dot, at any zoom.
       c._lodMin = nat ? 0 : ((c._visible >= 14) ? 0.95 : (c._visible >= 5 ? 1.4 : 2.0));
       // Events near the user's location are always revealed.
@@ -174,14 +191,25 @@
     // global top priority
     let g = 0;
     for (let i = 0; i < pool.length && g < RT.spikes.priority; i++) if (!chosen[pool[i].id]) { mark(pool[i], 'priority'); g++; }
-    // continent fairness — round-robin so every continent is represented
+    /* Continent fairness — round-robin so every continent is represented.
+       ⚠️ THIS PASS COULD NOT DO ITS JOB, because it drew only from `pool`, which is
+       pre-filtered by `_eligible`. A continent where nothing happened to be live had no
+       eligible cluster at all, so the pass meant to GUARANTEE representation silently
+       skipped it — exactly how Europe went dark at 01:20 UTC.
+       So it now falls back to the best-scoring cluster on that continent that has any
+       visible event. With the threshold fixed above this rarely fires, and it is the
+       reason "every continent is represented" is now true at any hour rather than only
+       when the clock is kind. */
+    const anyVisible = all.filter(function (c) { return c._visible > 0; })
+      .sort(function (a, b) { return b._score - a._score; });
     const conts = ['NA', 'SA', 'EU', 'AF', 'AS', 'OC'];
     let f = 0, progress = true;
     while (f < RT.spikes.fair && progress) {
       progress = false;
       for (let ci = 0; ci < conts.length && f < RT.spikes.fair; ci++) {
         const cont = conts[ci];
-        const c = pool.find(function (x) { return x._continent === cont && !chosen[x.id]; });
+        const c = pool.find(function (x) { return x._continent === cont && !chosen[x.id]; })
+          || anyVisible.find(function (x) { return x._continent === cont && !chosen[x.id]; });
         if (c) { mark(c, 'fair'); f++; progress = true; }
       }
     }
