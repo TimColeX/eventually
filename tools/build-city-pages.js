@@ -247,18 +247,32 @@ async function fetchAll(select, filter) {
   let truncated = true;
   for (let page = 0; page < MAX_PAGES; page++) {
     const from = page * 1000;
-    const r = await fetch(`${SUPABASE}/rest/v1/events?select=${select}&${filter}`, {
-      headers: { apikey: ANON, Authorization: 'Bearer ' + ANON, Range: `${from}-${from + 999}`, 'Range-Unit': 'items' },
-    });
-    if (!r.ok) {
+    let r, body = '', err = null;
+    /* RETRY A TIMEOUT, NOT A MISTAKE.
+       The 06:19 run on 2026-10-07 died on `events fetch 500 {"code":"57014" …
+       canceling statement due to statement timeout}` — ONE slow page out of fifty took
+       the whole rebuild down, and the 15:42 run then succeeded with no change. The same
+       instance variance that makes the globe's cold call cancel.
+       ⚠️ ONLY a 5xx or a statement timeout is retried. A 400/42703 is a MISSING COLUMN,
+       which fetchWithOptional below must still see immediately — retrying that would
+       just be three identical failures and a slower build. */
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt) await new Promise((s) => setTimeout(s, 2000 * attempt));   // 2s, then 4s
+      r = await fetch(`${SUPABASE}/rest/v1/events?select=${select}&${filter}`, {
+        headers: { apikey: ANON, Authorization: 'Bearer ' + ANON, Range: `${from}-${from + 999}`, 'Range-Unit': 'items' },
+      });
+      if (r.ok) { err = null; break; }
       /* Carry the status and body, because fetchWithOptional has to tell a missing column
          (400 / 42703) from a timeout. It used to catch everything alike. */
-      const body = await r.text().catch(() => '');
-      const err = new Error('events fetch ' + r.status + ' ' + body.slice(0, 200));
+      body = await r.text().catch(() => '');
+      err = new Error('events fetch ' + r.status + ' ' + body.slice(0, 200));
       err.status = r.status;
       err.pgCode = (body.match(/"code":"([^"]+)"/) || [, ''])[1];
-      throw err;
+      const transient = r.status >= 500 || err.pgCode === '57014';
+      if (!transient) break;
+      console.warn(`   page ${page} failed (${r.status} ${err.pgCode}) — retrying`);
     }
+    if (err) throw err;
     const batch = await r.json();
     out.push(...batch);
     if (batch.length < 1000) { truncated = false; break; }

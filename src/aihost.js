@@ -207,6 +207,25 @@
 
   // The free show's OPENING: a short spoken intro (the narrator's greeting — or, on
   // a location switch, the queued station ident) via the device voice, then Today's
+  /* THE SPOKEN LOCATION ASK — one cached clip, played once, when no home area is set.
+     Why it matters beyond politeness: `exploring` (the cheap-headline cost control) is
+     `hasHome && cellKey(here) !== cellKey(home)`, so with NO home it can never be true
+     and this listener gets the FULL-LENGTH briefing for whatever city they land on.
+     Calls `done()` unchanged whenever there is nothing to ask — no home missing, no
+     hook wired, or the clip failed — so the show is never held up by it. */
+  AIHost.prototype._playLocationAskThen = function (done, stale) {
+    const self = this;
+    if (!this.getLocationAsk) { done(); return; }
+    this.getLocationAsk().then(function (a) {
+      if (stale && stale()) return;
+      if (!a || !a.url) { done(); return; }
+      // Pulse the place button only now the words are playing, so the hint can never
+      // appear without the line that explains it.
+      if (self.onLocationAsk) { try { self.onLocationAsk(); } catch (e) {} }
+      self._audioSpeak(a.url, a.text, done, true, { text: a.text, kind: 'greeting', lang: 'en-US' });
+    }).catch(function () { done(); });
+  };
+
   // Briefing, then it flows into the ambient live rotation. One continuous listen.
   AIHost.prototype._playOpening = function () {
     const self = this;
@@ -911,15 +930,22 @@
         };
         // The name-free brand welcome ("Welcome to Eventually…"), unless the splash
         // already spoke it this session. Runs AFTER the one-time host intro.
+        /* …then, if we do not know where the listener is, the host ASKS — once — before
+           the briefing. Order: one-time host intro → brand welcome → location ask →
+           briefing. It sits here rather than in front of everything because a host that
+           asks for something before it has said anything useful is a host people turn
+           off. `_playLocationAskThen` resolves straight through when a home area is
+           already set, which is the normal case. */
         const afterIntro = function () {
           if (stale()) return;
+          const thenAsk = function () { self._playLocationAskThen(playConv, stale); };
           if (self._needsWelcome() && self.getWelcome) {
             self.getWelcome().then(function (w) {
               if (stale()) return;
-              if (w && w.url) self._audioSpeak(w.url, w.text, playConv, true, { text: w.text, kind: 'greeting', lang: 'en-US' });
-              else playConv();
-            }).catch(playConv);
-          } else playConv();
+              if (w && w.url) self._audioSpeak(w.url, w.text, thenAsk, true, { text: w.text, kind: 'greeting', lang: 'en-US' });
+              else thenAsk();
+            }).catch(thenAsk);
+          } else thenAsk();
         };
         // STARTUP vs SWITCH. The one-time intro + brand welcome are STARTUP-only. A city
         // SWITCH (_identCity set) skips STRAIGHT to the ident + briefing — no extra intro/
@@ -955,27 +981,17 @@
         const bridge = !!(this._identCity || this._bridgeNext);
         this._identCity = null; this._bridgeNext = false;
         // The show proper: PLUS = stinger → briefing; FREE = one brief greeting → stop.
+        /* ⚠️ THIS IS THE SINGLE-VOICE FALLBACK, NOT THE LIVE PATH. The two-host branch
+           above returns before reaching it, and two-host is what the live config runs —
+           an anonymous request comes back with `twoHost: true` and three segments. The
+           spoken location ask therefore lives in `afterIntro` up there, not here; this
+           path is already a degraded one and is deliberately left alone. */
         const proceed = function (bridged) {
-          /* THE OPENER IS THE LOCATION ASK WHEN WE DO NOT KNOW WHERE THE LISTENER IS,
-             and the stinger otherwise. It REPLACES the stinger rather than preceding it:
-             both are holding lines covering the same synthesis latency, and two in a row
-             is one too many. `getLocationAsk` resolves null unless there is genuinely no
-             home area and it has not already asked this session, so on the normal path
-             this is one extra resolved promise and nothing else. */
-          const opener = (self.getLocationAsk ? self.getLocationAsk() : Promise.resolve(null))
-            .then(function (a) {
-              if (a && a.url) { a._isAsk = true; return a; }
-              return self.getStinger ? self.getStinger() : null;
-            })
-            .catch(function () { return self.getStinger ? self.getStinger() : null; });
-          opener.then(function (s) {
+          (self.getStinger ? self.getStinger() : Promise.resolve(null)).then(function (s) {
             if (!self.speaking || self.briefingPlaying) return;
             if (s && s.url) {                                   // PLUS: stinger → briefing (+ personalization)
               self._setBuffering(false);
               if (bridged) { self._playPendingBriefing(); return; }   // the transition already covered the wait
-              // Only pulse the place button once the words are actually playing, so the
-              // hint can never appear without the line that explains it.
-              if (s._isAsk && self.onLocationAsk) { try { self.onLocationAsk(); } catch (e) {} }
               self._audioSpeak(s.url, s.text, function () { self._playPendingBriefing(); },
                 false, { text: s.text, kind: 'greeting', lang: 'en-US' });   // stinger read-along, shown on play
             } else {                                            // FREE: one brief greeting, then STOP
