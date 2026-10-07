@@ -489,6 +489,9 @@
        resolving, never heard. Setting it in `onLocationAsk` — which fires immediately
        before `_audioSpeak` — ties it to the words actually playing.
        Re-fetching in the meantime is free: the clip is content-hash cached (≈1s). */
+    // Synchronous, because `_rotate` checks it on every tick and a promise there would
+    // stall a tick each time there was nothing to ask.
+    needsLocationAsk: function () { return !_locationAsked && !homeLoc(); },
     getLocationAsk: function () {
       if (_locationAsked || homeLoc()) return Promise.resolve(null);
       const API = window.EventuallyAPI;

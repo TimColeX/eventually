@@ -90,7 +90,8 @@
     // late result for a PREVIOUS city can never overwrite the current one (#4 race control).
     this._gen = 0;
     this.getStinger = opts.getStinger || null;    // () -> Promise<{url,text}|null> (cached ElevenLabs intro, Plus)
-    this.getLocationAsk = opts.getLocationAsk || null;  // () -> Promise<{url,text}|null> (spoken "where are you?", replaces the stinger)
+    this.getLocationAsk = opts.getLocationAsk || null;  // () -> Promise<{url,text}|null> (the spoken "where are you?" clip)
+    this.needsLocationAsk = opts.needsLocationAsk || null;  // () -> bool, SYNCHRONOUS (see _rotate)
     this.onLocationAsk = opts.onLocationAsk || null;    // () -> void (highlight the place button, once the clip plays)
     this.getFreeGreeting = opts.getFreeGreeting || null;  // () -> Promise<{url,text}|null> (cached EL greeting, Free)
     this.getVoiceSettings = opts.getVoiceSettings || null;  // () -> { rate, pitch } (admin-tunable)
@@ -794,6 +795,25 @@
     if (this._fillerPlaying) return;           // cached city radio-filler is playing (or in a music gap) → don't re-fetch over it
     if (this._musicHold) return;               // free intro done → music bed only, no caption rotation
     const self = this;
+    /* 🔴 THE LOCATION ASK IS TRIGGERED HERE, NOT FROM THE OPENING CHAIN.
+       It used to hang off the end of intro → welcome → ask, and that was fragile for a
+       ONE-SHOT prompt: observed firing on one run and not the next, because any hiccup
+       earlier in the chain — a clip that fails, a `stale()` guard, a city switch that
+       takes the `_identCity` shortcut straight to the briefing — skipped it silently.
+       Every early return above means something else is already playing, so by the time
+       we reach this line the host is free and nothing is interrupted.
+       `getLocationAsk` resolves null once a home area is set or it has already been
+       spoken, so on the normal path this costs one resolved promise. The attempt counter
+       stops a failing clip from being re-fetched on every tick, for ever. */
+    if (this.speaking && this.getLocationAsk && this.needsLocationAsk
+        && this.needsLocationAsk()                      // ⚠️ SYNCHRONOUS on purpose: a promise
+        && !this._askBusy && (this._askTries || 0) < 3) {  // here would stall a tick every time
+      this._askBusy = true;                              // there was nothing to ask.
+      this._askTries = (this._askTries || 0) + 1;
+      this._playLocationAskThen(function () { self._askBusy = false; },
+        function () { return !self.speaking; });
+      return;                                            // the ask owns this tick
+    }
     // Briefing mode: Plus = SHARED, cached ElevenLabs briefing (premium voice from the
     // very first word — a cached stinger covers synth latency at the start). Free = the
     // browser-voice show. getBriefing() resolves null for Free → the free show runs.
@@ -936,16 +956,19 @@
            asks for something before it has said anything useful is a host people turn
            off. `_playLocationAskThen` resolves straight through when a home area is
            already set, which is the normal case. */
+        /* ⚠️ THE LOCATION ASK IS NO LONGER CHAINED HERE. Hanging it off the end of
+           intro → welcome meant it fired on one run and not the next, because anything
+           that skipped or broke this chain skipped it too. It is now triggered from the
+           top of `_rotate`, where the only way to arrive is with the host free. */
         const afterIntro = function () {
           if (stale()) return;
-          const thenAsk = function () { self._playLocationAskThen(playConv, stale); };
           if (self._needsWelcome() && self.getWelcome) {
             self.getWelcome().then(function (w) {
               if (stale()) return;
-              if (w && w.url) self._audioSpeak(w.url, w.text, thenAsk, true, { text: w.text, kind: 'greeting', lang: 'en-US' });
-              else thenAsk();
-            }).catch(thenAsk);
-          } else thenAsk();
+              if (w && w.url) self._audioSpeak(w.url, w.text, playConv, true, { text: w.text, kind: 'greeting', lang: 'en-US' });
+              else playConv();
+            }).catch(playConv);
+          } else playConv();
         };
         // STARTUP vs SWITCH. The one-time intro + brand welcome are STARTUP-only. A city
         // SWITCH (_identCity set) skips STRAIGHT to the ident + briefing — no extra intro/
