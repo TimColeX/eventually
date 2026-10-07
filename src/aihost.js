@@ -90,6 +90,8 @@
     // late result for a PREVIOUS city can never overwrite the current one (#4 race control).
     this._gen = 0;
     this.getStinger = opts.getStinger || null;    // () -> Promise<{url,text}|null> (cached ElevenLabs intro, Plus)
+    this.getLocationAsk = opts.getLocationAsk || null;  // () -> Promise<{url,text}|null> (spoken "where are you?", replaces the stinger)
+    this.onLocationAsk = opts.onLocationAsk || null;    // () -> void (highlight the place button, once the clip plays)
     this.getFreeGreeting = opts.getFreeGreeting || null;  // () -> Promise<{url,text}|null> (cached EL greeting, Free)
     this.getVoiceSettings = opts.getVoiceSettings || null;  // () -> { rate, pitch } (admin-tunable)
     // Voices can load asynchronously; refresh the best-voice pick when they arrive.
@@ -954,11 +956,26 @@
         this._identCity = null; this._bridgeNext = false;
         // The show proper: PLUS = stinger → briefing; FREE = one brief greeting → stop.
         const proceed = function (bridged) {
-          (self.getStinger ? self.getStinger() : Promise.resolve(null)).then(function (s) {
+          /* THE OPENER IS THE LOCATION ASK WHEN WE DO NOT KNOW WHERE THE LISTENER IS,
+             and the stinger otherwise. It REPLACES the stinger rather than preceding it:
+             both are holding lines covering the same synthesis latency, and two in a row
+             is one too many. `getLocationAsk` resolves null unless there is genuinely no
+             home area and it has not already asked this session, so on the normal path
+             this is one extra resolved promise and nothing else. */
+          const opener = (self.getLocationAsk ? self.getLocationAsk() : Promise.resolve(null))
+            .then(function (a) {
+              if (a && a.url) { a._isAsk = true; return a; }
+              return self.getStinger ? self.getStinger() : null;
+            })
+            .catch(function () { return self.getStinger ? self.getStinger() : null; });
+          opener.then(function (s) {
             if (!self.speaking || self.briefingPlaying) return;
             if (s && s.url) {                                   // PLUS: stinger → briefing (+ personalization)
               self._setBuffering(false);
               if (bridged) { self._playPendingBriefing(); return; }   // the transition already covered the wait
+              // Only pulse the place button once the words are actually playing, so the
+              // hint can never appear without the line that explains it.
+              if (s._isAsk && self.onLocationAsk) { try { self.onLocationAsk(); } catch (e) {} }
               self._audioSpeak(s.url, s.text, function () { self._playPendingBriefing(); },
                 false, { text: s.text, kind: 'greeting', lang: 'en-US' });   // stinger read-along, shown on play
             } else {                                            // FREE: one brief greeting, then STOP

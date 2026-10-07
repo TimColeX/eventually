@@ -44,6 +44,7 @@
   // "You are here" + nearby-events (within NEAR_KM of the user's chosen location).
   let userLoc = null;
   let freeIntroPlayed = false;          // the free upsell intro plays in full once per session
+  let _locationAsked = false;           // the host asks where you are at most once a session
   const NEAR_KM = 50;
   // "Events happening near you today" — live/upcoming within NEAR_KM of the user's
   // location (or all upcoming if no location). Feeds the free intro's spoken count.
@@ -471,6 +472,30 @@
     getStinger: function () {
       if (!window.EventuallyHostVoice || !window.EventuallyHostVoice.enabled) return Promise.resolve(null);
       return window.EventuallyHostVoice.getStinger(P.get().language || 'en');
+    },
+    /* THE SPOKEN LOCATION ASK — the host's own voice, in place of the stinger, when it
+       does not know where the listener is.
+       🔑 It is not only a nicety. `exploring` — the cheap-headline cost control — is
+       `hasHome && cellKey(here) !== cellKey(home)`, so **with no home set it can never be
+       true and the listener gets the FULL-LENGTH briefing for whatever city they land
+       on.** Asking closes that and makes the briefing about their own week.
+       Once per session and only while there is genuinely no home area: a host that asks
+       twice is a host people turn off. */
+    getLocationAsk: function () {
+      if (_locationAsked || homeLoc()) return Promise.resolve(null);
+      const API = window.EventuallyAPI;
+      if (!API || !API.askClip) return Promise.resolve(null);
+      _locationAsked = true;
+      track('host_location_ask');
+      return API.askClip('location', P.get().language || 'en');
+    },
+    // Draw the eye to the button the host just mentioned. Pure decoration — if the clip
+    // failed this never fires, so the pulse can't appear without the words.
+    onLocationAsk: function () {
+      const b = document.getElementById('nav-location');
+      if (!b) return;
+      b.classList.add('ask-pulse');
+      setTimeout(function () { b.classList.remove('ask-pulse'); }, 12000);
     },
     // FREE: a brief cached ElevenLabs intro (count + upsell first time, short after),
     // then narration stops and the music bed continues. Never the browser voice.

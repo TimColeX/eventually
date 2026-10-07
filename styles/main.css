@@ -915,6 +915,17 @@ body {
   background: var(--paper); border: 1px solid var(--line-2);
 }
 .loc-chip:hover { border-color: var(--clay); }
+/* The host has just asked where you are out loud — draw the eye to the button it named.
+   Added only while the clip plays, removed after 12s, and `prefers-reduced-motion`
+   keeps the emphasis without the movement. */
+.loc-chip.ask-pulse { border-color: var(--clay); animation: askPulse 1.9s ease-in-out 5; }
+@keyframes askPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(203, 90, 60, 0); }
+  50%      { box-shadow: 0 0 0 7px rgba(203, 90, 60, 0.18); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .loc-chip.ask-pulse { animation: none; box-shadow: 0 0 0 3px rgba(203, 90, 60, 0.22); }
+}
 .loc-chip.set { color: var(--clay); }
 /* Map pin — brand clay, and it follows the chip's colour once a location is set. */
 .loc-ic { width: 15px; height: 15px; flex: none; display: block; color: var(--clay); }

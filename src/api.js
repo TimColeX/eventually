@@ -291,6 +291,22 @@
       .catch(function () { return []; });
   }
 
+  /* ONE fixed spoken line, cached server-side per (voice, language) — currently only
+     `location`, the host asking where you are.
+     ⚠️ FETCHED WITH THE ANON KEY ON PURPOSE. `hostvoice.getStinger` cannot be reused:
+     it calls `accessToken()` and resolves null when signed out — and a listener with no
+     home area set is overwhelmingly a signed-out one, which is exactly who this is for.
+     Resolves null on any failure, so the host simply falls back to its usual opener. */
+  function askClip(kind, lang) {
+    if (!REMOTE || !kind) return Promise.resolve(null);
+    return fetch(BASE + '/functions/v1/briefing', {
+      method: 'POST', headers: headers(),
+      body: JSON.stringify({ ask: kind, lang: (lang || 'en').slice(0, 2) })
+    }).then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) { return (j && j.url) ? { url: j.url, text: j.text || '' } : null; })
+      .catch(function () { return null; });
+  }
+
   /* The CITY rows of the dropdown, with a real count (SQL 153).
    *
    * These used to be derived by grouping whatever `search_events` returned — but that
@@ -347,6 +363,7 @@
     getSponsors: getSponsors,
     search: search,
     searchCities: searchCities,
+    askClip: askClip,
     dailyBriefing: dailyBriefing
   };
 })(window);
