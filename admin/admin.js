@@ -1605,6 +1605,7 @@
     ticketmaster: 'ingest-ticketmaster',
     predicthq: 'ingest-predicthq',
     feeds: 'ingest-feeds',
+    showpass: 'ingest-showpass',
   };
   function triggerSync(provider, btn) {
     const msg = document.getElementById('sync-msg-' + provider);

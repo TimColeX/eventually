@@ -21,6 +21,11 @@
   const SOURCES = {
     ticketmaster:{ label: 'Ticketmaster', color: '#8A3B1E', badge: 'Official listing' },
     predicthq:   { label: 'PredictHQ',    color: '#2E7D8A', badge: 'Verified listing' },
+    /* ⚠️ A SOURCE MISSING FROM HERE FAILS QUIETLY — `src/app.js` falls back to the raw
+       key, so a card would read "showpass" in place of a label and take the default
+       colour. Same shape of trap as the Family category in 129: the import succeeds and
+       only the UI is wrong. Added with the importer, not after it. */
+    showpass:    { label: 'Showpass',     color: '#1F7A5A', badge: 'Verified listing' },
     native:      { label: 'Eventually',   color: '#21d4fd', badge: '' },
     orbit:       { label: 'Eventually Native', color: '#21d4fd', badge: '' }
   };
