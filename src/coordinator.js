@@ -118,6 +118,41 @@
     return m;
   }
 
+  /* ── IS THIS PIN IN THE SEA? THE REAL COASTLINE, NOT THE BLOBS ─────────────
+     🔴 WHY THIS EXISTS. The publish-time sea check used `isLand()` — the two dozen
+     coarse ellipses above. One oval has to cover the whole of Africa, so it swallows the
+     Gulf of Guinea: **`isLand()` reports the open ocean at −2.55, 1.55 as LAND, and says
+     Null Island (0, 0) is land too.** On 2026-10-08 an organiser published "Reclaiming
+     Education (REED)" — a real workshop at the Ministry of Education in Kano — and it
+     landed **1,796 km out to sea** off the West African coast. The check that exists to
+     catch exactly that never fired.
+     The map beside the form has been drawing REAL coastlines all along (Natural Earth,
+     `src/landdata.js`). The data was already loaded and already rasterised; only the
+     test was still using the blobs. Verified against the GeoJSON: the REED pin and
+     Null Island read SEA, Kano, Lagos and Regina read LAND.
+
+     ⚠️ A 3×3 NEIGHBOURHOOD, DELIBERATELY. At 0.25° a cell is ~28 km, and a quayside or a
+     small island sits in a cell the coastline only grazes. This must never nag someone
+     standing on a real harbour, so anything within one cell of land passes — which still
+     leaves any pin more than ~40 km out to sea caught. Gross mistakes are the target;
+     metres are not. */
+  const SEA_COLS = 1440, SEA_ROWS = 720;                  // 0.25° ≈ 28 km
+  function isLandPrecise(lat, lon) {
+    const m = landMask(SEA_COLS, SEA_ROWS);
+    if (!m) return isLand(lat, lon);                      // data not loaded → coarse fallback
+    const x = Math.floor((lon + 180) / 360 * SEA_COLS);
+    const y = Math.floor((90 - lat) / 180 * SEA_ROWS);
+    for (let dy = -1; dy <= 1; dy++) {
+      const yy = y + dy;
+      if (yy < 0 || yy >= SEA_ROWS) continue;
+      for (let dx = -1; dx <= 1; dx++) {
+        const xx = ((x + dx) % SEA_COLS + SEA_COLS) % SEA_COLS;   // wrap at the dateline
+        if (m[yy * SEA_COLS + xx]) return true;
+      }
+    }
+    return false;
+  }
+
   /* Module-level escape. Several render helpers used to define their own `esc` inside a
      function body, which meant a helper written OUTSIDE one of them threw ReferenceError
      at runtime — invisible, because the surrounding .catch() swallowed it. One escape,
@@ -728,12 +763,27 @@
       const map = this.el.querySelector('.co-loc'); if (map) { map.classList.add('co-need-loc'); q('.f-addr').focus(); }
       return;
     }
+    /* 🔴 A CITY IS REQUIRED, AND NOT FOR TIDINESS. The REED event (2026-10-08) was
+       published with `city` and `country` both NULL, and that single gap disabled the
+       OTHER half of this guard: the pin-versus-city check below needs a named city, and
+       so does the review queue's "📍 N km from <city>" flag. **Both layers were keyed on
+       a field nobody had filled, so a pin 1,796 km out to sea reached the globe
+       unchallenged.** A city-less event is also invisible on every city page and city
+       card — it is orphaned the moment it is published.
+       The field is normally filled by the address search or the reverse geocode; it ends
+       up empty when someone taps the map somewhere the geocoder cannot name — which is
+       precisely the case this needs to catch. */
+    const cityForCheck = (q('.f-city') ? q('.f-city').value.trim() : '') || this.city || '';
+    if (!cityForCheck) {
+      this._toast('Add the city this event is in — it is how people find it.');
+      const cf = this.el.querySelector('.f-city'); if (cf) cf.focus();
+      return;
+    }
     /* A pin in the sea is almost always a mis-tap on a 350px world map, and it publishes
        a real event into the middle of an ocean — where nobody can attend it and the globe
-       shows a spike in open water. ASK rather than block: isLand() is the same coarse
-       ellipse test the mini-map draws with, so a genuinely coastal venue can be a false
-       positive, and an island venue must still be publishable. */
-    if (!isLand(this.pin.lat, this.pin.lon)) {
+       shows a spike in open water. ASK rather than block: a genuinely coastal venue can
+       still be a false positive, and an island venue must stay publishable. */
+    if (!isLandPrecise(this.pin.lat, this.pin.lon)) {
       const where = this.pin.lat.toFixed(2) + ', ' + this.pin.lon.toFixed(2);
       if (!confirm('That pin looks like it is out at sea (' + where + ').\n\n' +
                    'If you meant an island or a harbour, carry on. Otherwise close this and ' +
@@ -750,7 +800,7 @@
        Bee" 235 km from Abuja and hid it from the city panel entirely.
        Offering to MOVE the pin is the point: the organiser typed the city, so the city
        is what they meant. */
-    const cityNamed = (q('.f-city') ? q('.f-city').value.trim() : '') || this.city || '';
+    const cityNamed = cityForCheck;        // already read above, and now guaranteed non-empty
     const countryNamed = (q('.f-country') ? q('.f-country').value.trim() : '') || this.country || '';
     const known = knownCityPoint(cityNamed, countryNamed);
     if (known) {
