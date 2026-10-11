@@ -6,7 +6,7 @@
  *
  * SAFE TO COMMIT. The anon key is a PUBLIC key — it identifies the project, it does not
  * grant anything; every table is behind row-level security. The keys that ARE secret
- * (Ticketmaster, PredictHQ, Anthropic, ElevenLabs, Fish, the cron token) live only in
+ * (Ticketmaster, Anthropic, ElevenLabs, Fish, the cron token) live only in
  * Supabase Secrets and are never sent to a browser.
  *
  * NOTE: the build stamp (window.EVENTUALLY_BUILD) stays inline in index.html, because

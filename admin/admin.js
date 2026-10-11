@@ -1571,8 +1571,10 @@
     sb.rpc('admin_sync_health').then(function (r) {
       const d = r.data;
       if (!d || d.error) { box.innerHTML = '<h2>Event data sources — health</h2><p class="ad-hint">Unavailable (' + esc((d && d.error) || (r.error && r.error.message) || 'error') + '). Have you run <b>39_sync_runs.sql</b>?</p>'; return; }
-      // Providers we've intentionally disabled (redundant / no valid key) are hidden here.
-      // (PredictHQ dedups against Ticketmaster → 0 net events, and its trial token expired.)
+      // RETIRED providers. This stays even though 166 drops predicthq from the known-provider
+      // array, because `admin_sync_health` also UNIONs `select distinct provider from
+      // sync_runs` — so any historic run would put the card back on screen with a red dot and
+      // no way to act on it. Removing it from the array is not enough on its own.
       const CR_HIDDEN = { predicthq: 1 };
       let h = '<h2>Event data sources — health</h2><p class="ad-hint">Each provider syncs into Supabase; the globe reads only from Supabase, so one provider failing never empties it. “Sync now” pulls fresh events immediately.</p>';
       (d || []).filter(function (p) { return !CR_HIDDEN[p.provider]; }).forEach(function (p) {
@@ -1603,9 +1605,11 @@
    * worked. Add a provider here when you add one to the health card. */
   const SYNC_FN = {
     ticketmaster: 'ingest-ticketmaster',
-    predicthq: 'ingest-predicthq',
     feeds: 'ingest-feeds',
     showpass: 'ingest-showpass',
+    // predicthq retired 2026-10-11 (0 events, expired trial token). To revive: re-add
+    // 'ingest-predicthq' here, drop it from CR_HIDDEN above, restore the SOURCES entry in
+    // src/data.js, and put it back in admin_sync_health's known list.
   };
   function triggerSync(provider, btn) {
     const msg = document.getElementById('sync-msg-' + provider);
@@ -1679,7 +1683,7 @@
   }
 
   // Per-source breakdown (live). Dynamic — any new source appears automatically.
-  const SRC_LABELS = { ticketmaster: 'Ticketmaster', predicthq: 'PredictHQ', native: 'Eventually' };
+  const SRC_LABELS = { ticketmaster: 'Ticketmaster', showpass: 'Showpass', native: 'Eventually' };
   function renderSourceBreakdown() {
     const box = document.getElementById('ad-src');
     if (!box) return;

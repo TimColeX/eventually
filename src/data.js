@@ -20,7 +20,10 @@
 
   const SOURCES = {
     ticketmaster:{ label: 'Ticketmaster', color: '#8A3B1E', badge: 'Official listing' },
-    predicthq:   { label: 'PredictHQ',    color: '#2E7D8A', badge: 'Verified listing' },
+    /* predicthq retired 2026-10-11 — 0 rows in `events` and 0 in `event_sources`, verified
+       against the live API before removing this, so no card can lose its label. Reviving it
+       means restoring this line: { label: 'PredictHQ', color: '#2E7D8A', badge: 'Verified
+       listing' } — see the note in admin.js's SYNC_FN for the rest. */
     /* ⚠️ A SOURCE MISSING FROM HERE FAILS QUIETLY — `src/app.js` falls back to the raw
        key, so a card would read "showpass" in place of a label and take the default
        colour. Same shape of trap as the Family category in 129: the import succeeds and
