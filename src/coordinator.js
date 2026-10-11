@@ -1605,8 +1605,18 @@
            published. Finished events are pruned, so someone who ran four nights this
            summer arrives here to an empty list — and used to be told "No events yet",
            which reads as "we lost your events". The ledger knows better, so the history
-           is rendered in this state too, and the wording waits to see it. */
-        body.innerHTML = '<p class="an-empty">' + (real === false
+           is rendered in this state too, and the wording waits to see it.
+
+           🔴 AND `real === false` DOES NOT MEAN "SIGNED OUT". It means
+           `creator_event_stats` returned nothing, which is ALSO what a signed-in
+           organiser gets the morning after their last event finishes. The owner hit
+           exactly that on 2026-10-11: signed in, email in the header, "2 OF 10 USED"
+           beside it, both events finished the week before — and the page told them to
+           sign in. Ask the auth layer who is here rather than inferring it from an
+           empty list. */
+        const A0 = global.EventuallyAuth;
+        const signedIn = !!(A0 && A0.user && A0.user());
+        body.innerHTML = '<p class="an-empty">' + (!signedIn
           ? 'Sign in to publish and manage your events here.'
           : 'Nothing coming up right now — publish an event and it appears here with its saves, likes and attendees.') +
           '</p><div class="an-history" hidden></div>';
