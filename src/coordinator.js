@@ -691,6 +691,22 @@
       }
       else if (act === 'reg') { self._toggleRegList(container, id, b); }
       else if (act === 'reg-csv') { self._exportRegistrations(id, ev && ev.title); }
+      /* The EventCast panel is mounted ON DEMAND and only once. It makes a round trip to
+         check eligibility, and an organiser with ten listings must not pay for ten of
+         those on a page they opened to check their saves. The module is optional on
+         purpose — an older cached page without it closes the panel rather than erroring. */
+      else if (act === 'eventcast') {
+        const sel = '[data-ecfor="' + (global.CSS && CSS.escape ? CSS.escape(id) : id) + '"]';
+        const ecBox = container.querySelector(sel);
+        if (!ecBox) return;
+        if (!ecBox.hidden) { ecBox.hidden = true; return; }
+        ecBox.hidden = false;
+        if (!ecBox.dataset.mounted) {
+          if (!global.EventuallyEventcast) { ecBox.innerHTML = '<p class="ec-note">Unavailable right now.</p>'; return; }
+          ecBox.dataset.mounted = '1';
+          global.EventuallyEventcast.mount(ecBox, id);
+        }
+      }
     });
   };
 
@@ -1623,6 +1639,14 @@
             (mod === 'approved' && pub
               ? '<button class="an-act" data-me-act="share" data-id="' + esc(e.event_id) + '">Link &amp; QR</button>'
               : '') +
+            /* EventCast. Same gate as the link above and for the same reason: it is
+               published ON the event page, so there is nothing to offer until that page
+               exists. The panel itself decides whether this event QUALIFIES (it needs a
+               venue, a real start time and the three answers) — the button only has to
+               get them to a place where that can be explained. */
+            (mod === 'approved' && pub
+              ? '<button class="an-act" data-me-act="eventcast" data-id="' + esc(e.event_id) + '">EventCast</button>'
+              : '') +
             // "Remove from globe" replaces Delete: the listing comes off the map but the
             // record (and the posting slot it used) stays. Permanent deletion is admin-only —
             // otherwise publish → delete → publish would loop around the yearly limit.
@@ -1635,6 +1659,7 @@
               : '') +
           '</div>' +
           '<div class="an-share" data-sharefor="' + esc(e.event_id) + '" hidden></div>' +
+          '<div class="an-ec" data-ecfor="' + esc(e.event_id) + '" hidden></div>' +
           (e.collect_registrations ? '<div class="an-reg" data-regfor="' + esc(e.event_id) + '" hidden></div>' : '') +
           // Live updates. Stays hidden unless this event's window is open, so a
           // publisher with ten listings sees a composer only on the one running
