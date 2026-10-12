@@ -368,6 +368,9 @@ async function cityProse() {
 
 async function analyse() {
   const now = new Date().toISOString();
+  // Matches globe_live_grace()'s companion bound in 176 — an event still running, that
+  // started within a day, stays in the build.
+  const dayAgo = new Date(Date.now() - 86400000).toISOString();
   const to = new Date(Date.now() + DAYS_AHEAD * 86400000).toISOString();
   const rows = await fetchWithOptional(
     // `timezone` is what makes the printed times correct — see fmt() below. description,
@@ -384,7 +387,25 @@ async function analyse() {
        filter 60,370 (= 61,089 − 719), naive filter 51,655 — short by exactly the 8,715
        NULLs. 128_hide_cancelled.sql carries the same trap in SQL. */
     `moderation=eq.approved&published=not.is.false&or=(status.is.null,status.not.in.(cancelled,canceled))`
-    + `&start_time=gte.${now}&start_time=lte.${to}&order=start_time.asc`
+    /* 🔴 AN EVENT THAT HAS STARTED IS NOT OVER, AND DROPPING IT HERE BREAKS TWO THINGS.
+       This used to be a bare `start_time=gte.${now}`, so the moment an event began it
+       fell out of the build — and that has two consequences nobody would guess from
+       reading this line:
+         1. It leaves `events/native.json`, which is the ONLY index `src/share.js` can
+            resolve a page URL from. So "Link & QR" answers *"your page is built a few
+            times a day"* about a page that is live and returning 200 — the organiser is
+            told their page does not exist while they are looking at it.
+         2. Its page stops being REGENERATED. The file lingers exactly as it was last
+            built, so nothing shipped afterwards reaches it. That is why a Test Event
+            page was still showing the EventCast transcript two versions after it was
+            removed.
+       Both happen precisely when an organiser most wants to share the link: while the
+       thing is actually on.
+       ⚠️ 24-HOUR BOUND, for the same reason as `176` on the globe: without it every
+       month-long exhibition is rebuilt into the index forever. Same rule, same bound —
+       keep the two in step. */
+    + `&or=(start_time.gte.${now},and(end_time.gt.${now},start_time.gte.${dayAgo}))`
+    + `&start_time=lte.${to}&order=start_time.asc`
   );
 
   const byCity = new Map();
