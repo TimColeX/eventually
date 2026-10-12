@@ -649,8 +649,19 @@
     const self = this;
     this._meClose = closeFn || function () {};
     container.innerHTML = '<div class="an-body"></div>';
-    const body = container.querySelector('.an-body');
-    this._renderAnalyticsInto(body);
+    this._renderAnalyticsInto(container.querySelector('.an-body'));
+    /* 🔴 ONCE PER CONTAINER. This used to add a listener on EVERY mount, and only the
+       innerHTML was being replaced — the container element itself survives, so the
+       listeners ACCUMULATED. With two of them a click ran the toggle twice: EventCast
+       opened and instantly closed again, so the button did nothing at all and only a
+       full page reload fixed it. Every re-render made it worse.
+       ⚠️ The handler therefore outlives any single render and must not close over
+       anything a render replaces — see the `body()` lookup below. */
+    if (container.dataset.meWired) return;
+    container.dataset.meWired = '1';
+    // Re-queried per click, never captured: `.an-body` is destroyed and rebuilt by every
+    // render, so a captured reference would point at a detached node within seconds.
+    const body = function () { return container.querySelector('.an-body'); };
     container.addEventListener('click', function (e) {
       const b = e.target.closest('[data-me-act]'); if (!b) return;
       const id = b.dataset.id, act = b.dataset.meAct;
@@ -687,7 +698,7 @@
         // Taking a listing off the globe is reversible and does NOT return the posting
         // slot it used — say so plainly rather than letting people discover it later.
         if (!on && !confirm('Remove "' + (ev ? ev.title : 'this event') + '" from the globe?\n\nYou can put it back at any time. This does not return the posting slot it used.')) return;
-        if (self.onSetPublished) Promise.resolve(self.onSetPublished(id, on)).then(function () { self._renderAnalyticsInto(body); });
+        if (self.onSetPublished) Promise.resolve(self.onSetPublished(id, on)).then(function () { self._renderAnalyticsInto(body()); });
       }
       else if (act === 'reg') { self._toggleRegList(container, id, b); }
       else if (act === 'reg-csv') { self._exportRegistrations(id, ev && ev.title); }

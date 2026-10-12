@@ -484,8 +484,23 @@
      button and no explanation. After a beat, show them the page a signed-out visitor
      gets; a later answer simply re-renders. */
   if (acctEnabled()) {
-    let answered = false;
-    A.onChange(function (u) { user = u; answered = true; render(); });
+    let answered = false, lastUid;
+    /* 🔴 A TOKEN REFRESH IS NOT A CHANGE OF USER, AND REBUILDING THE PAGE FOR ONE
+       THREW AWAY WHAT THE ORGANISER WAS DOING.
+       supabase-js fires onAuthStateChange with TOKEN_REFRESHED whenever the tab regains
+       focus. This re-rendered everything — so switching to another window and coming
+       back silently collapsed an open EventCast panel, mid-edit, with no explanation.
+       The owner reported it as "it returns me to the previous window".
+       Only an actual change of identity (signed in, signed out, different account) is
+       worth rebuilding for. `user` is still refreshed every time, so the newest session
+       object is always the one in hand. */
+    A.onChange(function (u) {
+      const uid = u ? u.id : null;
+      user = u; answered = true;
+      if (uid === lastUid) return;
+      lastUid = uid;
+      render();
+    });
     setTimeout(function () { if (!answered) render(); }, 1200);
   } else {
     render();
