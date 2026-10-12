@@ -113,7 +113,11 @@
   function explain(j, fallback) {
     const code = (j && j.error) || 'unknown';
     const msg = (j && j.detail) || WHY[code] || fallback;
-    return msg + ' (' + code + ')';
+    // `sample` is what the hosts actually wrote when it could not be read back. Shown,
+    // not just logged: the first time this failed the text was discarded, and without it
+    // there was no way to tell a formatting quirk from a refusal.
+    const sample = (j && j.sample) ? '\n\n' + j.sample : '';
+    return msg + ' (' + code + ')' + sample;
   }
 
   const Q = [
