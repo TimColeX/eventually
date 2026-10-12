@@ -86,6 +86,36 @@
     return String(text || '').replace(r1, 'HOST_1: ').replace(r2, 'HOST_2: ');
   }
 
+  /* 🔑 AN ERROR THAT SAYS NOTHING IS OUR BUG, NOT THE USER'S.
+     The first version of this panel mapped every backend failure to "The hosts couldn't
+     write it just now" — which is true, useless, and identical whether the Anthropic key
+     is missing, the model returned something unparseable, or the request never left the
+     browser. The owner hit it on the first real run and there was nothing to act on and
+     nothing to report. So: a plain sentence per known cause, and the raw code in
+     brackets after it, always. The code is ugly and it is the only part that makes a
+     report actionable. */
+  const WHY = {
+    sign_in_required: 'Your sign-in has expired. Reload the page and sign in again.',
+    not_yours: 'This event belongs to another account.',
+    offline: 'The app is not configured to reach the backend.',
+    network: 'The request could not reach the server — check your connection.',
+    bad_response: 'The server answered with something we could not read.',
+    eligibility_unavailable: 'We could not check this event just now.',
+    not_configured: 'The writing service is switched off on the server.',
+    llm_failed: 'The writing service did not answer. This is usually temporary.',
+    bad_script: 'The hosts wrote something we could not read back as a conversation.',
+    event_missing: 'That event could not be found.',
+    answer_the_questions_first: 'Save your answers first, then write it.',
+    no_script: 'There is no script to approve yet.',
+    no_voice_configured: 'The hosts’ voices are not set up on the server right now.',
+    synth_failed: 'The voice provider did not return any audio. Nothing was published.',
+  };
+  function explain(j, fallback) {
+    const code = (j && j.error) || 'unknown';
+    const msg = (j && j.detail) || WHY[code] || fallback;
+    return msg + ' (' + code + ')';
+  }
+
   const Q = [
     { k: 'ec_who',       label: "Who's on?",              hint: 'A name is enough — "MrP", "the Kano Youth Choir".' },
     { k: 'ec_what',      label: 'What happens?',          hint: 'One line. "Three sets, doors at seven."' },
@@ -147,7 +177,8 @@
       let h = '';
 
       if (st === 'ready') {
-        h += '<p class="ec-note ec-good">✓ Live on your event page. ' +
+        // No tick in the text: .ec-note.ec-good adds one, and two ticks reads as a typo.
+        h += '<p class="ec-note ec-good">Live on your event page. ' +
              (state.past ? 'The event has finished, so it now plays there as a record of it.'
                          : 'Anyone who opens the page can play it.') + '</p>';
       } else if (st === 'stale') {
@@ -252,7 +283,11 @@
             busy(false);
             if (j.error === 'too_many_rewrites') { say(j.detail || 'Too many rewrites today.', 'ec-warn'); return; }
             if (j.error === 'not_eligible') { return load().then(function () { say('A few details are still missing.', 'ec-warn'); }); }
-            if (j.error || !j.script) { say('The hosts couldn\'t write it just now. Try again in a moment.', 'ec-bad'); return; }
+            if (j.error || !j.script) {
+              console.warn('[eventcast] draft failed', j);     // the whole response, for a bug report
+              say(explain(j, 'The hosts couldn\'t write it just now. Try again in a moment.'), 'ec-bad');
+              return;
+            }
             return load().then(function () { say('Here it is. Read it, change anything you like, then approve.', 'ec-good'); });
           });
         }, function () { busy(false); say('Couldn\'t save your answers.', 'ec-bad'); });
@@ -270,8 +305,11 @@
         callBriefing({ eventcast: 'approve', event_id: eventId, script: edited }).then(function (j) {
           busy(false);
           if (j.error === 'script_too_long') { say(j.detail || 'That script is too long.', 'ec-warn'); return; }
-          if (j.error === 'no_voice_configured') { say('The hosts\' voices are not set up right now. We have been told.', 'ec-bad'); return; }
-          if (j.error || !j.ok) { say('That didn\'t record. Nothing was published — try approving again.', 'ec-bad'); return; }
+          if (j.error || !j.ok) {
+            console.warn('[eventcast] approve failed', j);
+            say(explain(j, 'That didn\'t record. Nothing was published — try approving again.'), 'ec-bad');
+            return;
+          }
           load().then(function () { say('Published. It is on your event page now.', 'ec-good'); });
         });
         return;

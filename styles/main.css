@@ -916,11 +916,23 @@ body {
 .ec-go:hover:not(:disabled) { filter: brightness(1.06); }
 .ec-go:disabled { opacity: .45; cursor: not-allowed; }
 .ec-draft { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
-.ec-note { font-size: 12.5px; line-height: 1.55; margin: 0 0 10px; padding: 9px 11px;
-           border-radius: 9px; background: var(--cream); border: 1px solid var(--line); color: var(--ink); }
-.ec-note.ec-good { border-color: #b7d4c2; background: #eef7f1; }
-.ec-note.ec-warn { border-color: #e4d2a4; background: #faf4e4; }
-.ec-note.ec-bad  { border-color: #e6bdb2; background: #fbeeea; color: #8a2f1d; }
+/* 🔴 STATUS IS CARRIED BY THE BORDER AND A LEADING MARK — NEVER BY A HARDCODED FILL.
+   The first version set a near-white background on .ec-good and .ec-warn and left the
+   text at var(--ink). That reads fine on the app's cream palette and is INVISIBLE on the
+   organiser's page, because styles/publish.css inverts the tokens there: --ink becomes
+   light text and --cream becomes a dark card. "Saved." rendered as pale text on
+   near-white. (.ec-bad escaped it only by accident, having set its own dark red.)
+   Keeping background and colour on the tokens means contrast is whatever the host page
+   says it is, on either palette, and the tint can never fight the text. */
+.ec-note { font-size: 12.5px; line-height: 1.55; margin: 0 0 10px; padding: 9px 11px 9px 12px;
+           border-radius: 9px; background: var(--cream); color: var(--ink);
+           border: 1px solid var(--line); border-left-width: 3px; }
+.ec-note.ec-good { border-left-color: #4e9c70; }
+.ec-note.ec-warn { border-left-color: #c9962f; }
+.ec-note.ec-bad  { border-left-color: #c2503a; }
+.ec-note.ec-good::before { content: '\2713\00a0'; color: #4e9c70; font-weight: 700; }
+.ec-note.ec-warn::before { content: '\26a0\fe0f\00a0'; }
+.ec-note.ec-bad::before  { content: '\2715\00a0'; color: #c2503a; font-weight: 700; }
 .ec-msg:empty { display: none; }
 .ec-msg .ec-note { margin: 12px 0 0; }
 
