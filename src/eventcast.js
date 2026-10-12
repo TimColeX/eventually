@@ -301,8 +301,21 @@
       if (act === 'approve') {
         const ta = box.querySelector('.ec-script');
         const edited = toWire(ta ? ta.value : '', hostNames.n1, hostNames.n2);
-        if (!/HOST_[12]\s*:/i.test(edited)) {
-          say('Keep each line starting with ' + hostNames.n1 + ': or ' + hostNames.n2 + ': so we know who says what.', 'ec-warn');
+        /* 🔴 EVERY LINE, NOT "AT LEAST ONE LINE".
+           The old check was `/HOST_[12]:/.test(edited)` — true if a single label
+           survived. So renaming ONE speaker (to a third person, or a typo) sailed
+           through: the unlabelled line is appended to the PREVIOUS host's turn, and the
+           name the organiser typed is then SPOKEN ALOUD — "...in Regina. Bob: Doors at
+           eight." Paid audio, on their own public page. Renaming BOTH was caught only by
+           accident, because then no label was left at all.
+           The offending line is quoted back, because "a line is wrong" in a six-line box
+           is not something anyone should have to hunt for. */
+        const stray = edited.split('\n').map(function (l) { return l.trim(); })
+          .filter(Boolean)
+          .filter(function (l) { return !/^(HOST[_ ]?[12]|H[12])\s*[:\-]/i.test(l); })[0];
+        if (stray) {
+          say('Every line needs to start with ' + hostNames.n1 + ': or ' + hostNames.n2 +
+              ': so we know who says it. This one does not — "' + stray.slice(0, 70) + '"', 'ec-warn');
           return;
         }
         busy(true, 'Recording it… this takes a few seconds.');
