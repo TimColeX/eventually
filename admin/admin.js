@@ -87,6 +87,7 @@
     main.innerHTML =
       '<div class="ad-tabs">' +
         tabBtn('overview', 'Overview') + tabBtn('review', 'Review Events') +
+        tabBtn('eventcast', 'EventCast') +
         tabBtn('intake', 'Poster Intake') +
         tabBtn('affiliate', 'Affiliate') + tabBtn('host', 'AI Host') +
         tabBtn('globe', 'Globe & Display') + tabBtn('publishing', 'Publishing') +
@@ -99,6 +100,7 @@
     const body = document.getElementById('ad-body');
     if (tab === 'overview') renderOverview(body);
     else if (tab === 'review') renderReview(body);
+    else if (tab === 'eventcast') renderEventcast(body);
     else if (tab === 'intake') renderIntake(body);
     else if (tab === 'affiliate') renderAffiliate(body);
     else if (tab === 'host') renderHost(body);
@@ -1368,6 +1370,127 @@
   }
 
   function tabBtn(id, label) { return '<button class="ad-tab' + (tab === id ? ' on' : '') + '" data-tab="' + id + '">' + label + '</button>'; }
+
+  /* ---------------- EventCast (174) ----------------
+     🔴 THIS TAB IS THE ONLY PLACE EVENTCAST WORDS ARE WRITTEN. Organisers answer three
+     factual questions and get a yes/no; they cannot author a syllable the hosts speak.
+     That is deliberate (owner's decision, 2026-10-11) and this screen is the other half
+     of it — without someone reading the queue, nothing ever reaches an organiser.
+
+     The order of the list is the workflow: "waiting for me" first. Everything else is
+     history, and history can wait. */
+  const EC_STATE = {
+    submitted: ['Waiting for you', '#8a6d1e'],
+    draft:     ['No script yet', '#8a8071'],
+    review:    ['With the organiser', '#2E6B4F'],
+    stale:     ['Event changed — redo', '#b3402a'],
+    ready:     ['Live on their page', '#2E6B4F'],
+    declined:  ['They said no', '#8a8071'],
+    blocked:   ['Withdrawn by us', '#b3402a'],
+  };
+  function renderEventcast(body) {
+    body.innerHTML = '<div class="ad-center">Loading EventCasts…</div>';
+    sb.rpc('admin_eventcasts').then(function (r) {
+      const d = r.data;
+      if (!d || d.error) {
+        body.innerHTML = '<div class="ad-center">Unavailable (' +
+          esc((d && d.error) || (r.error && r.error.message) || 'error') +
+          '). Have you run <b>174_eventcast_admin_flow.sql</b>?</div>';
+        return;
+      }
+      const by = d.by_status || {}, plays = d.plays || {}, rows = d.rows || [];
+      const kpi = function (v, l) { return '<div class="ad-kpi"><b>' + (v || 0) + '</b><span>' + l + '</span></div>'; };
+      let h = '<div class="ad-grid">' +
+        kpi(by.submitted, 'Waiting for you') + kpi(by.review, 'With organisers') +
+        kpi(by.ready, 'Live') + kpi(by.declined, 'Declined') +
+        kpi(plays.eventcast_play, 'Plays · 30d') + kpi(plays.eventcast_finish, 'Finished · 30d') +
+      '</div>';
+      h += '<p class="ad-hint" style="margin-top:12px">Organisers answer three questions; ' +
+        'you write and record it; they listen and choose whether to publish. ' +
+        '<b>They never edit the script</b> — if a fact is wrong, their answer is wrong, and they re-answer it.</p>';
+
+      if (!rows.length) { body.innerHTML = h + '<div class="ad-center">No EventCasts yet.</div>'; return; }
+
+      h += '<div class="ad-sec">';
+      rows.forEach(function (x) {
+        const st = EC_STATE[x.status] || [x.status, '#8a8071'];
+        const when = x.start_time ? new Date(x.start_time).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '—';
+        const segs = (x.segments || []).length;
+        h += '<div class="aff-row" style="padding:14px;margin-top:10px;border:1px solid var(--line);border-radius:10px">' +
+          '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+            '<b style="flex:1">' + esc(x.title || x.event_id) + '</b>' +
+            '<span class="an-badge" style="color:' + st[1] + '">' + esc(st[0]) + '</span>' +
+          '</div>' +
+          '<div class="ad-hint" style="margin-top:4px">' + esc(x.city || '') + ' · ' + esc(x.venue || '') +
+            ' · ' + when + ' · ' + esc(x.category || '') +
+            (x.script_source === 'admin' ? ' · <b>script edited by us</b>' : '') +
+            (x.stale_reason ? ' · <b style="color:#b3402a">changed: ' + esc(x.stale_reason) + '</b>' : '') + '</div>' +
+          // The organiser's own words, which are the facts the script must stay inside.
+          '<div class="ad-hint" style="margin-top:8px;padding:8px 10px;border-left:2px solid var(--line-2)">' +
+            '<b>Who:</b> ' + esc(x.ec_who || '—') + '<br><b>What:</b> ' + esc(x.ec_what || '—') +
+            '<br><b>Not to miss:</b> ' + esc(x.ec_dont_miss || '—') + '</div>' +
+          // `.ad-field > label` + a bare control is the portal's own convention; the
+          // first draft used a <label class="ad-field"><span>, which the stylesheet does
+          // not target, so the caption rendered as unstyled body text.
+          '<div class="ad-field" style="margin-top:10px"><label>The script — this is exactly what will be spoken</label>' +
+            '<textarea class="ec-admin-script" rows="7" data-id="' + esc(x.event_id) + '" ' +
+            'style="font-family:var(--mono);font-size:12.5px;line-height:1.7">' + esc(x.script || '') + '</textarea></div>' +
+          (segs ? '<div class="ad-hint" style="margin-top:6px">Recorded · ' + segs + ' clip(s) · ' +
+            (x.segments || []).map(function (s, i) {
+              return '<a href="' + esc(s.url) + '" target="_blank" rel="noopener">listen ' + (segs > 1 ? (i + 1) : '') + '</a>';
+            }).join(' · ') + '</div>' : '') +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">' +
+            '<button class="ad-btn" data-ec-act="save" data-id="' + esc(x.event_id) + '">Save script</button>' +
+            '<button class="ad-btn" data-ec-act="rewrite" data-id="' + esc(x.event_id) + '">Rewrite with AI</button>' +
+            '<button class="ad-save" data-ec-act="record" data-id="' + esc(x.event_id) + '">Record &amp; send to organiser</button>' +
+            '<button class="ad-btn" data-ec-act="' + (x.status === 'blocked' ? 'unblock' : 'block') + '" data-id="' + esc(x.event_id) + '">' +
+              (x.status === 'blocked' ? 'Allow again' : 'Withdraw') + '</button>' +
+          '</div>' +
+          '<span class="ad-saved" id="ec-msg-' + esc(x.event_id) + '"></span>' +
+        '</div>';
+      });
+      body.innerHTML = h + '</div>';
+
+      body.querySelectorAll('[data-ec-act]').forEach(function (btn) {
+        btn.onclick = function () { ecAction(btn.dataset.ecAct, btn.dataset.id, btn, body); };
+      });
+    }, function () { body.innerHTML = '<div class="ad-center">Unavailable.</div>'; });
+  }
+
+  function ecAction(act, id, btn, body) {
+    const msg = document.getElementById('ec-msg-' + id);
+    const ta = body.querySelector('.ec-admin-script[data-id="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
+    const set = function (t, bad) { if (msg) { msg.textContent = t; msg.style.color = bad ? '#b3402a' : '#3a7d44'; } };
+    btn.disabled = true; set('Working…');
+
+    const done = function () { btn.disabled = false; renderEventcast(body); };
+    const fail = function (e) { btn.disabled = false; set('Failed: ' + e, true); };
+
+    if (act === 'save') {
+      sb.rpc('admin_eventcast_script', { p_event_id: id, p_script: ta ? ta.value : '' })
+        .then(function (r) { if (r.error) return fail(r.error.message); set('Saved — record it to send it on.'); done(); }, function (e) { fail(String(e)); });
+      return;
+    }
+    if (act === 'block' || act === 'unblock') {
+      // Withdrawing is the one thing an organiser cannot undo, so it is worth a pause.
+      if (act === 'block' && !confirm('Withdraw this EventCast?\n\nIt comes off their page and they cannot publish it again.')) { btn.disabled = false; set(''); return; }
+      sb.rpc('admin_eventcast_block', { p_event_id: id, p_on: act === 'block' })
+        .then(function (r) { if (r.error) return fail(r.error.message); done(); }, function (e) { fail(String(e)); });
+      return;
+    }
+    // rewrite / record both go through the briefing function — they cost money, so they
+    // are the two that say what they are doing while they do it.
+    const payload = act === 'rewrite'
+      ? { eventcast: 'draft', event_id: id }
+      : { eventcast: 'record', event_id: id };
+    set(act === 'rewrite' ? 'Writing…' : 'Recording…');
+    sb.functions.invoke('briefing', { body: payload }).then(function (r) {
+      const d = r.data || {};
+      if (r.error || d.error) return fail((d.detail || d.error || (r.error && r.error.message)) + '');
+      set(act === 'rewrite' ? 'Rewritten — read it, then record.' : 'Recorded and sent to the organiser.');
+      done();
+    }, function (e) { fail(String(e)); });
+  }
 
   /* ---------------- Overview (analytics) ---------------- */
   function renderOverview(body) {

@@ -916,6 +916,16 @@ body {
 .ec-go:hover:not(:disabled) { filter: brightness(1.06); }
 .ec-go:disabled { opacity: .45; cursor: not-allowed; }
 .ec-draft { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+/* The organiser's listen-before-you-decide player. Deliberately plainer than the one on
+   the public event page: this is a control in a form, not a feature on a page. */
+.ec-player { display: flex; align-items: center; gap: 12px; margin-top: 14px;
+             padding: 12px; border: 1px solid var(--line-2); border-radius: 11px; background: var(--cream); }
+.ec-play { width: 44px; height: 44px; flex: 0 0 auto; border-radius: 50%; border: 0;
+           background: var(--clay); color: var(--cream); cursor: pointer; font-size: 14px; line-height: 1; }
+.ec-pmid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.ec-bar { height: 6px; border-radius: 99px; background: var(--line-2); overflow: hidden; }
+.ec-bar > i { display: block; height: 100%; width: 0; background: var(--clay); border-radius: 99px; }
+.ec-plabel { font-family: var(--mono); font-size: 11px; color: var(--muted); }
 /* 🔴 STATUS IS CARRIED BY THE BORDER AND A LEADING MARK — NEVER BY A HARDCODED FILL.
    The first version set a near-white background on .ec-good and .ec-warn and left the
    text at var(--ink). That reads fine on the app's cream palette and is INVISIBLE on the
