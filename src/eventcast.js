@@ -170,7 +170,16 @@
              (state.past ? 'Your event has finished, so it now plays there as a record of it.'
                          : 'Anyone who opens the page can play it.') + '</p>' +
              player('On your page now') +
-             '<div class="ec-btns"><button class="an-act" data-ec="decline">Take it off my page</button></div>';
+             /* "Start again" belongs HERE too. The first version offered only "Take it
+                off my page" on a live clip, so starting over meant guessing that you had
+                to decline FIRST and then look for a button that appears afterwards. The
+                owner hit exactly that: told to press Start again, and it was not on the
+                screen. A two-step dance nobody is told about is not a flow. */
+             '<div class="ec-btns">' +
+               '<button class="an-act" data-ec="decline">Take it off my page</button>' +
+               '<button class="an-act" data-ec="restart">Start again</button>' +
+             '</div>' +
+             '<p class="ec-hint">“Start again” clears the answers and the recording so you can ask for a fresh one.</p>';
         h += '<div class="ec-msg" aria-live="polite"></div>';
         box.innerHTML = h; return;
       }
