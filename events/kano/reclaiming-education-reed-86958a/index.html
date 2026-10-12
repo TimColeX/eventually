@@ -65,14 +65,11 @@
   .ec-bar { height:6px; border-radius:99px; background:#4a3a24; overflow:hidden; }
   .ec-bar i { display:block; height:100%; width:0; background:#CB5A3C; border-radius:99px; }
   .ec-by { margin:0; font-family:var(--mono); font-size:.7rem; color:#9a8f80; }
-  .ec-cap { margin:0; font-size:.92rem; line-height:1.55; color:#ece5da; min-height:1.5em; }
   .ec-acts { display:flex; gap:14px; flex-wrap:wrap; }
   .ec-link { background:none; border:0; padding:0; cursor:pointer; font-family:var(--mono);
              font-size:.7rem; letter-spacing:.06em; text-transform:uppercase; color:#9a8f80;
              text-decoration:underline; text-underline-offset:3px; }
   .ec-link:hover { color:#f0a24a; }
-  .ec-tx { font-size:.9rem; line-height:1.6; color:#c9bfb2; white-space:pre-line;
-           border-top:1px solid #2e2820; padding-top:12px; }
   /* An archive, not a pitch: once the event is over the clip is still here, but it is
      visibly in the past rather than still selling tickets. */
   .ec.is-past { border-color:#2e2820; }
@@ -121,12 +118,16 @@
         <p class="ec-by" id="ec-by">The Eventually hosts</p>
       </div>
     </div>
-    <p class="ec-cap" id="ec-cap" aria-live="polite"></p>
+    <!-- NO TRANSCRIPT AND NO READ-ALONG (owner's decision, 2026-10-11, after seeing it
+         live). A clip this short does not need its own wall of text under it, and the
+         caption was the worst part of the block: it truncated mid-word and labelled the
+         speakers "Host 1 / Host 2". The player is the feature; the words are in it.
+         ⚠️ The transcript WAS the page's indexable text for this block, so if the
+         EventCast is ever expected to earn search traffic of its own, this is the thing
+         to put back — the caption is still stored on the row, so nothing was lost. -->
     <div class="ec-acts">
-      <button type="button" class="ec-link" id="ec-more" aria-expanded="false">Read the transcript</button>
       <button type="button" class="ec-link" id="ec-share">Share this</button>
     </div>
-    <div class="ec-tx" id="ec-tx" hidden></div>
   </section>
   <p>Technical Review and Validation Workshop on the domestication of the REED/TEWS Framework into the Kano State Re-entry Guidelines.</p>
 
@@ -223,7 +224,7 @@
      mp3, every other provider returns one clip per turn, and the player must not care
      which. Only status=eq.ready rows are readable at all (167), so anything that
      comes back is something the organiser approved word for word. */
-  fetch(SB + '/rest/v1/eventcasts?select=segments,caption,status'
+  fetch(SB + '/rest/v1/eventcasts?select=segments,status'
           + '&event_id=eq.' + encodeURIComponent(EVID) + '&status=eq.ready&limit=1',
         { headers: hdr })
     .then(function (r) { return r.ok ? r.json() : null; })
@@ -231,13 +232,13 @@
       var ec = rows && rows[0];
       var segs = (ec && ec.segments) || [];
       if (!segs.length || !segs[0].url) return;              // nothing approved → no player
-      mount(segs, ec.caption || '');
+      mount(segs);
     })
     .catch(function () { /* no player, never a broken one */ });
 
-  function mount(segs, caption) {
+  function mount(segs) {
     var box = $('ec'), btn = $('ec-play'), prog = $('ec-prog'), bar = $('ec-bar');
-    var cap = $('ec-cap'), tx = $('ec-tx'), more = $('ec-more'), dur = $('ec-dur');
+    var dur = $('ec-dur');
     // An EventCast written before the event is in the future tense and points at tickets
     // that are gone, so after the event it is relabelled as what it now is: a record.
     // Kept, because it costs nothing and it is what an organiser shows the next time they
@@ -247,8 +248,6 @@
       $('ec-k').textContent = 'The EventCast';
       $('ec-by').textContent = 'From before the event · the Eventually hosts';
     }
-    cap.textContent = (segs[0].text || '').slice(0, 160);
-    tx.textContent = caption || segs.map(function (s) { return s.text || ''; }).join('\n');
     box.hidden = false;
     track('eventcast_view');
 
@@ -266,11 +265,7 @@
       bar.setAttribute('aria-valuenow', String(pct));
       if (!finished && pct >= 90) { finished = true; track('eventcast_finish'); }
     }
-    function load(n) {
-      i = n;
-      audio.src = segs[n].url;
-      cap.textContent = (segs[n].text || '').slice(0, 160);
-    }
+    function load(n) { i = n; audio.src = segs[n].url; }
     function stop(reset) {
       audio.pause();
       btn.innerHTML = '&#9654;';
@@ -291,9 +286,11 @@
       stop(false);
     });
     // A clip that will not load must say so rather than leaving a dead button.
+    // A clip that will not load must not leave a dead play button sitting there. With
+    // the caption gone, the byline is the only line of text left to say so in.
     audio.addEventListener('error', function () {
       stop(true); btn.disabled = true;
-      cap.textContent = 'This EventCast could not be played.';
+      $('ec-by').textContent = 'This EventCast could not be played.';
     });
 
     btn.addEventListener('click', function () {
@@ -304,13 +301,6 @@
       audio.play().then(function () {
         if (!played) { played = true; track('eventcast_play'); }
       }).catch(function () { stop(false); });
-    });
-
-    more.addEventListener('click', function () {
-      var open = tx.hidden;
-      tx.hidden = !open;
-      more.setAttribute('aria-expanded', open ? 'true' : 'false');
-      more.textContent = open ? 'Hide the transcript' : 'Read the transcript';
     });
 
     $('ec-share').addEventListener('click', function () {
