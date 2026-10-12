@@ -170,6 +170,14 @@
              (state.past ? 'Your event has finished, so it now plays there as a record of it.'
                          : 'Anyone who opens the page can play it.') + '</p>' +
              player('On your page now') +
+             /* A LINK TO THE THING WE JUST SAID IS LIVE. The panel announced "live on
+                your event page" and then gave no way to go and look at it — the owner
+                asked where the page was, which is the question a missing link always
+                produces. The path is LOOKED UP, never computed: a city slug is
+                disambiguated across the whole build (London, Canada → `london-ca`), so
+                only the generator knows an event's real URL. A page not in that index
+                yet has not been rebuilt, and saying so beats a link to a 404. */
+             '<p class="ec-hint ec-pagelink">Finding your page…</p>' +
              /* "Start again" belongs HERE too. The first version offered only "Take it
                 off my page" on a live clip, so starting over meant guessing that you had
                 to decline FIRST and then look for a button that appears afterwards. The
@@ -181,7 +189,9 @@
              '</div>' +
              '<p class="ec-hint">“Start again” clears the answers and the recording so you can ask for a fresh one.</p>';
         h += '<div class="ec-msg" aria-live="polite"></div>';
-        box.innerHTML = h; return;
+        box.innerHTML = h;
+        fillPageLink();
+        return;
       }
 
       if (st === 'review' || st === 'declined') {
@@ -251,6 +261,22 @@
     }
 
     function stopAudio() { if (audio) { try { audio.pause(); } catch (e) {} audio = null; } }
+
+    // Resolves the event's real public URL through the same index "Link & QR" uses, so
+    // the two can never point at different places. Silent on failure beyond saying so.
+    function fillPageLink() {
+      const el = box.querySelector('.ec-pagelink');
+      if (!el) return;
+      const S = global.EventuallyShare;
+      if (!S || !S.pathFor) { el.remove(); return; }
+      S.pathFor(eventId).then(function (p) {
+        if (!p) {
+          el.textContent = 'Your page is rebuilt a few times a day — the EventCast appears on it within a few hours.';
+          return;
+        }
+        el.innerHTML = '<a href="' + esc(p) + '" target="_blank" rel="noopener">Open your event page</a> to hear it there.';
+      }, function () { el.remove(); });
+    }
 
     function play(btn) {
       const segs = (state.eventcast && state.eventcast.segments) || [];

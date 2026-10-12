@@ -1439,7 +1439,11 @@
             (x.segments || []).map(function (s, i) {
               return '<a href="' + esc(s.url) + '" target="_blank" rel="noopener">listen ' + (segs > 1 ? (i + 1) : '') + '</a>';
             }).join(' · ') + '</div>' : '') +
-          '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">' +
+          // ⚠️ `.ad-list-row` IS LOAD-BEARING, not decoration. `.ad-btn` is width:100% by
+          // default (it is a form button), and admin.css sizes it to its label only
+          // inside a row. Without this class each button rendered as a full-width slab
+          // stacked down the card.
+          '<div class="ad-list-row" style="border-bottom:0;gap:8px;justify-content:flex-start;margin-top:10px">' +
             '<button class="ad-btn" data-ec-act="save" data-id="' + esc(x.event_id) + '">Save script</button>' +
             '<button class="ad-btn" data-ec-act="rewrite" data-id="' + esc(x.event_id) + '">Rewrite with AI</button>' +
             '<button class="ad-save" data-ec-act="record" data-id="' + esc(x.event_id) + '">Record &amp; send to organiser</button>' +
