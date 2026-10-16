@@ -182,6 +182,7 @@
     this.getDefaultLocation = opts.getDefaultLocation; // () -> {lat,lon,city}|null (user's set location)
     this.onFlyTo = opts.onFlyTo;           // (lat, lon) -> void
     this.onUploadImage = opts.onUploadImage;   // (blob, eventId) -> Promise<{url}|{error}>
+    this.onReadPoster = opts.onReadPoster;     // (posterUrl) -> Promise<{fields}|{error}>
     this.getVenues = opts.getVenues || null;   // () -> Promise<[{id,name,address,lat,lon,timezone,city}]>
     this.getPublishHistory = opts.getPublishHistory || null;  // () -> Promise<[{title,city,start_time,outcome}]>
     this.pageMode = !!opts.pageMode;           // true on publish.html: a page, not a modal
@@ -423,8 +424,15 @@
               '</div>' +
               '<div class="co-img-bar" hidden>' +
                 '<span class="co-img-info"></span>' +
+                /* READ THE POSTER. The form is not the obstacle — doing the work twice
+                   is, and an organiser with a poster has already done it once. This is
+                   the same `intake` extraction the admin desk uses, pointed at their own
+                   picture. It only appears once there IS a picture, because offering it
+                   with nothing to read is a button that can only disappoint. */
+                '<button type="button" class="co-img-scan">&#9671; Fill the form from this</button>' +
                 '<button type="button" class="co-img-x">Remove</button>' +
               '</div>' +
+              '<p class="co-scan-msg" aria-live="polite" hidden></p>' +
               '<p class="co-hint">We check pictures before they go live. ' +
                 'Use your own artwork or a photo you have the right to use.</p>' +
             '</section>' +
@@ -1239,6 +1247,10 @@
       e.stopPropagation();
       self._clearImage(true);
     });
+    const scan = this.el.querySelector('.co-img-scan');
+    // stopPropagation on both: the whole picture card is a click target that opens
+    // the file picker, so without it scanning also reopens the chooser.
+    if (scan) scan.addEventListener('click', function (e) { e.stopPropagation(); self._scanPoster(); });
   };
 
   Coordinator.prototype._takeImage = function (file) {
@@ -1262,6 +1274,93 @@
       if (bar) bar.hidden = true;
       self._toast("That picture couldn't be read. Try a JPG or PNG.");
     });
+  };
+
+  /* ── READ THE POSTER INTO THE FORM ─────────────────────────────────────────
+     The same extraction the admin intake desk runs, pointed at the organiser's own
+     picture: `intake` with action `read_poster`.
+
+     ⚠️ THE PICTURE HAS TO BE UPLOADED FIRST. `fetchOwnImage` in the function will
+     only fetch from this project's own storage — that origin check is its SSRF
+     guard — so there is no way to hand it the local blob. A scan therefore stores a
+     file that may never be used, which `event-image-cleanup` is already there to
+     sweep up.
+
+     🔑 IT FILLS BLANKS AND LEAVES TYPING ALONE. Anything the organiser has already
+     written wins. A tool that helps must never overwrite the person it is helping —
+     and the extractor is deliberately willing to return null rather than guess, so
+     a blank it leaves is a blank worth keeping. */
+  Coordinator.prototype._scanPoster = function () {
+    const self = this;
+    const q = function (s) { return self.el.querySelector(s); };
+    const btn = q('.co-img-scan'), msg = q('.co-scan-msg');
+    const say = function (t, bad) {
+      if (!msg) return;
+      msg.hidden = false; msg.textContent = t;
+      msg.style.color = bad ? '#b3402a' : 'var(--muted)';
+    };
+    if (!this._imageBlob) { say('Add a picture first.', true); return; }
+    if (!this.onReadPoster || !this.onUploadImage) { say('Not available right now.', true); return; }
+
+    btn.disabled = true;
+    say('Reading the poster…');
+    // A throwaway id: this upload exists only to give the function something it is
+    // allowed to fetch. The real event gets its own id and its own upload at publish.
+    const tmpId = 'scan-' + ((global.crypto && crypto.randomUUID) ? crypto.randomUUID() : Date.now());
+    Promise.resolve(this.onUploadImage(this._imageBlob, tmpId)).then(function (up) {
+      if (!up || !up.url) { btn.disabled = false; say('The picture could not be uploaded.', true); return; }
+      return Promise.resolve(self.onReadPoster(up.url)).then(function (res) {
+        btn.disabled = false;
+        if (!res || res.error) {
+          say(res && res.detail ? res.detail : 'We could not read that poster. Fill the form in by hand.', true);
+          return;
+        }
+        const n = self._applyScan(res.fields || {});
+        say(n ? 'Filled in ' + n + ' field' + (n === 1 ? '' : 's') + ' — check every one before you publish.'
+              : 'Nothing could be read from that one. Fill the form in by hand.', !n);
+      });
+    }, function () { btn.disabled = false; say('The picture could not be uploaded.', true); });
+  };
+
+  /* Put the extracted fields into the form, skipping anything already filled.
+     Returns how many were actually written, so the message can be honest about it. */
+  Coordinator.prototype._applyScan = function (f) {
+    const self = this;
+    let n = 0;
+    const put = function (sel, val) {
+      const el = self.el.querySelector(sel);
+      if (!el || val == null || val === '') return;
+      if (String(el.value || '').trim() !== '') return;     // the organiser's typing wins
+      el.value = val; n++;
+      // The form listens for input to drive the time-zone note, the category colour
+      // and the draft save; setting .value alone fires nothing.
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    put('.f-name', f.name);
+    put('.f-venue', f.venue);
+    put('.f-address', f.address);
+    put('.f-date', f.date);
+    put('.f-enddate', f.end_date);
+    put('.f-time', f.start);
+    put('.f-endtime', f.end);
+    put('.f-city', f.city);
+    put('.f-desc', f.description);
+    put('.f-url', f.ticket_url);
+    put('.f-organiser', f.organiser_name);
+    // Selects: only take a value the dropdown actually offers, or the form ends up
+    // holding a category that cannot be saved.
+    const cat = self.el.querySelector('.f-cat');
+    if (cat && f.category && !cat.value) {
+      const hit = Array.prototype.slice.call(cat.options).filter(function (o) { return o.value === f.category; })[0];
+      if (hit) { cat.value = f.category; n++; cat.dispatchEvent(new Event('change', { bubbles: true })); }
+    }
+    const ctry = self.el.querySelector('.f-country');
+    if (ctry && f.country && !ctry.value) {
+      const hit2 = Array.prototype.slice.call(ctry.options).filter(function (o) { return o.value === f.country; })[0];
+      if (hit2) { ctry.value = f.country; n++; ctry.dispatchEvent(new Event('change', { bubbles: true })); }
+    }
+    return n;
   };
 
   // `andExisting` also clears a picture that is already live on the event, which

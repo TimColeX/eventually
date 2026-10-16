@@ -754,6 +754,27 @@ body {
   transition: border-color .15s ease, color .15s ease;
 }
 .co-img-x:hover { border-color: var(--clay); color: var(--clay); }
+/* "Fill the form from this". The offer, not the housekeeping — so it reads as the
+   primary thing to do with a poster you have just added, and Remove stays quiet.
+   ⚠️ `justify-content: space-between` on .co-img-bar would push three children to the
+   edges; the info line takes the slack instead so the two buttons sit together. */
+.co-img-info { flex: 1; min-width: 0; }
+/* 🔴 `color: var(--cream)`, NEVER `#fff`. On the organiser's page publish.css
+   redefines --clay to amber (#f0a24a) because brand clay is too dark to read on that
+   ground — and it flips --cream to a DARK value for exactly this reason, as its own
+   comment says: "--cream doubles as 'text on an accent'". White on that amber measures
+   about 2.1:1 and fails. `.co-publish` right below already does it correctly; matching
+   it means this button is right on both palettes instead of one. */
+.co-img-scan {
+  flex: none; min-height: 36px; padding: 7px 13px; border-radius: 9px; cursor: pointer;
+  background: var(--clay); border: 1px solid var(--clay); color: var(--cream);
+  font-family: var(--font); font-size: 12.5px; font-weight: 700;
+}
+/* A brightness step rather than a hardcoded hex, so hover works whichever colour
+   --clay currently is. A fixed dark red would vanish into the dark page. */
+.co-img-scan:hover:not(:disabled) { filter: brightness(1.08); }
+.co-img-scan:disabled { opacity: .55; cursor: progress; }
+.co-scan-msg { margin: 8px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
 /* Auto event-colour preview (derived from category — no manual picker) */
 .co-catcolor { display: flex; align-items: center; gap: 10px; margin: var(--co-sec-gap) 0 0; padding: 12px 13px; border-radius: 12px; background: var(--bg2); border: 1px solid var(--line); }
 .co-catdot { width: 22px; height: 22px; border-radius: 7px; flex: none; box-shadow: 0 1px 3px rgba(0,0,0,.18); }

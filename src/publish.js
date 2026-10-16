@@ -152,6 +152,30 @@
       if (!acctEnabled() || !A.uploadEventImage) return Promise.resolve({ error: 'offline' });
       return A.uploadEventImage(blob, eventId);
     },
+    /* Read the organiser's own poster into the form — the same `intake` extraction
+       the admin desk runs, under the `read_poster` action, which writes nothing.
+       The supabase client attaches the signed-in JWT, which is what the function
+       checks; there is no admin involved and no draft created. */
+    onReadPoster: function (posterUrl) {
+      if (!acctEnabled() || !A.client) return Promise.resolve({ error: 'offline' });
+      return A.client.functions.invoke('intake', {
+        body: { action: 'read_poster', poster_urls: [posterUrl] }
+      }).then(function (r) {
+        const d = r.data || {};
+        if (r.error && !d.error) {
+          /* supabase-js reports a non-2xx as a generic string and buries the body in
+             error.context — and the body is where `daily_limit` and its explanation
+             live. Dig it out, or a rate-limited organiser is told only "error". */
+          const ctx = r.error.context;
+          if (ctx && typeof ctx.json === 'function') {
+            return ctx.json().then(function (b) { return b || { error: 'failed' }; },
+                                   function () { return { error: 'failed' }; });
+          }
+          return { error: 'failed' };
+        }
+        return d;
+      }, function () { return { error: 'network' }; });
+    },
     getVenues: function () {
       if (!user || !A.myVenues) return Promise.resolve([]);
       return A.myVenues();
