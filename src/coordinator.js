@@ -314,18 +314,15 @@
             '<section class="co-sec">' +
             '<div class="co-card-h">Event details</div>' +
             '<label>Event name<input class="f-name" placeholder="Midnight Rooftop Sessions"></label>' +
-            '<div class="co-row co-row-2">' +
-              '<label>Category<select class="f-cat">' + cats + '</select></label>' +
-              // Was collected and silently discarded for months — there was no
-              // column for it. Now stored, and required, because "Abuja" is not
-              // somewhere a person can turn up to.
-              // Placeholders describe the field; they never show a sample value. A
-              // made-up address or venue can be someone's real one, and a grey
-              // sample reads as already filled in.
-              '<label>Venue<input class="f-venue" placeholder="Venue name"></label>' +
-            '</div>' +
-            '<label>Address <span class="co-opt">(filled in from the map — edit if needed)</span>' +
-              '<input class="f-address" placeholder="Street address, city"></label>' +
+            /* 🔑 VENUE AND ADDRESS HAVE MOVED TO THE LOCATION CARD, under the map.
+               They were here, in the details column, while the map that FILLS THEM IN
+               sat in the other column — so someone dropped a pin on the right and
+               watched fields populate on the left, and correcting the venue meant
+               typing in a different column from the map they were looking at.
+               The Location card already carried the argument for its own City and
+               Country fields: they belong with the pin "because they describe the PIN —
+               moving it rewrites them". Venue and address are no different. */
+            '<label>Category<select class="f-cat">' + cats + '</select></label>' +
             '<label>Date<input type="date" class="f-date"></label>' +
             /* ENDS ON. Until now the end TIME was always stamped onto the start
                DATE (or the next day if it read as earlier), so a two-day event
@@ -429,7 +426,16 @@
 
                  They live under the map, not in the details column, because they
                  describe the PIN — moving it rewrites them. */
-              '<div class="co-row co-row-2" style="margin-top:10px">' +
+              /* Venue first, then the street, then the city — the order a person says an
+                 address out loud, and the order the map fills them in.
+                 ⚠️ VENUE IS REQUIRED and that is not tidiness: "Abuja" is not somewhere
+                 a person can turn up to. Placeholders describe the field and never show
+                 a sample value — a made-up venue can be someone's real one, and a grey
+                 sample reads as already filled in. */
+              '<label style="margin-top:10px">Venue<input class="f-venue" placeholder="Venue name"></label>' +
+              '<label>Address <span class="co-opt">(filled in from the map — edit if needed)</span>' +
+                '<input class="f-address" placeholder="Street address, city"></label>' +
+              '<div class="co-row co-row-2">' +
                 /* The placeholder used to read "From the map — edit if wrong", which was
                    true and misleading: editing it changed the NAME and left the pin where
                    it was, so the two could disagree by hundreds of kilometres. Now the
