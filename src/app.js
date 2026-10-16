@@ -2643,7 +2643,11 @@
     adbar.classList.remove('adbar-unit');
     adbar.innerHTML =
       '<nav class="bb-nav" aria-label="Quick links">' +
-        '<button class="bb-link" data-bb="publish">Publish Event</button>' +
+        /* "Add Event", not "Publish Event": this is the DOOR, and Publish is what you
+           do at the END of it — the submit button still says so. The wider name also
+           leaves room for the branch that is planned behind it (my own event / I saw a
+           poster) without the label having to change again and retrain anyone. */
+        '<button class="bb-link" data-bb="publish">Add Event</button>' +
         '<button class="bb-link" data-bb="calendar">Calendar</button>' +
         '<button class="bb-link" data-bb="help">Help Centre</button>' +
       '</nav>' +
@@ -2896,7 +2900,7 @@
         '<p>Registering is <b>free and it isn\'t a ticket</b> — Eventually doesn\'t take payment for these events. Changed your mind? Open the event and cancel; that frees your place for someone else.</p>' +
         '<p>Organising something? Choose <b>“Eventually collects registrations”</b> when you publish. You can set a limit on places, and you\'ll find your list — with a CSV download — under <b>My Events</b>.</p></details>' +
       (SHOW_TIMELINE ? '<details><summary>How do the dates &amp; timeline work?</summary><p>The bar along the bottom is a day scrubber. Drag it, or use the ‹ › day arrows, to move between days — the globe and results update to show what\'s on for that day. Tap <b>Today</b> to jump back to now.</p></details>' : '') +
-      '<details><summary>How do I list my event?</summary><p>Tap <b>Publish Event</b> at the bottom of the screen. That opens the organiser\'s page — <a href="publish.html">eventually-app.com/publish.html</a>, which you can bookmark. Add the details, find the place by searching its address or dropping a pin on the map, and add a photo if you like. You\'re asked to sign in when you publish, not before. Your first 10 events each year are free.</p>' +
+      '<details><summary>How do I list my event?</summary><p>Tap <b>Add Event</b> at the bottom of the screen. That opens the organiser\'s page — <a href="publish.html">eventually-app.com/publish.html</a>, which you can bookmark. Add the details, find the place by searching its address or dropping a pin on the map, and add a photo if you like. You\'re asked to sign in when you publish, not before. Your first 10 events each year are free.</p>' +
         '<p>We <b>check every new event</b> before it appears on the globe, and we\'ll email you as soon as it\'s approved. A new or changed photo is checked the same way. The same page has a <b>Your Events</b> tab where you can see each event\'s status, edit it, take a copy for another date, or take it off the globe — and a <b>Your Venues</b> tab for the places you\'ve saved.</p>' +
         '<p>Want more attention for it? Tick <b>Ask us to feature this event</b> when you publish. Featured events get a ★ badge, a taller spike, and first place in their location\'s list. We review every request and email you our decision — featuring is free while we\'re in beta.</p></details>' +
       '<details><summary>What is Eventually Plus?</summary><p>An optional membership that\'s <b>coming soon</b>: advanced AI briefings and personal event picks, ad-free listening &amp; browsing, travel-aware city briefings, and early access to new features. Open <b>⋯ menu → Eventually Plus</b> to join the waitlist and we\'ll email you when it launches.</p></details>' +

@@ -295,8 +295,10 @@ body.pg-body {
 }
 @media (max-width: 380px) {
   .pg-globe { padding: 8px 10px; font-size: 12px; }
-  /* At 320px "Publish Event" came two pixels short of its third of the strip and
-     truncated to "Publish Ev…". Two pixels of padding buys the whole label back. */
+  /* At 320px the longest tab label came two pixels short of its third of the strip and
+     truncated. Two pixels of padding buys the whole label back. (Written when the first
+     tab read "Publish Event"; it is now "Add Event", but "Your Venues" is still long
+     enough to need this — the rule is sized to the LONGEST label, not that one.) */
   .pg-tab { font-size: 12px; padding: 9px 3px; }
 }
 
