@@ -2313,6 +2313,12 @@
         // scope matches anything. Empty unless there is bad news.
         '<span class="spon-reach" data-id="' + esc(s.id) + '" data-scope="' + esc(s.scope) + '"></span>' +
         '</span><span>' +
+        /* 🔑 HEAR IT WITHOUT BROADCASTING IT. Until now the only way to find out what a
+           sponsor sounds like was to ENABLE it — which puts it on air to real listeners.
+           The owner's "RADARLADE Solutions" line reached live briefings for exactly that
+           reason: it was a test. This plays the message, with the lead-in the host
+           actually speaks, to this admin only. */
+        '<button class="ad-regen ad-spon-play" data-id="' + esc(s.id) + '">&#9654; Preview</button> ' +
         '<button class="ad-regen ad-spon-edit" data-id="' + esc(s.id) + '">Edit</button> ' +
         '<button class="ad-regen ad-spon-tog" data-id="' + esc(s.id) + '" data-en="' + (s.enabled === false ? '0' : '1') + '">' + (s.enabled === false ? 'Enable' : 'Disable') + '</button> ' +
         '<button class="ad-regen ad-spon-del" data-id="' + esc(s.id) + '">Delete</button></span></div>';
@@ -2322,6 +2328,8 @@
       '<div class="ad-field" style="margin-top:20px"><label>Sponsors (' + dbSponsors.length + ') — FREE tier only, verbatim; worldwide + city-targeted</label>' +
       '<p class="ad-hint">Paid sponsors play on the <b>free</b> tier only (Plus is ad-free). Scope <b>world</b> plays everywhere; a <b>country</b> (e.g. <b>canada</b>) plays across that country; a <b>city</b> (e.g. <b>toronto</b>) plays only there. At most two air in one show — one worldwide and one local, and a city sponsor beats a country one. One city sponsor per briefing, rotated by weight. Verbatim — not written by Claude, edits apply instantly (no regeneration). For a message on BOTH tiers, use the Announcement above.</p>' +
       '<div class="ad-list" id="db-spon-list">' + sponRows + '</div>' +
+      // Where Preview reports what it is doing, and which lead-in you are hearing.
+      '<div id="spon-preview-msg" class="ad-hint" style="margin-top:8px" aria-live="polite"></div>' +
       // Airings — the number a sponsor asks for before renewing. Filled in async so a slow
       // or not-yet-migrated database never blocks the sponsor editor from rendering.
       '<div id="db-airings" class="ad-hint" style="margin-top:10px">Loading airing counts…</div>' +
@@ -2762,6 +2770,7 @@
     if (sList) sList.addEventListener('click', function (e) {
       const del = e.target.closest('.ad-spon-del');
       const tog = e.target.closest('.ad-spon-tog');
+      const play = e.target.closest('.ad-spon-play');
       const ed = e.target.closest('.ad-spon-edit');
       if (ed) {
         const s = dbSponsors.filter(function (x) { return String(x.id) === String(ed.dataset.id); })[0];
@@ -2788,8 +2797,46 @@
         sb.from('briefing_sponsors').delete().eq('id', del.dataset.id).then(function () { renderHost(body); });
       } else if (tog) {
         sb.from('briefing_sponsors').update({ enabled: tog.dataset.en === '0' }).eq('id', tog.dataset.id).then(function () { renderHost(body); });
+      } else if (play) {
+        previewSponsor(play);
       }
     });
+  }
+
+  /* Speak one sponsor message to the admin, exactly as a listener would hear it.
+     ⚠️ WITH THE LEAD-IN. `31_briefing.ts` prefixes every sponsor with "A quick word from
+     our sponsor." — previewing the bare message would hide the disclosure, which is the
+     part most worth hearing before you put somebody's money on air. The second slot uses
+     a different line, so the note says which one this is.
+     Uses `test_voice`, which is admin-gated and cache-bypassing, with the BRAND voice
+     (host 1 on the active provider) — the same voice that reads sponsors live. */
+  const SPONSOR_LEADIN = 'A quick word from our sponsor.';
+  let sponsorAudio = null;
+  function previewSponsor(btn) {
+    const row = (dbSponsors || []).find(function (s) { return String(s.id) === btn.dataset.id; });
+    if (!row) return;
+    // `aiCfg` is the module's copy of app_config.config.aiHost. (NOT the file-level
+    // `cfg`, which is EVENTUALLY_ADMIN_CONFIG — the Supabase URL and key.)
+    const prov = aiCfg.provider === 'elevenlabs' ? 'elevenlabs' : aiCfg.provider === 'easyvoice' ? 'easyvoice' : 'fish';
+    const h1 = aiCfg.host1 || {};
+    const vid = (h1.voiceIds && h1.voiceIds[prov]) || (prov === 'elevenlabs' ? h1.elVoiceId : (h1.fishVoiceId || h1.voiceId)) || '';
+    const note = document.getElementById('spon-preview-msg');
+    const say = function (t, bad) { if (note) { note.textContent = t; note.style.color = bad ? '#b3402a' : '#6f665a'; } };
+    if (!vid) { say('No ' + prov + ' voice is set for host 1 — set one in Host voices above.', true); return; }
+
+    btn.disabled = true;
+    say('Generating with the ' + prov + ' brand voice…');
+    invokeBriefing({
+      test_voice: true, provider: prov, reference_id: vid,
+      text: SPONSOR_LEADIN + ' ' + String(row.message || '').slice(0, 600)
+    }).then(function (d) {
+      btn.disabled = false;
+      if (d.error || !d.url) { say('Failed: ' + (d.error || 'no audio'), true); return; }
+      if (sponsorAudio) { try { sponsorAudio.pause(); } catch (e) {} }
+      sponsorAudio = new Audio(d.url);
+      sponsorAudio.play().catch(function () {});
+      say('Playing — this is the first slot, which uses "' + SPONSOR_LEADIN + '" The second slot says "And one more from our sponsors."');
+    }, function (e) { btn.disabled = false; say('Failed: ' + String(e), true); });
   }
 
 
