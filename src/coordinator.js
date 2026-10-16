@@ -268,7 +268,43 @@
           '<span class="co-quota" hidden></span></div>' +
           '<button class="co-close" aria-label="Close">✕</button>' +
         '</header>' +
-        '<div class="co-body"><div class="co-cols">' +
+        '<div class="co-body">' +
+          /* 🔑 THE POSTER COMES FIRST, AND THAT IS THE WHOLE POINT OF MOVING IT.
+             It used to sit in the SIDE column, below the map — so an organiser typed the
+             name, category, venue, address, date, two times, a zone and a description,
+             and only then scrolled far enough to discover we could have read most of it
+             off the picture already in their camera roll. That is the worst possible
+             moment to learn it. Someone running a real public event almost always has a
+             poster; the fast path has to be visible before the slow one.
+
+             ⚠️ IT MUST READ AS AN OFFER, NOT A STEP. Nobody should think a picture is
+             required — plenty of good events are a talk with no artwork. Hence "(optional)"
+             in the header, "or just fill the form in below" under it, and nothing here
+             blocking the fields that follow. */
+          '<section class="co-img co-sec co-img-lead">' +
+            '<div class="co-card-h">Start with your poster <span class="co-opt">(optional)</span></div>' +
+            '<p class="co-img-lead-p">Add it and we\'ll read what we can — the name, date, time and venue — ' +
+              'straight into the form. Check it over, fix anything wrong, and publish. ' +
+              '<b>Or just fill the form in below.</b></p>' +
+            '<div class="co-img-drop" tabindex="0" role="button" aria-label="Add a picture">' +
+              '<input type="file" class="f-image" accept="image/*" hidden>' +
+              '<div class="co-img-empty"><b>Add a poster or photo</b>' +
+                '<small>Also shown on the event card and across the top of the event. ' +
+                'Any size — we shrink it for you.</small></div>' +
+              '<img class="co-img-prev" alt="" hidden>' +
+            '</div>' +
+            '<div class="co-img-bar" hidden>' +
+              '<span class="co-img-info"></span>' +
+              /* The scan button appears only once there IS a picture: offering it with
+                 nothing to read is a button that can only disappoint. */
+              '<button type="button" class="co-img-scan">&#9671; Fill the form from this</button>' +
+              '<button type="button" class="co-img-x">Remove</button>' +
+            '</div>' +
+            '<p class="co-scan-msg" aria-live="polite" hidden></p>' +
+            '<p class="co-hint">We check pictures before they go live. ' +
+              'Use your own artwork or a photo you have the right to use.</p>' +
+          '</section>' +
+          '<div class="co-cols">' +
           '<div class="co-col co-col-main">' +
             // Every group in this form opens with the same header, in both columns.
             // Without one here the left column started with a field label while the
@@ -410,31 +446,6 @@
                   }).join('') +
                 '</select></label>' +
               '</div>' +
-            '</section>' +
-            // The poster. Optional — an event with no picture still gets the
-            // category-colour block, which is what every native event had until now.
-            '<section class="co-img co-sec">' +
-              '<div class="co-card-h">Picture <span class="co-opt">(optional)</span></div>' +
-              '<div class="co-img-drop" tabindex="0" role="button" aria-label="Add a picture">' +
-                '<input type="file" class="f-image" accept="image/*" hidden>' +
-                '<div class="co-img-empty"><b>Add a poster or photo</b>' +
-                  '<small>Shown on the event card and across the top of the event. ' +
-                  'Any size — we shrink it for you.</small></div>' +
-                '<img class="co-img-prev" alt="" hidden>' +
-              '</div>' +
-              '<div class="co-img-bar" hidden>' +
-                '<span class="co-img-info"></span>' +
-                /* READ THE POSTER. The form is not the obstacle — doing the work twice
-                   is, and an organiser with a poster has already done it once. This is
-                   the same `intake` extraction the admin desk uses, pointed at their own
-                   picture. It only appears once there IS a picture, because offering it
-                   with nothing to read is a button that can only disappoint. */
-                '<button type="button" class="co-img-scan">&#9671; Fill the form from this</button>' +
-                '<button type="button" class="co-img-x">Remove</button>' +
-              '</div>' +
-              '<p class="co-scan-msg" aria-live="polite" hidden></p>' +
-              '<p class="co-hint">We check pictures before they go live. ' +
-                'Use your own artwork or a photo you have the right to use.</p>' +
             '</section>' +
             // Starts blank, not on Music — this line naming a category the organiser
             // never chose is part of what made the old default look deliberate.

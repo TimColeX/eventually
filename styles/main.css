@@ -775,6 +775,14 @@ body {
 .co-img-scan:hover:not(:disabled) { filter: brightness(1.08); }
 .co-img-scan:disabled { opacity: .55; cursor: progress; }
 .co-scan-msg { margin: 8px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+/* The poster band, above the two columns. Full width, and marked as the fast path —
+   but never as a required step: see the note in coordinator.js. */
+.co-img-lead { margin-bottom: 18px; }
+.co-img-lead-p { margin: 0 0 12px; font-size: 13.5px; line-height: 1.55; color: var(--muted); max-width: 68ch; }
+/* Wider here than in the old side column, so the drop zone reads as an invitation
+   rather than a thumbnail slot — but capped, so it does not become a billboard. */
+.co-img-lead .co-img-drop { min-height: 132px; }
+.co-img-lead .co-img-prev { max-height: 260px; }
 /* Auto event-colour preview (derived from category — no manual picker) */
 .co-catcolor { display: flex; align-items: center; gap: 10px; margin: var(--co-sec-gap) 0 0; padding: 12px 13px; border-radius: 12px; background: var(--bg2); border: 1px solid var(--line); }
 .co-catdot { width: 22px; height: 22px; border-radius: 7px; flex: none; box-shadow: 0 1px 3px rgba(0,0,0,.18); }
