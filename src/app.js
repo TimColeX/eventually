@@ -792,6 +792,15 @@
   // live first, then soonest.
   function visibleEvents(cluster) {
     return cluster.eventIds.map(D.getById)
+      /* 🔴 THE TYPES FILTER HAS TO APPLY HERE TOO, and it did not.
+         `activeTypes` gated the globe's markers (see the cluster build) but never this
+         list — so selecting only Family filtered the SPIKES, then tapping one opened a
+         panel listing Music, Community and everything else, with a count to match.
+         The owner found it on Hasselt: one type selected, thirty-two events shown.
+         ⚠️ This function feeds BOTH the list and the "N EVENTS" header, so filtering
+         here is what makes the number agree with the rows under it. The panel's own
+         dropdown still narrows further, within what the globe filter admits. */
+      .filter(function (e) { return activeTypes[e.category] !== false; })
       .filter(function (e) { return D.typeForDate(e, selectedDate) !== 'past'; })
       .sort(function (a, b) {
         if (!!b.sponsored !== !!a.sponsored) return b.sponsored ? 1 : -1;  // featured first
