@@ -2646,9 +2646,13 @@
         /* "Add Event", not "Publish Event": this is the DOOR, and Publish is what you
            do at the END of it — the submit button still says so. The wider name also
            leaves room for the branch that is planned behind it (my own event / I saw a
-           poster) without the label having to change again and retrain anyone. */
-        '<button class="bb-link" data-bb="publish">Add Event</button>' +
+           poster) without the label having to change again and retrain anyone.
+           🔑 IT SITS IN THE MIDDLE, and the other two are quieter: the centre of three
+           is where the eye lands first, and it is the only one of the three that asks
+           anything of the visitor. Calendar and Help Centre are places to go back to,
+           not things to do. */
         '<button class="bb-link" data-bb="calendar">Calendar</button>' +
+        '<button class="bb-link" data-bb="publish">Add Event</button>' +
         '<button class="bb-link" data-bb="help">Help Centre</button>' +
       '</nav>' +
       // Always-visible legal links (Google's brand review wants the Privacy Policy linked

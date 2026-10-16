@@ -1284,16 +1284,22 @@ body {
      and they were 34px — the smallest thing on the screen. */
   min-height: 36px;
   padding: 9px 14px; border-radius: 10px; border: 1px solid var(--line-2);
-  background: var(--paper); color: var(--clay);
+  /* Grey by default. These two are places to go BACK to; only Add Event asks anything
+     of the visitor, and it overrides this below. */
+  background: var(--paper); color: var(--muted);
   font-family: var(--font); font-size: 13px; font-weight: 600; white-space: nowrap;
   /* The bar itself is click-through (see .adbar) so the globe stays draggable —
      the buttons put themselves back in the click path. */
   pointer-events: auto;
   box-shadow: 0 2px 10px rgba(33,26,21,.10); }
-.bb-link:hover { border-color: var(--clay); background: #FBF3EC; }
-/* Same size, colour and shape as its neighbour — only the weight differs, so the
-   priority action reads first without breaking the symmetry. */
-.bb-link[data-bb="publish"] { font-weight: 800; }
+.bb-link:hover { border-color: var(--clay); background: #FBF3EC; color: var(--clay); }
+/* Same size and shape as its neighbours — weight and colour carry the priority, so
+   the one action on the strip reads first without breaking the symmetry.
+   ⚠️ --ember, NOT --clay. Clay on white measures about 4.1:1, which is under the 4.5
+   a 13px label needs; ember is the same family, darker, and lands near 7:1 — so the
+   emphasis is stronger AND it is the one that actually passes. */
+.bb-link[data-bb="publish"] { font-weight: 800; color: var(--ember); }
+.bb-link[data-bb="publish"]:hover { color: var(--ember); }
 /* Quiet Privacy · Terms line at the strip's right edge (desktop). */
 .bb-legal { position: absolute; right: var(--page-inset); top: 50%; transform: translateY(-50%); pointer-events: auto;
   font-family: var(--mono); font-size: 10.5px; letter-spacing: .03em; color: var(--faint); white-space: nowrap; }
