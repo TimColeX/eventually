@@ -2957,11 +2957,15 @@
   function openHelp() {
     const CAT_DESC = {
       'Music': 'concerts, gigs, festivals', 'Tech': 'conferences, hackathons, meetups',
-      'Business': 'networking, talks, expos', 'Arts': 'exhibitions, theatre, galleries',
+      'Business': 'networking, talks, conferences', 'Arts': 'exhibitions, theatre, galleries',
       'Food & Drink': 'tastings, markets, pop-ups', 'Sports': 'games, matches, races',
-      'Film & Media': 'screenings, premieres', 'Community': 'fairs, local gatherings',
+      'Film & Media': 'screenings, premieres', 'Community': 'street fairs, local gatherings',
       'Nightlife': 'clubs, DJ sets, parties', 'Comedy': 'stand-up, improv shows',
-      'Family': 'kids’ shows, all-ages, days out'
+      'Family': 'kids’ shows, all-ages, days out',
+      /* This line is where the two kinds of "fair" are told apart — a trade fair is this,
+         a summer street fair is Community. It is the only place a reader is told, so the
+         wording carries the distinction rather than just listing examples. */
+      'Expos & Fairs': 'trade fairs, home & bridal shows, conventions'
     };
     const colours = Object.keys(D.CATEGORIES).map(function (c) {
       return '<span class="help-cat"><span class="help-sw" style="background:' + D.CATEGORIES[c] + '"></span>' +

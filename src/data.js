@@ -97,7 +97,29 @@
      *
      * ⚠️ LAST ON PURPOSE. Object.keys() of this map drives the filter chips AND the
      * publish form's options, so inserting mid-list silently reorders both. */
-    'Family':        '#DCC09A'   // Warm sand
+    'Family':        '#DCC09A',  // Warm sand
+    /* EXPOS & FAIRS — added 2026-10-16, and this one was added against the data.
+     *
+     * The feeds said no: Ticketmaster's own expo bucket (`Hobby/Special Interest Expos`)
+     * holds 44 events, and a guarded title sweep brings the total to 80 of 57,131 — it
+     * arrives smaller than Business. 🔑 THE REASON IT EXISTS ANYWAY IS AN ORGANISER WHO
+     * ASKED FOR IT: they run trade fairs and said Business was not where their event
+     * belonged. The counts measure OUR FEEDS, not what people want to list, and this map
+     * is also the publish form's menu. A supply-side request is the better evidence for
+     * a publish-form option than a feed count, which is why it outranked the measurement.
+     *
+     * NAMED for both sides of that: "Expos" is the word the data uses (home shows,
+     * bridal expos, comic cons), "Fairs" is the word the organiser used. ⚠️ It does NOT
+     * mean a street fair or a summer festival — Ticketmaster's `Fairs & Festivals`
+     * genre (346 events) stays in Community, where 129 deliberately left it. The Help
+     * Centre description is where that line is drawn for the reader.
+     *
+     * Colour measured, same bar Family had to clear: the tightest existing pair is
+     * Business / Film & Media at deltaE 6.8, and moss is 30.3 from its nearest
+     * neighbour (Film & Media) — the most separable colour in the palette. It is the
+     * first thing here that is not a warm earth tone, which is deliberate for a type
+     * this rare: on a globe of clay and ochre spikes, you can find it. */
+    'Expos & Fairs': '#6F7A3C'   // Moss
   };
 
   // The loaded events — live from the backend, plus any the user publishes this session.
