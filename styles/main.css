@@ -1167,6 +1167,173 @@ body {
 .pf-row { display: flex; align-items: center; justify-content: space-between; font-size: 13.5px; color: var(--muted); }
 .pf-row .pf-loc, .pf-row b { color: var(--ink); font-weight: 700; }
 .pf-label { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); }
+.pf-label-sub { margin-top: 16px; }
+
+/* ===================== THE PASSPORT =====================================
+   The account card as a travel document. Eventually is a globe you move around,
+   so the thing that says who you are looks like the thing you carry while doing it.
+
+   🔑 IT HAS TO HOLD AT ~300px. The drawer is 380px wide and drops to
+   `100vw - 28px` on a phone, so this card is never given more than about 340px
+   and often less. Everything below is sized for that: the two-column data page
+   collapses only under 340px, the MRZ scales with the card rather than the
+   viewport, and the stamp is placed where no text runs.
+   ⚠️ Only two faces exist here — Sora and Space Mono (var(--font) / var(--mono)).
+   The passport look comes from MONO LABELS over bold values, not from a third font. */
+.pf-passport { margin-top: 8px; }
+.pp {
+  border: 1px solid var(--line-2); border-radius: 16px; overflow: hidden;
+  background: var(--paper); box-shadow: 0 6px 18px rgba(33,26,21,.09);
+}
+
+/* ---- the cover ---- */
+.pp-top {
+  position: relative; padding: 16px 16px 14px 34px;
+  background: var(--cream);
+  /* The wave pattern real passports print to make forgery hard. Two offset sine-ish
+     gradients at very low contrast — texture you feel rather than read. */
+  background-image:
+    repeating-linear-gradient(115deg, rgba(203,90,60,.07) 0 1px, transparent 1px 9px),
+    repeating-linear-gradient(65deg, rgba(203,90,60,.05) 0 1px, transparent 1px 13px);
+  border-bottom: 1px solid var(--line-2);
+}
+/* Signed out there is no account id, so there is no number and no spine — and the
+   gutter reserved for it would read as a wonky margin. Reclaim it. */
+.pp-top:not(:has(.pp-spine)) { padding-left: 16px; }
+/* The number up the spine, as it is stamped on a real cover. Decorative: the same
+   number is in the data page, where it can actually be read. */
+.pp-spine {
+  position: absolute; left: 12px; top: 16px;
+  writing-mode: vertical-rl; transform: rotate(180deg); transform-origin: center;
+  font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: .14em;
+  color: var(--faint);
+}
+.pp-crest { display: flex; align-items: center; gap: 8px; }
+.pp-dots { display: inline-flex; gap: 3px; }
+.pp-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--apricot); }
+.pp-dots i:nth-child(2) { background: var(--clay); }
+.pp-dots i:nth-child(3) { background: var(--ember); }
+.pp-word { font-size: 19px; font-weight: 800; letter-spacing: -.04em; color: var(--ink); }
+.pp-kind {
+  margin-top: 7px; font-family: var(--mono); font-size: 10.5px; font-weight: 700;
+  letter-spacing: .16em; text-transform: uppercase; color: var(--ink);
+}
+.pp-motto {
+  margin: 12px 0 0; max-width: 62%; font-size: 13px; font-style: italic;
+  font-weight: 600; letter-spacing: -.01em; color: var(--ink);
+}
+.pp-issued {
+  margin-top: 5px; font-family: var(--mono); font-size: 9.5px; letter-spacing: .1em;
+  color: var(--faint);
+}
+/* The globe, as the dotted sphere the app draws — same idea, three lines of CSS. */
+.pp-globe {
+  position: absolute; right: -26px; top: -22px; width: 118px; height: 118px; border-radius: 50%;
+  background-image: radial-gradient(var(--line-2) 1.1px, transparent 1.2px);
+  background-size: 7px 7px;
+  box-shadow: 0 0 0 8px rgba(224,135,95,.10);
+}
+
+/* ---- the data page ---- */
+.pp-page { position: relative; padding: 13px 16px 16px; background: var(--paper); }
+.pp-pagehead {
+  display: flex; justify-content: space-between; gap: 10px;
+  font-family: var(--mono); font-size: 9px; font-weight: 700; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--faint);
+  padding-bottom: 11px; border-bottom: 1px dashed var(--line);
+}
+.pp-pagehead span:first-child { color: var(--clay); }
+.pp-grid { display: flex; gap: 14px; margin-top: 13px; }
+/* The photo box. A letter, not a face — the app has never asked for a picture and
+   this is not the place to start. */
+.pp-photo {
+  flex: none; width: 76px; height: 96px; border-radius: 8px; background: var(--clay);
+  background-image: radial-gradient(rgba(255,255,255,.22) 1px, transparent 1.1px);
+  background-size: 8px 8px;
+  display: grid; place-items: center;
+}
+.pp-photo span { font-size: 42px; font-weight: 800; color: var(--cream); letter-spacing: -.04em; }
+.pp-fields {
+  flex: 1 1 auto; min-width: 0;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 9px 10px; align-content: start;
+}
+.pp-f { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.pp-k {
+  font-family: var(--mono); font-size: 8.5px; font-weight: 700; letter-spacing: .11em;
+  text-transform: uppercase; color: var(--faint); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.pp-v { font-size: 13px; line-height: 1.25; color: var(--ink); min-width: 0; }
+.pp-v b { font-weight: 700; letter-spacing: -.01em; overflow-wrap: anywhere; }
+.pp-no { color: var(--clay); font-family: var(--mono); font-size: 12.5px; letter-spacing: .02em; }
+.pp-blank { color: var(--hint); font-weight: 600; }
+
+/* Signature left, stamp right, sharing one row. `align-items: flex-end` sits the
+   signature on the same baseline as the bottom of the stamp. */
+.pp-foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-top: 16px; }
+.pp-sign { flex: 1 1 auto; min-width: 0; }
+.pp-sig {
+  display: block; font-size: 17px; font-style: italic; font-weight: 600; color: var(--ink);
+  padding-bottom: 4px; border-bottom: 1px solid var(--line-2); letter-spacing: -.01em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pp-sign .pp-k { display: block; margin-top: 5px; }
+
+/* The home-city stamp: pressed at an angle. It is a FLEX ITEM, not an overlay — a
+   rotation does not change the layout box, so it reserves its own space and can never
+   land on a value. */
+.pp-stamp {
+  flex: none; width: 88px; height: 88px; border-radius: 50%;
+  display: grid; place-items: center; gap: 1px; text-align: center;
+  transform: rotate(-11deg); opacity: .72;
+  border: 2px solid var(--clay); box-shadow: inset 0 0 0 3px var(--paper), inset 0 0 0 4px rgba(203,90,60,.5);
+  color: var(--clay); pointer-events: none;
+}
+.pp-stamp b {
+  font-size: 13px; font-weight: 800; letter-spacing: -.02em; line-height: 1;
+  max-width: 78px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pp-stamp i {
+  font-family: var(--mono); font-style: normal; font-size: 7.5px; font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase;
+}
+
+/* ---- the machine-readable strip ---- */
+.pp-mrz {
+  padding: 9px 12px 10px; background: var(--sand); border-top: 1px solid var(--line-2);
+  font-family: var(--mono); font-weight: 700; color: var(--ink);
+  /* Sized off the CARD, not the viewport: 40 fixed-width characters have to fit a box
+     this component does not control, and clamping to cqi/vw is what keeps the two
+     lines the same length instead of one wrapping. */
+  font-size: clamp(7px, 2.6vw, 9.5px); line-height: 1.6; letter-spacing: .04em;
+  white-space: nowrap; overflow: hidden;
+}
+.pp-mrz span { display: block; }
+
+/* Phones: the field column drops to about 89px, and "CITIES EXPLORED" at the desktop
+   size measures ~90 — so it ellipsised. Tighten the LABEL rather than shorten the word:
+   the label is already the smallest thing on the card, and a truncated field name on a
+   document reads as damage. 8px with .08em tracking measures ~82 and clears it. */
+@media (max-width: 420px) {
+  .pp-k { font-size: 8px; letter-spacing: .08em; }
+  .pp-fields { gap: 9px 8px; }
+}
+
+/* VERY narrow phones only — one column of fields, smaller photo, stamp tucked away.
+   ⚠️ The breakpoint is 345px, not 380: measured, two columns still fit comfortably at
+   375px (the card gets ~310px, the fields ~188px, so ~89px a column against a longest
+   label of ~76px). Collapsing at 380 would stack ten fields on a phone that had room
+   for five rows, and make the card twice as tall for nothing. */
+@media (max-width: 345px) {
+  .pp-fields { grid-template-columns: 1fr; gap: 8px; }
+  .pp-photo { width: 60px; height: 78px; }
+  .pp-photo span { font-size: 34px; }
+  .pp-motto { max-width: 100%; }
+  .pp-stamp { width: 72px; height: 72px; opacity: .62; }
+  .pp-stamp b { font-size: 11px; max-width: 58px; }
+  .pp-top { padding-left: 30px; }
+}
+/* =================== end Passport ==================================== */
 .pf-interests, .pf-langs { display: flex; flex-wrap: wrap; gap: 7px; }
 .pf-hint { margin: 9px 0 0; font-size: 11.5px; color: var(--hint); line-height: 1.5; }
 .pf-id-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }

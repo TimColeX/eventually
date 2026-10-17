@@ -157,8 +157,13 @@
       <button class="pf-close" aria-label="Close">✕</button>
     </header>
     <div class="pf-body">
+      <!-- THE PASSPORT. The card is the showpiece; the editable rows stay underneath it
+           in the plain list they have always been, so nothing becomes harder to find
+           and the card itself stays a document rather than a form. -->
       <section class="pf-sec pf-account">
-        <div class="pf-label">Account details</div>
+        <div class="pf-label">Passport</div>
+        <div class="pf-passport"></div>
+        <div class="pf-label pf-label-sub">Details</div>
         <div class="pf-acct"></div>
       </section>
 
@@ -260,7 +265,7 @@
     /* Build stamp. Must match sw.js CACHE and version.json — `node tools/bump-version.js`
        keeps all three in step. This is how a running app knows a newer one exists.
        It stays inline because this file is the one the bump script rewrites. */
-    window.EVENTUALLY_BUILD = 'v308';
+    window.EVENTUALLY_BUILD = 'v309';
   </script>
   <!-- Backend config, shared with publish.html so there is one copy of it. Safe to
        commit: the anon key is a PUBLIC key, protected by row-level security.

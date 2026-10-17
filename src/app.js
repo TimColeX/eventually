@@ -1570,6 +1570,10 @@
     const ev = D.getById(activeEventId);
     if (act.dataset.act === 'save') {
       const on = P.toggleSaved(ev.id, snapOf(ev)); act.classList.toggle('on', on); act.textContent = on ? '★' : '☆';
+      // A city you saved something in is a city you have been to, as far as the Passport
+      // is concerned — and UNSAVING does not take it back, which is the point of keeping
+      // this separately from `saved`.
+      if (on) P.noteCity(ev.city, ev.country);
       if (acctEnabled()) A.setUserEvent('save', ev.id, snap(ev), on);
       syncReminders(); refreshSaved();
       window.EventuallyToast(on ? 'Saved to your events.' : 'Removed from saved.');
@@ -1595,7 +1599,7 @@
         window.EventuallyToast(ev.userLiked ? 'Liked.' : 'Like removed.');
       } else {
         ev.userAttending = !ev.userAttending; ev.attending = Math.max(0, ev.attending + (ev.userAttending ? 1 : -1));
-        if (ev.userAttending) P.markAttended(ev.id);
+        if (ev.userAttending) { P.markAttended(ev.id); P.noteCity(ev.city, ev.country); }
         act.classList.toggle('on', ev.userAttending); act.querySelector('.n').textContent = ev.attending > 0 ? ev.attending.toLocaleString() : '';
         if (acctEnabled()) A.setUserEvent('attend', ev.id, snap(ev), ev.userAttending);
         window.EventuallyToast(ev.userAttending ? "Marked as going." : 'No longer going.');
@@ -2103,6 +2107,7 @@
     introBtn.setAttribute('aria-checked', String(introOn));
     introBtn.querySelector('.tg-state').textContent = introOn ? 'On' : 'Off';
     profileEl.querySelector('.pf-logout').style.display = user ? '' : 'none';
+    renderPassport();
     renderAccount();
     renderIdentities();
   }
@@ -2113,6 +2118,137 @@
   function fmtAddress(a) {
     if (!a) return '';
     return [a.line1, a.line2, a.city, a.region, a.postcode, a.country].filter(Boolean).join(', ');
+  }
+
+  /* ------------------------------------------------------------------ PASSPORT
+   * The account card as a travel document: Eventually is a globe you move around,
+   * so the thing that says who you are should look like the thing you carry while
+   * doing it. Everything on it is REAL — nothing is invented to fill a slot, which
+   * is the whole risk with a design like this.
+   *
+   * ⚠️ WHAT IS DELIBERATELY NOT HERE, and why:
+   *   • EVENTS ATTENDED — the obvious passport stat, and it syncs fine (`user_events`
+   *     carries `attend`). It reads 0 for almost everyone, and a document whose
+   *     headline number is 0 looks broken rather than new. SAVED is the number this
+   *     app actually drives.
+   *   • A STAMP PER CITY — one home-city stamp only. Stamps are what Globe Hunters is
+   *     meant to award; handing out a full page of them now spends the reward before
+   *     the game that earns it exists.
+   */
+
+  // Three letters, airport-style, from a city name. "Regina" → REG, "New York" → NYC,
+  // "Rio de Janeiro" → RDJ: initials when there are several words, else the first three
+  // letters. Not a real IATA code and not pretending to be one.
+  function cityCode(city) {
+    const w = String(city || '').replace(/[^A-Za-z\s'-]/g, ' ').trim().split(/\s+/).filter(Boolean);
+    if (!w.length) return '---';
+    if (w.length >= 2) return w.slice(0, 3).map(function (x) { return x[0]; }).join('').toUpperCase().padEnd(3, w[0].slice(1, 2).toUpperCase() || 'X');
+    return w[0].slice(0, 3).toUpperCase().padEnd(3, 'X');
+  }
+
+  /* A stable passport number from the account id. Same id, same number, forever — which
+     is what makes it feel issued rather than generated. FNV-1a over the uuid, because it
+     needs to be deterministic and spread out, not secure: this number identifies nothing
+     and unlocks nothing. Signed out, there is no id, so there is no number. */
+  function passportNo(id) {
+    if (!id) return null;
+    let h = 0x811c9dc5;
+    for (let i = 0; i < id.length; i++) { h ^= id.charCodeAt(i); h = (h * 0x01000193) >>> 0; }
+    return 'EV' + String(h % 10000000).padStart(7, '0');
+  }
+
+  function monthYear(iso) {
+    const d = iso ? new Date(iso) : null;
+    if (!d || isNaN(d.getTime())) return null;
+    return d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }).toUpperCase();
+  }
+
+  /* The machine-readable strip. Real passports pad to a fixed width with `<`, which is
+     why it looks like that — keep the width fixed or the two lines stop aligning and it
+     reads as a mistake rather than a convention. Name only: no email, no id. */
+  function mrz(line) { return (line + '<'.repeat(40)).slice(0, 40); }
+
+  function splitName(full) {
+    const w = String(full || '').trim().split(/\s+/).filter(Boolean);
+    if (!w.length) return { given: '', family: '' };
+    if (w.length === 1) return { given: '', family: w[0] };
+    return { family: w[w.length - 1], given: w.slice(0, -1).join(' ') };
+  }
+
+  function renderPassport() {
+    const box = profileEl.querySelector('.pf-passport');
+    if (!box) return;
+    const p = P.get();
+
+    /* Catch up on any city saved before this existed, or saved on another device and
+       merged back in at sign-in. noteCity ignores repeats, so this is cheap and makes
+       CITIES EXPLORED right on first open rather than only going forward. */
+    savedEventObjs().forEach(function (e) { P.noteCity(e.city, e.country); });
+    if (p.location && p.location.city) P.noteCity(p.location.city, p.location.country);
+
+    const nm = splitName(p.name || (user && user.name));
+    const home = (p.location && p.location.city) || '';
+    const homeFull = home ? home + (p.location.region ? ', ' + p.location.region : '') : null;
+    const no = passportNo(user && user.id);
+    const plan = p.plus ? 'Plus' : 'Free';
+    const since = monthYear(user && user.since);
+    const initial = ((p.name || (user && user.name) || '?').trim()[0] || '?').toUpperCase();
+
+    // A field with nothing in it says so in the document's own voice rather than
+    // showing an empty box — "—" reads as issued-but-blank, which is what it is.
+    const V = function (v) { return v ? esc(v) : '<span class="pp-blank">—</span>'; };
+    const field = function (k, v, cls) {
+      return '<div class="pp-f' + (cls ? ' ' + cls : '') + '"><span class="pp-k">' + k + '</span>' +
+             '<span class="pp-v">' + v + '</span></div>';
+    };
+
+    box.innerHTML =
+      '<div class="pp" role="group" aria-label="Your Eventually passport">' +
+        '<div class="pp-top">' +
+          (no ? '<span class="pp-spine" aria-hidden="true">' + esc(no) + '</span>' : '') +
+          '<div class="pp-crest">' +
+            '<span class="pp-dots" aria-hidden="true"><i></i><i></i><i></i></span>' +
+            '<span class="pp-word">eventually</span>' +
+          '</div>' +
+          '<div class="pp-kind">Event Passport</div>' +
+          '<p class="pp-motto">Good for every city on the globe.</p>' +
+          '<div class="pp-issued">Issued · ' + (homeFull ? esc(homeFull.toUpperCase()) : 'NO HOME CITY SET') + '</div>' +
+          '<span class="pp-globe" aria-hidden="true"></span>' +
+        '</div>' +
+        '<div class="pp-page">' +
+          '<div class="pp-pagehead"><span>Passport</span><span>Data page · 01</span></div>' +
+          '<div class="pp-grid">' +
+            '<div class="pp-photo" aria-hidden="true"><span>' + esc(initial) + '</span></div>' +
+            '<div class="pp-fields">' +
+              field('Type', '<b>E · Explorer</b>') +
+              field('City code', '<b>' + (home ? esc(cityCode(home)) : '<span class="pp-blank">---</span>') + '</b>') +
+              field('Surname', '<b>' + V(nm.family.toUpperCase()) + '</b>') +
+              field('Passport no.', '<b class="pp-no">' + V(no) + '</b>') +
+              field('Given names', '<b>' + V(nm.given.toUpperCase()) + '</b>') +
+              field('Plan', '<b>' + esc(plan) + '</b>') +
+              field('Home city', '<b>' + V(homeFull) + '</b>') +
+              field('Member since', '<b>' + V(since) + '</b>') +
+              field('Events saved', '<b>' + (p.saved || []).length + '</b>') +
+              field('Cities explored', '<b>' + P.cityCount() + '</b>') +
+            '</div>' +
+          '</div>' +
+          /* Signature and stamp share a ROW rather than the stamp being floated over the
+             page. The absolutely-positioned version overlapped the CITIES EXPLORED value
+             at drawer width — and would have found something else to sit on at any other
+             width. In a row, the stamp cannot cover anything by construction. */
+          '<div class="pp-foot">' +
+            '<div class="pp-sign"><span class="pp-sig">' +
+              esc(nm.given ? nm.given[0] + '. ' + nm.family : (nm.family || '—')) +
+              '</span><span class="pp-k">Signature of holder</span></div>' +
+            (home ? '<span class="pp-stamp" aria-hidden="true"><b>' + esc(home.toUpperCase()) + '</b>' +
+                    '<i>home city</i></span>' : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="pp-mrz" aria-hidden="true">' +
+          '<span>' + esc(mrz('E<' + (home ? cityCode(home) : 'XXX') + (nm.family || 'HOLDER').toUpperCase().replace(/[^A-Z]/g, '') + '<<' + (nm.given || '').toUpperCase().replace(/[^A-Z]/g, ''))) + '</span>' +
+          '<span>' + esc(mrz((no || 'EV0000000') + '<' + (home ? cityCode(home) : 'XXX') + '<' + plan.toUpperCase())) + '</span>' +
+        '</div>' +
+      '</div>';
   }
 
   function renderAccount() {
@@ -2760,7 +2896,9 @@
     if (user) h += '<div class="dd-user"><span class="avatar">' + user.name[0].toUpperCase() + '</span>' +
       '<div><strong>' + esc(user.name) + '</strong><small>' + (p.plus ? 'Eventually Plus' : 'Free plan') + '</small></div></div>';
     else h += '<button class="dd-item dd-primary" data-act="signin">Sign In / Sign Up</button>';
-    h += '<button class="dd-item" data-act="profile">Profile</button>';
+    // "Profile" → "Passport" (v309). data-act stays `profile`: it is the handler's name,
+    // not a label, and renaming it would touch the dispatch for nothing.
+    h += '<button class="dd-item" data-act="profile">Passport</button>';
     h += '<button class="dd-item" data-act="saved">Calendar &amp; Saved <span class="dd-badge">' + p.saved.length + '</span></button>';
     // "Publish an Event" has moved to the bottom bar, where it is the boldest thing
     // on screen and reachable from every state (verified: it stays hittable with the
@@ -2829,7 +2967,7 @@
   modal.querySelector('.modal-close').addEventListener('click', closeModal);
   modal.querySelector('.modal-backdrop').addEventListener('click', closeModal);
 
-  /* Delete my account (Profile → Account details). Says plainly what goes and what
+  /* Delete my account (Passport → Details). Says plainly what goes and what
      stays, then asks for DELETE to be typed — a single tap is too easy to make by
      accident for something that can't be undone. The server does the work
      (backend/92_delete_account.ts); on success this device forgets the profile too. */
@@ -2936,9 +3074,9 @@
         '<p>Publishing your own event on Eventually? You get this for free — post updates from <b>My Events</b> while your event is running.</p></details>' : '') +
       '<details><summary>What is the eventually Host?</summary><p>Your live AI radio host. Two presenters talk you through what\'s on, with music playing underneath. It starts by itself after a short countdown when you arrive — press <b>pause</b> any time, and the speaker button turns the music on or off.</p>' +
         '<p>The host talks about <b>the place you\'re looking at</b>: your own area to begin with, then any spike you tap or city you search. When you\'re exploring somewhere else, the <b>My area</b> button (a small house on phones) brings the host and the globe back home. Tap the words under the host to read the full transcript.</p></details>' +
-      '<details><summary>How do I use the calendar &amp; save events?</summary><p>Tap <b>Calendar</b> at the bottom of the screen (or <b>⋯ menu → Calendar &amp; Saved</b>). A small orange dot under a date means there are events near your location that day, matched to your interests — tap the date to see them. Tap the ☆ on any event to save it; saved days are marked with a ★ on the calendar. A <b>“For you”</b> section suggests more nearby events you might like. You can choose your interests in your <b>Profile</b>.</p></details>' +
+      '<details><summary>How do I use the calendar &amp; save events?</summary><p>Tap <b>Calendar</b> at the bottom of the screen (or <b>⋯ menu → Calendar &amp; Saved</b>). A small orange dot under a date means there are events near your location that day, matched to your interests — tap the date to see them. Tap the ☆ on any event to save it; saved days are marked with a ★ on the calendar. A <b>“For you”</b> section suggests more nearby events you might like. You can choose your interests in your <b>Passport</b>.</p></details>' +
       '<details><summary>What do “Starts in” countdowns &amp; reminder emails mean?</summary><p>Upcoming events show a live <b>“Starts in”</b> countdown so you know exactly how long until they begin.</p>' +
-        '<p>If you\'re signed in, we\'ll email you about events you\'ve saved: a <b>reminder</b> three days before and again two hours before, and a note if one is <b>cancelled, postponed or moved</b>. Both are on unless you turn them off. There\'s also an optional <b>weekly email</b> of what\'s on near you, which is off until you turn it on. You\'ll find all three under <b>Profile → Emails</b>, and every email has an unsubscribe link.</p></details>' +
+        '<p>If you\'re signed in, we\'ll email you about events you\'ve saved: a <b>reminder</b> three days before and again two hours before, and a note if one is <b>cancelled, postponed or moved</b>. Both are on unless you turn them off. There\'s also an optional <b>weekly email</b> of what\'s on near you, which is off until you turn it on. You\'ll find all three under <b>Passport → Emails</b>, and every email has an unsubscribe link.</p></details>' +
       '<details><summary>What happens when I tap the event button? Is Eventually free?</summary><p>Eventually is <b>free</b> — browsing, saving, reminders and the AI host cost nothing. Each event links to its official source: <b>Get Tickets</b> for ticketed events (e.g. Ticketmaster) to buy there, or <b>View event</b> for free and community listings (like a university or library) to see details and register. You always book directly with the seller or organiser.</p>' +
         '<p>Some ticket links are partner links: if you buy through one, Eventually may earn a small commission. It costs you nothing extra, and it never changes which events we show.</p>' +
         '<p>Event details come from organisers and ticket sellers, not from Eventually, and we don\'t run the events ourselves — please check anything important with them before you go. See the <a href="terms.html#event-disclaimer" target="_blank" rel="noopener">event disclaimer</a> in our Terms.</p></details>' +
@@ -3380,7 +3518,10 @@
       }
       const meta = u.user_metadata || {};
       user = { id: u.id, email: u.email, provider: (u.app_metadata && u.app_metadata.provider) || 'email',
-               name: meta.name || meta.full_name || (u.email || 'You').split('@')[0] };
+               name: meta.name || meta.full_name || (u.email || 'You').split('@')[0],
+               // MEMBER SINCE on the Passport. Carried here because it is the only place
+               // the raw Supabase user is in scope — nothing else in the app has it.
+               since: u.created_at || null };
       closeAuth();
       // Load profile + saved/liked/attended together, then MERGE with any local
       // (anonymous) data — never overwrite local saves with an empty remote read.

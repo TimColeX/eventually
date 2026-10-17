@@ -17,6 +17,15 @@
     savedSnap: {},         // id -> lightweight snapshot {id,name,city,date,category,categoryColor,priceLabel,lat,lon,venue,endsAt}
     searches: [],          // recent search strings
     attended: [],          // event ids marked attended
+    /* Every city this visitor has saved or attended something in, as { "regina|canada":
+       firstSeenMs }. The Passport's CITIES EXPLORED counts these.
+       🔑 WHY A SEPARATE RECORD INSTEAD OF COUNTING `saved`: saved events are AUTO-PRUNED
+       once they finish (see pruneSaved), so a count derived from them goes DOWN over
+       time. A passport whose stamp count falls is worse than no number at all — where
+       you have been does not stop having happened. This only ever grows.
+       ℹ️ On a new device it rebuilds itself: `saved` and `attended` sync through
+       `user_events`, and noteCity runs again as those come back. */
+    citiesSeen: {},
     plus: false,           // Eventually Plus member
     notify: false,         // web notifications enabled
     language: 'en'         // Host language (default English)
@@ -46,6 +55,24 @@
       persist(); return state.saved.indexOf(id) > -1;
     },
     isSaved: function (id) { return state.saved.indexOf(id) > -1; },
+
+    /* ---- Cities, for the Passport ----
+       Keyed on city + country so London UK and London Ontario are two stamps, the same
+       distinction the search dropdown had to learn (see `regionOf` in app.js). Call it
+       with whatever is to hand; it ignores blanks and never records the same place
+       twice. First-seen time is kept because a passport is a chronology — it is what a
+       "stamps in order" view would need, and it costs nothing to store now. */
+    noteCity: function (city, country) {
+      const c = String(city || '').trim();
+      if (!c) return false;
+      if (!state.citiesSeen) state.citiesSeen = {};
+      const k = c.toLowerCase() + '|' + String(country || '').trim().toLowerCase();
+      if (state.citiesSeen[k]) return false;
+      state.citiesSeen[k] = Date.now();
+      persist(); return true;
+    },
+    citiesSeen: function () { return state.citiesSeen || {}; },
+    cityCount: function () { return Object.keys(state.citiesSeen || {}).length; },
     // Attach/refresh the snapshot for an already-saved event (so it survives data reloads).
     saveSnap: function (id, snap) { if (!state.savedSnap) state.savedSnap = {}; if (snap && state.saved.indexOf(id) > -1) { state.savedSnap[id] = snap; persist(); } },
     savedSnaps: function () { return state.savedSnap || {}; },
