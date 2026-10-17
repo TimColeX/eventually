@@ -1295,11 +1295,16 @@ body {
 .bb-link:hover { border-color: var(--clay); background: #FBF3EC; color: var(--clay); }
 /* Same size and shape as its neighbours — weight and colour carry the priority, so
    the one action on the strip reads first without breaking the symmetry.
-   ⚠️ --ember, NOT --clay. Clay on white measures about 4.1:1, which is under the 4.5
-   a 13px label needs; ember is the same family, darker, and lands near 7:1 — so the
-   emphasis is stronger AND it is the one that actually passes. */
-.bb-link[data-bb="publish"] { font-weight: 800; color: var(--ember); }
-.bb-link[data-bb="publish"]:hover { color: var(--ember); }
+   🔑 --clay, TO MATCH THE HOST'S PLAY BUTTON (`.ah-play` is `background: var(--clay)`),
+   which sits directly above it. The owner asked for the pair to read as one accent,
+   and on a strip this close together they do now.
+   ⚠️ KNOWN TRADE, recorded so it is not "fixed" by accident: clay on white measures
+   **4.14:1** against the 4.5 a 12.5px label needs (ember, which this was, is 7.71).
+   It is a deliberate choice of the brand accent over the guideline, not an oversight.
+   The label is 800 weight, which helps legibility but does NOT change the threshold —
+   "large text" starts at 18.66px bold, and this is 12.5px. */
+.bb-link[data-bb="publish"] { font-weight: 800; color: var(--clay); }
+.bb-link[data-bb="publish"]:hover { color: var(--clay); }
 /* Quiet Privacy · Terms line at the strip's right edge (desktop). */
 .bb-legal { position: absolute; right: var(--page-inset); top: 50%; transform: translateY(-50%); pointer-events: auto;
   font-family: var(--mono); font-size: 10.5px; letter-spacing: .03em; color: var(--faint); white-space: nowrap; }
