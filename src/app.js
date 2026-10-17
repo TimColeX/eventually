@@ -2172,7 +2172,22 @@
   /* The machine-readable strip. Real passports pad to a fixed width with `<`, which is
      why it looks like that — keep the width fixed or the two lines stop aligning and it
      reads as a mistake rather than a convention. Name only: no email, no id. */
-  function mrz(line) { return (line + '<'.repeat(40)).slice(0, 40); }
+  function mrz(line) { return (line + '<'.repeat(44)).slice(0, 44); }
+
+  /* Drawn as SVG, and that is not decoration — it is the only way the line reaches BOTH
+     edges. As HTML text, 44 monospace characters are whatever width the font makes them,
+     so the strip ended short on the right and the margins were visibly unequal; no
+     font-size fixes that, because the card's width is not a multiple of the glyph's.
+     `textLength` + `lengthAdjust` fit the glyphs to the box instead, so both lines span
+     exactly the same full width at every card size.
+     ⚠️ No `preserveAspectRatio="none"` — with `height: auto` the whole thing scales
+     proportionally. Forcing the aspect would stretch the glyphs vertically. */
+  function mrzSvg(text) {
+    return '<svg class="pp-mrz-l" viewBox="0 0 400 13" aria-hidden="true">' +
+             '<text x="0" y="10" textLength="400" lengthAdjust="spacingAndGlyphs">' +
+               esc(text) + '</text>' +
+           '</svg>';
+  }
 
   function splitName(full) {
     const w = String(full || '').trim().split(/\s+/).filter(Boolean);
@@ -2212,13 +2227,21 @@
       '<div class="pp" role="group" aria-label="Your Eventually passport">' +
         '<div class="pp-top">' +
           (no ? '<span class="pp-spine" aria-hidden="true">' + esc(no) + '</span>' : '') +
-          '<div class="pp-crest">' +
-            '<span class="pp-dots" aria-hidden="true"><i></i><i></i><i></i></span>' +
-            '<span class="pp-word">eventually</span>' +
+          /* TWO CLUSTERS, not four loose lines. `space-between` across four children
+             spread them evenly down the cover and made the emptiness worse, not better
+             — the crest needs to hold the top and the motto the bottom, with the gap
+             between them doing the work. */
+          '<div class="pp-cluster">' +
+            '<div class="pp-crest">' +
+              '<span class="pp-dots" aria-hidden="true"><i></i><i></i><i></i></span>' +
+              '<span class="pp-word">eventually</span>' +
+            '</div>' +
+            '<div class="pp-kind">Event Passport</div>' +
           '</div>' +
-          '<div class="pp-kind">Event Passport</div>' +
-          '<p class="pp-motto">Good for every city on the globe.</p>' +
-          '<div class="pp-issued">Issued · ' + (homeFull ? esc(homeFull.toUpperCase()) : 'NO HOME CITY SET') + '</div>' +
+          '<div class="pp-cluster">' +
+            '<p class="pp-motto">Good for every city on the globe.</p>' +
+            '<div class="pp-issued">Issued · ' + (homeFull ? esc(homeFull.toUpperCase()) : 'NO HOME CITY SET') + '</div>' +
+          '</div>' +
           '<span class="pp-globe" aria-hidden="true"></span>' +
         '</div>' +
         '<div class="pp-page">' +
@@ -2253,8 +2276,8 @@
               '<b>' + (p.saved || []).length + '</b></div>' +
           '</div>' +
           '<div class="pp-mrz" aria-hidden="true">' +
-            '<span>' + esc(mrz('E<' + (home ? cityCode(home) : 'XXX') + (nm.family || 'HOLDER').toUpperCase().replace(/[^A-Z]/g, '') + '<<' + (nm.given || '').toUpperCase().replace(/[^A-Z]/g, ''))) + '</span>' +
-            '<span>' + esc(mrz((no || 'EV0000000') + '<' + (home ? cityCode(home) : 'XXX') + '<' + plan.toUpperCase())) + '</span>' +
+            mrzSvg(mrz('E<' + (home ? cityCode(home) : 'XXX') + (nm.family || 'HOLDER').toUpperCase().replace(/[^A-Z]/g, '') + '<<' + (nm.given || '').toUpperCase().replace(/[^A-Z]/g, ''))) +
+            mrzSvg(mrz((no || 'EV0000000') + '<' + (home ? cityCode(home) : 'XXX') + '<' + plan.toUpperCase())) +
           '</div>' +
         '</div>' +
       '</div>';

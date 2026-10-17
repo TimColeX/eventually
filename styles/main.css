@@ -1227,9 +1227,13 @@ body {
 .pp-page { border-radius: 0 0 14px 14px; }
 
 /* ---- the cover ---- */
+/* `space-between`, not `center`. Centred, the four lines sat as one clump in the middle
+   with dead cream above and below — which is what the owner saw. Pushed apart, the
+   crest holds the top and the issue line holds the bottom, and the space between them
+   reads as a cover rather than as slack. */
 .pp-top {
-  position: relative; display: flex; flex-direction: column; justify-content: center;
-  padding: 14px 15px 14px 31px; overflow: hidden;
+  position: relative; display: flex; flex-direction: column; justify-content: space-between;
+  padding: 13px 14px 12px 29px; overflow: hidden;
   background: var(--cream);
   /* The wave pattern real passports print to make forgery hard. Two offset sine-ish
      gradients at very low contrast — texture you feel rather than read. */
@@ -1257,32 +1261,35 @@ body {
   font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: .14em;
   color: var(--faint);
 }
+/* The two clusters the cover pushes apart. Position relative so they sit above the
+   globe, which is absolutely placed behind them. */
+.pp-cluster { position: relative; }
 .pp-crest { display: flex; align-items: center; gap: 8px; }
 .pp-dots { display: inline-flex; gap: 3px; }
 .pp-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--apricot); }
 .pp-dots i:nth-child(2) { background: var(--clay); }
 .pp-dots i:nth-child(3) { background: var(--ember); }
-.pp-word { font-size: 20px; font-weight: 800; letter-spacing: -.04em; color: var(--ink); }
+.pp-word { font-size: 18px; font-weight: 800; letter-spacing: -.04em; color: var(--ink); }
 .pp-kind {
-  margin-top: 9px; font-family: var(--mono); font-size: 10px; font-weight: 700;
+  margin-top: 7px; font-family: var(--mono); font-size: 9.5px; font-weight: 700;
   letter-spacing: .18em; text-transform: uppercase; color: var(--ink);
 }
 /* A hairline under the kind, the width of the words — the restraint that separates a
    document from a card with a logo on it. */
 .pp-kind::after {
-  content: ''; display: block; width: 46px; height: 2px; margin-top: 9px;
+  content: ''; display: block; width: 42px; height: 2px; margin-top: 7px;
   background: var(--clay); opacity: .85; border-radius: 2px;
 }
 /* ONE LINE, always. It is a motto, and a motto that wraps is a sentence. Full width
    now that the stamp is gone, nowrap to make the promise, and a clamp so it keeps it
    on a narrow phone instead of overflowing. */
 .pp-motto {
-  margin: 11px 0 0; font-size: clamp(10.5px, 3.5vw, 12.5px); font-style: italic;
+  margin: 0 0 0; font-size: clamp(10px, 3.3vw, 11.5px); font-style: italic;
   font-weight: 600; letter-spacing: -.015em; color: var(--ink);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .pp-issued {
-  margin-top: 6px; font-family: var(--mono); font-size: 9px; letter-spacing: .1em;
+  margin-top: 5px; font-family: var(--mono); font-size: 8.5px; letter-spacing: .1em;
   color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 /* The globe, as the dotted sphere the app draws — same idea, a few lines of CSS.
@@ -1291,36 +1298,36 @@ body {
    rather than a cover. At this size the globe fills the right of the panel and the
    emptiness becomes composition — which is what a cover is supposed to be. */
 .pp-globe {
-  position: absolute; right: -34px; top: 50%; transform: translateY(-50%);
-  width: 172px; height: 172px; border-radius: 50%;
-  background-image: radial-gradient(var(--line-2) 1.1px, transparent 1.2px);
-  background-size: 8px 8px;
+  position: absolute; right: -40px; top: 50%; transform: translateY(-50%);
+  width: 186px; height: 186px; border-radius: 50%;
+  background-image: radial-gradient(var(--line-2) 1.2px, transparent 1.3px);
+  background-size: 9px 9px;
   /* A terminator across it, so it reads as a sphere lit from the left rather than a
      flat disc of dots. */
-  box-shadow: 0 0 0 10px rgba(224,135,95,.09), inset -22px 0 34px -20px rgba(90,56,36,.30);
-  opacity: .9;
+  box-shadow: 0 0 0 11px rgba(224,135,95,.10), inset -26px 0 40px -22px rgba(90,56,36,.32);
+  opacity: 1;
 }
 
 /* ---- the data page ---- */
 .pp-page {
   position: relative; display: flex; flex-direction: column;
-  padding: 11px 15px 10px; background: var(--paper);
+  padding: 8px 15px 8px; background: var(--paper);
   /* The faintest wash down from the fold, as a page curves away from the spine. */
   background-image: linear-gradient(180deg, rgba(90,56,36,.045), transparent 22px);
 }
 .pp-pagehead {
   display: flex; justify-content: space-between; gap: 10px;
-  font-family: var(--mono); font-size: 8.5px; font-weight: 700; letter-spacing: .14em;
+  font-family: var(--mono); font-size: 7.5px; font-weight: 700; letter-spacing: .13em;
   text-transform: uppercase; color: var(--faint);
-  padding-bottom: 8px; border-bottom: 1px dashed var(--line);
+  padding-bottom: 4px; border-bottom: 1px dashed var(--line);
 }
 .pp-pagehead span:first-child { color: var(--clay); }
-.pp-grid { display: flex; gap: 12px; margin-top: 9px; }
+.pp-grid { display: flex; gap: 11px; margin-top: 7px; }
 /* The photo box. A letter, not a face — the app has never asked for a picture and
    this is not the place to start. Deepened to a two-stop clay so it reads as printed
    rather than filled, with a hairline to lift it off the page. */
 .pp-photo {
-  flex: none; width: 62px; height: 80px; border-radius: 7px;
+  flex: none; width: 54px; height: 70px; border-radius: 6px;
   background-color: var(--clay);
   background-image:
     radial-gradient(rgba(255,255,255,.20) 1px, transparent 1.1px),
@@ -1330,67 +1337,69 @@ body {
   display: grid; place-items: center;
 }
 .pp-photo span {
-  font-size: 33px; font-weight: 800; color: var(--cream); letter-spacing: -.04em;
+  font-size: 28px; font-weight: 800; color: var(--cream); letter-spacing: -.04em;
   text-shadow: 0 1px 1px rgba(33,26,21,.18);
 }
 .pp-fields {
   flex: 1 1 auto; min-width: 0;
-  display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; align-content: space-between;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; align-content: start;
 }
-.pp-f { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.pp-f { min-width: 0; display: flex; flex-direction: column; gap: 0; }
 .pp-k {
-  font-family: var(--mono); font-size: 8.5px; font-weight: 700; letter-spacing: .11em;
-  text-transform: uppercase; color: var(--faint); white-space: nowrap;
+  font-family: var(--mono); font-size: 7px; font-weight: 700; letter-spacing: .08em;
+  line-height: 1.15; text-transform: uppercase; color: var(--faint); white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis;
 }
-.pp-v { font-size: 12.5px; line-height: 1.15; color: var(--ink); min-width: 0; }
+.pp-v { font-size: 11px; line-height: 1.05; color: var(--ink); min-width: 0; }
 .pp-v b { font-weight: 700; letter-spacing: -.01em; overflow-wrap: anywhere; }
-.pp-no { color: var(--clay); font-family: var(--mono); font-size: 11.5px; letter-spacing: .02em; }
+.pp-no { color: var(--clay); font-family: var(--mono); font-size: 10px; letter-spacing: .02em; }
 .pp-blank { color: var(--hint); font-weight: 600; }
 
 /* Signature left, the one live figure right. `margin-top: auto` pins this row to the
    bottom of the data half however tall the half ends up — which is what lets the two
    halves be equal without the content floating in the middle of the page. */
-.pp-foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-top: auto; padding-top: 9px; }
+.pp-foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; margin-top: auto; padding-top: 7px; }
 .pp-sign { flex: 1 1 auto; min-width: 0; }
 .pp-tally { flex: none; text-align: right; }
-.pp-tally b { display: block; font-size: 15.5px; font-weight: 800; letter-spacing: -.02em; color: var(--clay); line-height: 1.1; }
-.pp-tally .pp-k { display: block; margin-bottom: 2px; }
+.pp-tally b { display: block; font-size: 13px; font-weight: 800; letter-spacing: -.02em; color: var(--clay); line-height: 1.1; }
+.pp-tally .pp-k { display: block; margin-bottom: 1px; }
 .pp-sig {
-  display: block; font-size: 15.5px; font-style: italic; font-weight: 600; color: var(--ink);
-  padding-bottom: 3px; border-bottom: 1px solid var(--line-2); letter-spacing: -.01em;
+  display: block; font-size: 12.5px; font-style: italic; font-weight: 600; color: var(--ink);
+  padding-bottom: 1px; border-bottom: 1px solid var(--line-2); letter-spacing: -.01em;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.pp-sign .pp-k { display: block; margin-top: 5px; }
+.pp-sign .pp-k { display: block; margin-top: 2px; }
 
 /* (The home-city stamp lived here. Removed at the owner's request, v310 — and the
    reasoning is worth keeping: a stamp that costs nothing to earn spends the reward
    Globe Hunters is being designed around. Stamps come back when they mean something.) */
 
 /* ---- the machine-readable strip ----
-   INSIDE the white half, not a third band of its own. On sand it read as a separate
-   panel and the booklet stopped being two halves — which is the whole shape. Same
-   paper, a dashed rule above it, and the ink dropped back so it sits under the data
-   rather than competing with it. */
+   🔙 BACK ON SAND. It was moved onto plain paper to protect the "two equal halves"
+   reading; the owner put the clay band back, and they are right — the strip is the
+   one part of a passport that is printed on a different surface, and on white it
+   simply looked like text that had lost its panel. The halves are still measured on
+   `.pp-top` vs `.pp-page`, so a band inside the white half changes nothing there. */
 .pp-mrz {
-  margin: 9px -15px -10px; padding: 6px 15px 8px;
-  border-top: 1px dashed var(--line);
-  font-family: var(--mono); font-weight: 700; color: var(--faint);
-  /* Sized off the CARD, not the viewport: 40 fixed-width characters have to fit a box
-     this component does not control, and clamping to vw is what keeps the two lines
-     the same length instead of one wrapping. */
-  font-size: clamp(6.6px, 2.4vw, 8.2px); line-height: 1.42; letter-spacing: .04em;
-  white-space: nowrap; overflow: hidden;
+  margin: 6px -15px -8px; padding: 5px 15px 6px;
+  background: var(--sand); border-top: 1px solid var(--line-2);
+  display: flex; flex-direction: column; gap: 1px;
 }
-.pp-mrz span { display: block; }
+/* Both lines span the full width, edge to edge, because `textLength` fits the glyphs
+   to the box — see mrzSvg(). `height: auto` keeps the scaling proportional. */
+.pp-mrz-l { display: block; width: 100%; height: auto; }
+.pp-mrz-l text {
+  font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--ink);
+  opacity: .82;
+}
 
 /* Phones: the field column drops to about 89px, and a long label measured ~92 at the
    desktop size — so it ellipsised. Tighten the LABEL rather than shorten the word: it
    is already the smallest thing on the card, and a truncated field name on a document
    reads as damage. 8px with .08em tracking measures ~82 and clears it. */
 @media (max-width: 420px) {
-  .pp-k { font-size: 8px; letter-spacing: .08em; }
-  .pp-fields { gap: 8px; }
+  .pp-k { font-size: 7px; letter-spacing: .07em; }
+  .pp-fields { column-gap: 8px; }
 }
 
 /* VERY narrow phones — still TWO columns, just smaller.
@@ -1402,10 +1411,10 @@ body {
 @media (max-width: 345px) {
   .pp-photo { width: 54px; height: 72px; }
   .pp-photo span { font-size: 28px; }
-  .pp-grid { gap: 10px; }
-  .pp-fields { gap: 6px 8px; }
-  .pp-v { font-size: 11.5px; }
-  .pp-no { font-size: 10.5px; }
+  .pp-grid { gap: 9px; }
+  .pp-fields { column-gap: 7px; }
+  .pp-v { font-size: 10.5px; }
+  .pp-no { font-size: 9.5px; }
   .pp-top { padding-left: 28px; }
   .pp-word { font-size: 18px; }
 }
@@ -1420,7 +1429,14 @@ body {
   background: var(--paper); border: 1px solid var(--line-2); color: var(--ink); font-family: var(--font); font-weight: 600; font-size: 13px; }
 .pf-id-link:hover { border-color: var(--clay); }
 /* account details (view + inline edit) */
-.pf-acct { display: flex; flex-direction: column; margin-top: 8px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+/* The Details card sits directly under the Passport, so it takes the same lift — the
+   same two warm shadows, without the stacked page edges, which belong to the booklet
+   alone. A flat card under a 3D one reads as unfinished. */
+.pf-acct {
+  display: flex; flex-direction: column; margin-top: 8px; background: var(--paper);
+  border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+  box-shadow: 0 2px 4px rgba(90,56,36,.08), 0 10px 20px -10px rgba(90,56,36,.20);
+}
 .pf-acct-row { display: flex; align-items: center; gap: 10px; font-size: 13.5px; padding: 11px 13px; border-top: 1px solid var(--line); }
 .pf-acct-row:first-child { border-top: 0; }
 .pf-acct-row .pf-acct-k { color: var(--muted); flex: none; min-width: 96px; font-size: 12.5px; }
