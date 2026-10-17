@@ -2289,8 +2289,15 @@
     const p = P.get();
 
     if (!user) {
-      box.innerHTML = '<p class="pf-hint">Sign in to view and manage your name, contact details and preferences.</p>' +
-        '<button class="pf-acct-signin">Sign in</button>';
+      /* The empty state gets its own padded block. The paragraph used to sit directly
+         in `.pf-acct`, which has no padding of its own — every row supplies its own —
+         so the sentence ran edge to edge against the card's corners. Two shorter lines
+         read better here than one long one, and the second is the reason to act. */
+      box.innerHTML = '<div class="pf-acct-empty">' +
+          '<p class="pf-acct-empty-t">Your details live on your account.</p>' +
+          '<p class="pf-acct-empty-s">Sign in to manage your name, contact details and email preferences.</p>' +
+          '<button class="pf-acct-signin">Sign in</button>' +
+        '</div>';
       return;
     }
 
