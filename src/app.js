@@ -2131,9 +2131,15 @@
    *     carries `attend`). It reads 0 for almost everyone, and a document whose
    *     headline number is 0 looks broken rather than new. SAVED is the number this
    *     app actually drives.
-   *   • A STAMP PER CITY — one home-city stamp only. Stamps are what Globe Hunters is
-   *     meant to award; handing out a full page of them now spends the reward before
-   *     the game that earns it exists.
+   *   • STAMPS, of any kind. There was one home-city stamp; the owner took it out at
+   *     v310. Stamps are what Globe Hunters is meant to award, and a stamp that costs
+   *     nothing spends the reward before the game that earns it exists.
+   *   • CITIES EXPLORED — same reason, plus it was a statistic sitting among identity
+   *     fields, which is the one thing a passport data page never has.
+   *
+   * 📐 THE CARD IS A BOOKLET IN TWO EQUAL HALVES: cover (cream) and data page (white),
+   * forced to the same height by a 1fr 1fr grid with a stitched fold between them. If
+   * you add a field, something else comes out — the halves staying equal is the design.
    */
 
   // Three letters, airport-style, from a city name. "Regina" → REG, "New York" → NYC,
@@ -2219,6 +2225,12 @@
           '<div class="pp-pagehead"><span>Passport</span><span>Data page · 01</span></div>' +
           '<div class="pp-grid">' +
             '<div class="pp-photo" aria-hidden="true"><span>' + esc(initial) + '</span></div>' +
+            /* EIGHT IDENTITY FIELDS, four rows, and no statistics among them.
+               CITIES EXPLORED was here and is gone: a count is not an identity field, it
+               was the least passport-like thing on the data page, and a stamp collection
+               is what Globe Hunters is meant to award. `citiesSeen` KEEPS RECORDING in
+               profile.js — the history cannot be rebuilt retroactively, so it accrues
+               quietly until there is somewhere honest to show it. */
             '<div class="pp-fields">' +
               field('Type', '<b>E · Explorer</b>') +
               field('City code', '<b>' + (home ? esc(cityCode(home)) : '<span class="pp-blank">---</span>') + '</b>') +
@@ -2228,25 +2240,22 @@
               field('Plan', '<b>' + esc(plan) + '</b>') +
               field('Home city', '<b>' + V(homeFull) + '</b>') +
               field('Member since', '<b>' + V(since) + '</b>') +
-              field('Events saved', '<b>' + (p.saved || []).length + '</b>') +
-              field('Cities explored', '<b>' + P.cityCount() + '</b>') +
             '</div>' +
           '</div>' +
-          /* Signature and stamp share a ROW rather than the stamp being floated over the
-             page. The absolutely-positioned version overlapped the CITIES EXPLORED value
-             at drawer width — and would have found something else to sit on at any other
-             width. In a row, the stamp cannot cover anything by construction. */
+          /* The stamp is gone. One live number stays, in the corner the stamp had — the
+             card should not be entirely static, and this is the figure the app actually
+             drives. */
           '<div class="pp-foot">' +
             '<div class="pp-sign"><span class="pp-sig">' +
               esc(nm.given ? nm.given[0] + '. ' + nm.family : (nm.family || '—')) +
               '</span><span class="pp-k">Signature of holder</span></div>' +
-            (home ? '<span class="pp-stamp" aria-hidden="true"><b>' + esc(home.toUpperCase()) + '</b>' +
-                    '<i>home city</i></span>' : '') +
+            '<div class="pp-tally"><span class="pp-k">Events saved</span>' +
+              '<b>' + (p.saved || []).length + '</b></div>' +
           '</div>' +
-        '</div>' +
-        '<div class="pp-mrz" aria-hidden="true">' +
-          '<span>' + esc(mrz('E<' + (home ? cityCode(home) : 'XXX') + (nm.family || 'HOLDER').toUpperCase().replace(/[^A-Z]/g, '') + '<<' + (nm.given || '').toUpperCase().replace(/[^A-Z]/g, ''))) + '</span>' +
-          '<span>' + esc(mrz((no || 'EV0000000') + '<' + (home ? cityCode(home) : 'XXX') + '<' + plan.toUpperCase())) + '</span>' +
+          '<div class="pp-mrz" aria-hidden="true">' +
+            '<span>' + esc(mrz('E<' + (home ? cityCode(home) : 'XXX') + (nm.family || 'HOLDER').toUpperCase().replace(/[^A-Z]/g, '') + '<<' + (nm.given || '').toUpperCase().replace(/[^A-Z]/g, ''))) + '</span>' +
+            '<span>' + esc(mrz((no || 'EV0000000') + '<' + (home ? cityCode(home) : 'XXX') + '<' + plan.toUpperCase())) + '</span>' +
+          '</div>' +
         '</div>' +
       '</div>';
   }
