@@ -1413,6 +1413,13 @@ body.no-timeline.has-ad .legend { bottom: calc(138px + env(safe-area-inset-botto
 .type-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .type-chips .chip { display: inline-flex; align-items: center; gap: 7px; }
 .type-chips .chip .dot { width: 9px; height: 9px; border-radius: 50%; }
+/* Same count, same rule as the dropdown's `.tn` — see it for why these are shown. */
+.type-chips .chip .chip-n {
+  font-family: var(--mono); font-size: 10.5px; font-weight: 700; color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+.type-chips .chip.on .chip-n { color: inherit; opacity: .72; }
+.type-chips .chip.is-empty { opacity: .42; cursor: default; }
 .type-actions { display: flex; gap: 8px; margin-top: 16px; }
 .type-actions button { padding: 8px 14px; border-radius: 9px; cursor: pointer; font-family: var(--font); font-size: 12.5px; font-weight: 600; background: var(--paper); border: 1px solid var(--line-2); color: var(--ink); }
 .type-actions button:hover { border-color: var(--clay); }
@@ -1596,7 +1603,9 @@ body.no-timeline.has-ad .legend { bottom: calc(138px + env(safe-area-inset-botto
   display: inline-flex; align-items: center; justify-content: center;
 }
 .types-menu {
-  position: absolute; top: calc(100% + 5px); right: 0; width: 210px; display: none; z-index: 50;
+  /* 210 → 248px: the counts need a column of their own, and squeezing them against the
+     labels is what makes a number look like part of the name. */
+  position: absolute; top: calc(100% + 5px); right: 0; width: 248px; display: none; z-index: 50;
   /* Frosted glass so the globe stays faintly visible behind the menu. */
   background: rgba(252, 247, 240, 0.72);
   -webkit-backdrop-filter: blur(14px) saturate(1.3);
@@ -1615,7 +1624,27 @@ body.no-timeline.has-ad .legend { bottom: calc(138px + env(safe-area-inset-botto
 }
 .topt:hover { background: var(--tint); }
 .topt .tdot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
-.topt .tcheck { margin-left: auto; color: var(--clay); font-weight: 700; }
+/* HOW MANY, before the tick. Right-aligned and tabular so the numbers make a column
+   that can be read down the menu — which is the whole point of showing them: the
+   comparison between types is the information, not any single figure. The label itself
+   may shrink and ellipsise; the number never does. */
+.topt .tn {
+  margin-left: auto; flex: none; font-family: var(--mono); font-size: 10.5px; font-weight: 700;
+  color: var(--faint); font-variant-numeric: tabular-nums; letter-spacing: .02em;
+}
+/* Grid items default to min-width:auto, so in the two-column mobile menu a long label
+   would push the number out of the cell rather than letting the cell squeeze. */
+.topt { min-width: 0; }
+.topt .tlabel { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topt .tcheck { margin-left: 6px; width: 9px; flex: none; color: var(--clay); font-weight: 700; }
+/* Nothing on the globe: dimmed, and the button is disabled in the markup. Not deleted —
+   `CATEGORIES` also feeds the publish form, and an organiser with exactly that event
+   still needs somewhere to file it. */
+.topt.is-empty { opacity: .42; cursor: default; }
+.topt.is-empty:hover { background: none; }
+.topt-note {
+  margin: 7px 5px 3px; font-size: 11px; line-height: 1.4; color: var(--faint);
+}
 .topt-all { color: var(--muted); border-bottom: 1px solid var(--line); border-radius: 0; margin-bottom: 4px; padding-bottom: 11px; }
 .topt-all.on { color: var(--clay); }
 
@@ -1654,8 +1683,12 @@ body.no-timeline.has-ad .legend { bottom: calc(138px + env(safe-area-inset-botto
   /* 2-column grid so all 10 categories fit without a tall, overlapping menu. */
   .types-menu { right: 0; width: min(92vw, 360px); max-height: 62vh; overflow-y: auto; padding: 8px; }
   .types-menu.show { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; align-content: start; }
-  .types-menu .topt-all { grid-column: 1 / -1; }
+  .types-menu .topt-all, .types-menu .topt-note { grid-column: 1 / -1; }
   .types-menu .topt { padding: 11px 10px; font-size: 13px; }
+  /* Two columns is about 150px of usable width per cell, so the label gives way before
+     the number does: the name truncates, the count stays readable. */
+  .types-menu .topt { gap: 6px; overflow: hidden; }
+  .types-menu .topt .tn { font-size: 10px; }
   .topbar { flex-wrap: wrap; gap: 10px; padding: 12px 14px; --bar-ctl-h: 44px; }
   /* A finger, not a mouse: every control on this screen gets a full 44px target. */
   .bb-link, .dd-item { min-height: 44px; }

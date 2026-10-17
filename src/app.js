@@ -290,17 +290,69 @@
   function clusterById(id) { return D.getClusters().find(function (c) { return c.id === id; }); }
 
   /* ---------- "Types" dropdown (right end of the search bar) ---------- */
+
+  /* HOW MANY EVENTS EACH CHIP WOULD ACTUALLY SHOW.
+   *
+   * A chip promises "tap this and the globe narrows to it". Two of them could not keep
+   * that promise — Nightlife has never held a single event (0 of 59,961 rows, ever) and
+   * Tech holds 24 in 6 cities — and once the filter started applying properly (v303),
+   * tapping one emptied the globe. A number is the honest fix: you see what you are
+   * about to get, and a type with nothing is dimmed rather than deleted, so the publish
+   * form keeps offering it to the organiser who has exactly that event.
+   *
+   * ⚠️ COUNTED OVER THE SAME UNIVERSE `refreshMarkers` USES, minus `activeTypes` itself
+   * (or every chip you switched off would read 0). Admin-hidden out, the Plus interest
+   * filter in, past out, the selected date applied. Any other universe and the number
+   * stops predicting what the tap does, which is worse than no number.
+   *
+   * ℹ️ It counts what is LOADED — the worldwide snapshot, plus whatever a city search
+   * has merged in. So it is "on the globe right now", which is what the chip controls,
+   * and it is recomputed every time the menu opens. */
+  function typeCounts() {
+    const interests = (interestFilterActive && P.get().plus) ? P.effectiveInterests(D.getById) : null;
+    const out = {};
+    Object.keys(D.CATEGORIES).forEach(function (c) { out[c] = 0; });
+    D.getClusters().forEach(function (c) {
+      const ids = c.eventIds;
+      for (let k = 0; k < ids.length; k++) {
+        const ev = D.getById(ids[k]);
+        if (!ev) continue;
+        if (RT._hidEv[ev.id] || RT._hidCity[(ev.city || '').toLowerCase()]) continue;
+        if (interests && interests.length && interests.indexOf(ev.category) < 0) continue;
+        if (D.typeForDate(ev, selectedDate) === 'past') continue;
+        if (out[ev.category] != null) out[ev.category]++;
+      }
+    });
+    return out;
+  }
+  function countLabel(n) { return n ? n.toLocaleString() : 'none'; }
+
   const typesBtn = document.getElementById('types-btn');
   const typesMenu = document.getElementById('types-menu');
   function renderTypesMenu() {
     const cats = Object.keys(D.CATEGORIES);
     const allOn = cats.every(function (c) { return activeTypes[c]; });
+    const counts = typeCounts();
     let h = '<button class="topt topt-all' + (allOn ? ' on' : '') + '" data-type="__all">All event types</button>';
     h += cats.map(function (c) {
-      return '<button class="topt' + (activeTypes[c] ? ' on' : '') + '" data-type="' + c + '">' +
-        '<span class="tdot" style="background:' + D.CATEGORIES[c] + '"></span>' + c +
+      /* An empty type is NOT clickable. With everything on, tapping one means "only
+         this" — guaranteed to empty the globe — and with a filter already running,
+         switching off a type that shows nothing changes nothing. The control has no
+         useful outcome either way, so it says so instead of offering one. */
+      const n = counts[c];
+      return '<button class="topt' + (activeTypes[c] ? ' on' : '') + (n ? '' : ' is-empty') + '" data-type="' + c + '"' +
+        (n ? '' : ' disabled aria-disabled="true"') + '>' +
+        /* The label is its own span so it can be the thing that gives way in the
+           two-column mobile menu — a bare text node is an anonymous flex item and
+           cannot be ellipsised, so it wraps instead and the rows stop lining up. */
+        '<span class="tdot" style="background:' + D.CATEGORIES[c] + '"></span>' +
+        '<span class="tlabel">' + c + '</span>' +
+        '<span class="tn">' + countLabel(n) + '</span>' +
         '<span class="tcheck">' + (activeTypes[c] ? '✓' : '') + '</span></button>';
     }).join('');
+    if (cats.some(function (c) { return !counts[c]; })) {
+      h += '<p class="topt-note">Dimmed types have nothing on the globe right now.</p>';
+    }
     typesMenu.innerHTML = h;
     const sel = cats.filter(function (c) { return activeTypes[c]; }).length;
     const badge = typesBtn.querySelector('.types-badge');
@@ -2881,10 +2933,16 @@
 
   function openTypes() {
     const cats = Object.keys(D.CATEGORIES);
-    const html = '<p class="modal-lead">Show or hide event types across the globe and results.</p>' +
+    const counts = typeCounts();                     // same promise, same numbers as the dropdown
+    const anyEmpty = cats.some(function (c) { return !counts[c]; });
+    const html = '<p class="modal-lead">Show or hide event types across the globe and results.' +
+      (anyEmpty ? ' Dimmed types have nothing on the globe right now.' : '') + '</p>' +
       '<div class="type-chips">' + cats.map(function (c) {
-        return '<button class="chip' + (activeTypes[c] ? ' on' : '') + '" data-type="' + c + '">' +
-          '<span class="dot" style="background:' + D.CATEGORIES[c] + '"></span>' + c + '</button>';
+        const n = counts[c];
+        return '<button class="chip' + (activeTypes[c] ? ' on' : '') + (n ? '' : ' is-empty') + '" data-type="' + c + '"' +
+          (n ? '' : ' disabled aria-disabled="true"') + '>' +
+          '<span class="dot" style="background:' + D.CATEGORIES[c] + '"></span>' + c +
+          '<span class="chip-n">' + countLabel(n) + '</span></button>';
       }).join('') + '</div>' +
       '<div class="type-actions"><button data-all="1">Show all</button><button data-all="0">Hide all</button></div>';
     openModal('Event types', html, function (body) {
