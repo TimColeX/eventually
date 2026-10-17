@@ -1746,11 +1746,28 @@
     return '';
   }
 
+  /* Is the visitor filtering by type right now? The dropdown has to know, because its
+     two halves get the truth from different places: the event rows are ours to filter,
+     the city counts come from the server, which has never heard of the chips. */
+  function typesFiltered() {
+    const cats = Object.keys(D.CATEGORIES);
+    return !cats.every(function (c) { return activeTypes[c]; });
+  }
+
   function renderSearchResults(cities, events) {
+    const filtered = typesFiltered();
     let html = cities.map(function (c) {
       // `explore` cities come from the geocoder (any place on Earth, even with no
       // events yet) — jump there on the globe instead of showing an event count.
-      const sub = c.explore ? 'Explore on the map' : (c.n + ' event' + (c.n === 1 ? '' : 's'));
+      /* AND SAY SO WHEN IT IS THE UNFILTERED TOTAL. `search_cities` counts every
+         approved event in the place; it cannot count only the types that are switched
+         on, because the chips live in this browser. So with a filter active, "Hasselt,
+         Belgium — 32 events" was the honest answer to a question nobody asked, sitting
+         one tap away from a panel that correctly says 1. Naming the discrepancy is
+         cheaper and truer than hiding the number — and than a round trip to the
+         server for a count that changes on every chip tap. */
+      const sub = c.explore ? 'Explore on the map'
+        : (c.n + ' event' + (c.n === 1 ? '' : 's') + (filtered ? ' · all types' : ''));
       /* WHICH London? There are two in the inventory (United Kingdom and Canada),
          and the same goes for Cambridge, Birmingham, Richmond and Newcastle. The
          name alone was ambiguous AND the two were grouped together, so tapping it
@@ -1787,6 +1804,7 @@
     const cities = Object.keys(byCity).map(function (k) { return byCity[k]; }).sort(function (a, b) { return b.n - a.n; }).slice(0, 3);
     const events = D.getEvents().filter(function (e) {
       if (RT._hidEv[e.id] || RT._hidCity[(e.city || '').toLowerCase()]) return false;
+      if (activeTypes[e.category] === false) return false;    // the chips apply here too
       return (e.name + ' ' + (e.city || '') + ' ' + e.category).toLowerCase().indexOf(q) > -1;
     }).sort(function (a, b) { return D.popularity(b) - D.popularity(a); }).slice(0, 5)
       .map(function (e) { return { id: e.id, name: e.name, city: e.city, lat: e.lat, lon: e.lon, color: e.categoryColor }; });
@@ -1894,7 +1912,12 @@
           const cities = (served.length ? served
             : Object.keys(byCity).map(function (k) { return byCity[k]; }).sort(function (a, b) { return b.n - a.n; })
           ).slice(0, 4);
-          const events = rows.slice(0, 6).map(function (e) { return { id: e.event_id, name: e.title, city: e.city, lat: e.lat, lon: e.lon, color: D.CATEGORIES[e.category] || '#CB5A3C' }; });
+          /* The type chips apply to these rows too. Filter BEFORE the slice, or a
+             match set that starts with six Music events would leave nothing to show
+             the visitor who asked for Family. */
+          const events = rows.filter(function (e) { return activeTypes[e.category] !== false; })
+            .slice(0, 6)
+            .map(function (e) { return { id: e.event_id, name: e.title, city: e.city, lat: e.lat, lon: e.lon, color: D.CATEGORIES[e.category] || '#CB5A3C' }; });
           renderSearchResults(cities, events);
           // Geocoder fallback: when the DB has few/no matches for this query, let the
           // user jump to ANY city on Earth (even with no events yet). Only fires on
