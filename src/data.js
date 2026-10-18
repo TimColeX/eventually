@@ -81,7 +81,11 @@
     'Sports':        '#A23A22',  // Clay-red
     'Film & Media':  '#7C5230',  // Bronze
     'Community':     '#C18A5C',  // Tan
-    'Nightlife':     '#9B4A52',  // Warm brick-rose
+    /* NIGHTLIFE TOOK THE MOSS and Expos & Fairs took the brick-rose (2026-10-17, owner's
+       call — they swapped). ℹ️ The two colours only traded names: the SET is identical,
+       so every pairwise separation in the palette is exactly what it was, and the
+       deltaE bar recorded below still holds without re-measuring. */
+    'Nightlife':     '#6F7A3C',  // Moss
     'Comedy':        '#E8A24C',  // Warm amber
     /* FAMILY — added 2026-10-02, on evidence rather than a hunch.
      *
@@ -114,12 +118,14 @@
      * genre (346 events) stays in Community, where 129 deliberately left it. The Help
      * Centre description is where that line is drawn for the reader.
      *
-     * Colour measured, same bar Family had to clear: the tightest existing pair is
-     * Business / Film & Media at deltaE 6.8, and moss is 30.3 from its nearest
-     * neighbour (Film & Media) — the most separable colour in the palette. It is the
-     * first thing here that is not a warm earth tone, which is deliberate for a type
-     * this rare: on a globe of clay and ochre spikes, you can find it. */
-    'Expos & Fairs': '#6F7A3C'   // Moss
+     * Colour: brick-rose, swapped with Nightlife's moss on 2026-10-17 at the owner's
+     * request. ⚠️ A SWAP IS NOT A NEW COLOUR — the palette's SET is unchanged, so every
+     * pairwise deltaE is exactly what it was and nothing needed re-measuring.
+     * The bar a genuinely NEW colour has to clear still stands: the tightest existing
+     * pair is Business / Film & Media at deltaE 6.8, and moss — now Nightlife's — is
+     * 30.3 from its nearest neighbour, the most separable in the palette. It is also
+     * the only one here that is not a warm earth tone. */
+    'Expos & Fairs': '#9B4A52'   // Warm brick-rose
   };
 
   // The loaded events — live from the backend, plus any the user publishes this session.
