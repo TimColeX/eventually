@@ -27,7 +27,7 @@
   let selectedDate = D.TODAY;
   let interestFilterActive = false;     // Plus "advanced filtering"
   const activeTypes = {};               // "Event types" globe filter (all on by default)
-  Object.keys(D.CATEGORIES).forEach(function (c) { activeTypes[c] = true; });
+  D.categoryNames().forEach(function (c) { activeTypes[c] = true; });
   // Runtime config — admin-tunable via the app_config table; these are the code
   // defaults used until (and if) the remote config loads.
   let RT = { spikes: { priority: 18, fair: 15, sponsored: 12 }, maxClusters: 0, adsEnabled: true, hostEnabled: true,
@@ -301,7 +301,7 @@
   const typesBtn = document.getElementById('types-btn');
   const typesMenu = document.getElementById('types-menu');
   function renderTypesMenu() {
-    const cats = Object.keys(D.CATEGORIES);
+    const cats = D.categoryNames();
     const allOn = cats.every(function (c) { return activeTypes[c]; });
     let h = '<button class="topt topt-all' + (allOn ? ' on' : '') + '" data-type="__all">All event types</button>';
     h += cats.map(function (c) {
@@ -320,7 +320,7 @@
   });
   typesMenu.addEventListener('click', function (e) {
     const b = e.target.closest('[data-type]'); if (!b) return;
-    const cats = Object.keys(D.CATEGORIES);
+    const cats = D.categoryNames();
     if (b.dataset.type === '__all') { cats.forEach(function (c) { activeTypes[c] = true; }); }
     else {
       const c = b.dataset.type;
@@ -1762,7 +1762,7 @@
      two halves get the truth from different places: the event rows are ours to filter,
      the city counts come from the server, which has never heard of the chips. */
   function typesFiltered() {
-    const cats = Object.keys(D.CATEGORIES);
+    const cats = D.categoryNames();
     return !cats.every(function (c) { return activeTypes[c]; });
   }
 
@@ -2085,7 +2085,7 @@
     profileEl.querySelector('.pf-plus-state').textContent = plusStateLabel(subState);
     profileEl.querySelector('.pf-loc').textContent = p.location ? p.location.city : 'not set';
     profileEl.querySelector('.pf-saved-n').textContent = p.saved.length;
-    profileEl.querySelector('.pf-interests').innerHTML = Object.keys(D.CATEGORIES).map(function (c) {
+    profileEl.querySelector('.pf-interests').innerHTML = D.categoryNames().map(function (c) {
       return '<button class="chip' + (P.hasInterest(c) ? ' on' : '') + '" data-cat="' + c + '">' + c + '</button>';
     }).join('');
     // Languages flagged `soon` are shown but not selectable: the scripts translate correctly,
@@ -3065,7 +3065,7 @@
   } catch (e) {}
 
   function openTypes() {
-    const cats = Object.keys(D.CATEGORIES);
+    const cats = D.categoryNames();
     const html = '<p class="modal-lead">Show or hide event types across the globe and results.</p>' +
       '<div class="type-chips">' + cats.map(function (c) {
         return '<button class="chip' + (activeTypes[c] ? ' on' : '') + '" data-type="' + c + '">' +
@@ -3094,7 +3094,7 @@
          wording carries the distinction rather than just listing examples. */
       'Expos & Fairs': 'trade fairs, home & bridal shows, conventions'
     };
-    const colours = Object.keys(D.CATEGORIES).map(function (c) {
+    const colours = D.categoryNames().map(function (c) {
       return '<span class="help-cat"><span class="help-sw" style="background:' + D.CATEGORIES[c] + '"></span>' +
         '<span class="help-cat-t"><b>' + esc(c) + '</b>' + (CAT_DESC[c] ? '<span class="help-cat-d"> — ' + esc(CAT_DESC[c]) + '</span>' : '') + '</span></span>';
     }).join('');

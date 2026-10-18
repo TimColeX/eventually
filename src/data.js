@@ -99,8 +99,13 @@
      * closest existing pair (Business / Film & Media) is deltaE 6.8 apart, and warm sand
      * is 23.0 from its nearest neighbour (Community). Keep that bar if another is added.
      *
-     * ⚠️ LAST ON PURPOSE. Object.keys() of this map drives the filter chips AND the
-     * publish form's options, so inserting mid-list silently reorders both. */
+     * ℹ️ THE ORDER OF THIS MAP IS HISTORY, NOT A RUNNING ORDER. Categories are appended
+     * as they are added, so the list reads as the order they were decided in. Every
+     * screen sorts for itself — see `categoryNames()` below, which is what the chips,
+     * the Types menu, the publish form and the Help Centre all use.
+     * ⚠️ It used to matter: `Object.keys()` went straight to the UI, so inserting
+     * mid-list silently reordered the filter chips and the publish form. It does not
+     * any more, as long as display sites keep going through `categoryNames()`. */
     'Family':        '#DCC09A',  // Warm sand
     /* EXPOS & FAIRS — added 2026-10-16, and this one was added against the data.
      *
@@ -250,6 +255,18 @@
     TODAY: TODAY,
     SOURCES: SOURCES,
     CATEGORIES: CATEGORIES,
+    /* THE ONE ORDER THE SCREENS USE: alphabetical. Twelve categories is past the point
+       where a reader scans the whole list, so it has to be findable rather than
+       chronological — and the map's own order is the order they were ADDED, which is
+       meaningful to us and meaningless to a visitor.
+       ℹ️ `localeCompare`, not `<`, so accented and non-English names sort the way the
+       reader expects when the category list is eventually translated.
+       ⚠️ Sorted FRESH on each call rather than cached: this is a dozen strings a few
+       times per panel open, and a cache would be one more thing to invalidate when a
+       category is added. */
+    categoryNames: function () {
+      return Object.keys(CATEGORIES).sort(function (a, b) { return a.localeCompare(b); });
+    },
     COUNTRIES: COUNTRIES,
     events: EVENTS,
     getEvents: function () { return EVENTS; },

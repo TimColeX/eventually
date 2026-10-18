@@ -256,7 +256,7 @@
        picked something real, and it keeps `select.value` as '' until they do — which
        is what _publish() checks. */
     const cats = '<option value="" disabled selected>Choose a category…</option>' +
-      Object.keys(global.EventuallyData.CATEGORIES).map(function (c) { return '<option>' + c + '</option>'; }).join('');
+      global.EventuallyData.categoryNames().map(function (c) { return '<option>' + c + '</option>'; }).join('');
     this.el.innerHTML =
       '<div class="co-backdrop"></div>' +
       '<div class="co-modal">' +
