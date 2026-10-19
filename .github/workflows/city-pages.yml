@@ -13,7 +13,7 @@ name: Rebuild city pages
 
 on:
   schedule:
-    # Every four hours, not once a day. Two reasons, and the second is the better one:
+    # Every eight hours, not once a day. Two reasons, and the second is the better one:
     #   1. An organiser who publishes an event and gets it approved had to wait up to a
     #      full day to see it on their city's page. (It is on the globe instantly — the
     #      page is the static SEO surface, rebuilt from live data.)
@@ -23,7 +23,18 @@ on:
     # is public, so Actions minutes are free; the only real cost is the Supabase read.
     # NOTE: GitHub queues scheduled jobs on shared runners — observed runs have landed
     # 5–6 hours after the cron time, so treat these as "at the earliest", not "at".
-    - cron: '30 */4 * * *'     # 00:30 / 04:30 / 08:30 / 12:30 / 16:30 / 20:30 UTC
+    #
+    # 🔴 WAS EVERY FOUR HOURS UNTIL 2026-10-18, AND THE REASON IT CHANGED IS COST, NOT
+    # TASTE. Supabase emailed that the org had passed its free-plan egress quota (5 GB;
+    # grace until 18 Nov). Measured: this job pulls **~60,000 rows in 60 pages of
+    # 250–360 KB** every run — **15–21 MB a run**, which at six runs a day was
+    # **2.7–3.9 GB a month**, most of the overage, almost all of it rebuilding pages
+    # that had not changed. Three runs a day halves it.
+    # ⚠️ DO NOT RAISE THE FREQUENCY BACK WITHOUT CHECKING THE EGRESS BUDGET FIRST. The
+    # cost is per RUN and is not going to fall on its own — the event table only grows.
+    # 💡 The manual "Run workflow" button below is the answer to "I just approved an
+    # event and want it on the city page now" — that was the real argument for 4-hourly.
+    - cron: '30 */8 * * *'     # 00:30 / 08:30 / 16:30 UTC
   workflow_dispatch: {}        # plus a manual "Run workflow" button — use it after
                                # approving an event you want on its city page now
 
