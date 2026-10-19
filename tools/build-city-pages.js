@@ -347,6 +347,70 @@ async function fetchWithOptional(select, optional, filter) {
   return fetchAll(present.length ? select + ',' + present.join(',') : select, filter);
 }
 
+/* ---------------------------------------------------------------------------
+ * THE GLOBE'S SNAPSHOT, WRITTEN AS A STATIC FILE
+ *
+ * 🔑 WHY THIS EXISTS, AND IT IS NOT A PERFORMANCE TWEAK. On 2026-10-18 Supabase
+ * emailed that the org had blown its free-plan egress quota (5 GB; 5.94 GB used with a
+ * week of the cycle left, ~270 MB/day). Measured: the app asks `events_in_view` for the
+ * whole world on EVERY boot — 3,000 rows, 1,127 KB of JSON, **313 KB gzipped on the
+ * wire, per visitor**. At the observed rate that is ~185 MB a day: essentially the
+ * entire overage, paid again for every single visit, for a payload that is the same for
+ * everyone and changes slowly.
+ *
+ * So the build writes it once, here, and the app loads it from GitHub Pages — where
+ * egress is free — falling back to the live RPC whenever the file is missing, stale or
+ * unreadable. Supabase then serves this payload THREE TIMES A DAY instead of once per
+ * visitor.
+ *
+ * ⚠️ THE TRADE, stated plainly: the event LIST is up to 8 hours old. Live/past states
+ * are NOT stale — the client computes those from each event's own timestamps
+ * (`typeForDate`, the live grace), so an older list still renders "on now" correctly.
+ * What lags is an event approved since the last build. ℹ️ SEARCH IS UNAFFECTED and
+ * still hits the database live, so a brand-new event is findable immediately.
+ *
+ * ⚠️ IT COSTS REPO SIZE: ~313 KB per version, three times a day, in a repo that IS the
+ * website (84 MB today). If that ever becomes uncomfortable, writing it on the 00:30 run
+ * only is a one-line change and trades 16 hours of list freshness for two thirds of the
+ * growth. Do not instead "optimise" it by dropping fields — `description` is already the
+ * 140-char snippet the cards render, and removing it empties them.
+ * --------------------------------------------------------------------------- */
+async function writeGlobeSnapshot(eventsDir) {
+  const hdr = { apikey: ANON, Authorization: 'Bearer ' + ANON };
+  // The app asks for the admin-configured window, so the snapshot has to use the same
+  // one or the file answers a different question from the request it replaces.
+  let windowDays = 60;
+  try {
+    const r = await fetch(`${SUPABASE}/rest/v1/app_config?select=config&limit=1`, { headers: hdr });
+    const rows = r.ok ? await r.json() : null;
+    const n = Number(rows && rows[0] && rows[0].config && rows[0].config.windowDays);
+    if (Number.isFinite(n) && n > 0) windowDays = Math.min(365, Math.max(1, Math.round(n)));
+  } catch { /* fall through on the default — a wrong window is better than no file */ }
+
+  const body = {
+    min_lat: -90, min_lon: -180, max_lat: 90, max_lon: 180,
+    to_ts: new Date(Date.now() + windowDays * 86400000).toISOString(),
+    cats: null,
+  };
+  const r = await fetch(`${SUPABASE}/rest/v1/rpc/events_in_view`, {
+    method: 'POST', headers: { ...hdr, 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error('events_in_view ' + r.status + ' ' + (await r.text()).slice(0, 160));
+  const rows = await r.json();
+  /* 🔴 NEVER WRITE AN EMPTY SNAPSHOT. The app treats a readable file as authoritative,
+     so a file with no rows would blank the globe for everyone until the next build —
+     a worse outcome than the egress this exists to save. An empty result means the RPC
+     had a bad day; leave yesterday's file in place and let the app use it. */
+  if (!Array.isArray(rows) || !rows.length) throw new Error('events_in_view returned 0 rows — keeping the previous snapshot');
+
+  fs.writeFileSync(
+    path.join(eventsDir, 'globe.json'),
+    JSON.stringify({ generated: new Date().toISOString(), windowDays, rows }),
+    'utf8'
+  );
+  return { rows: rows.length, windowDays };
+}
+
 async function cityProse() {
   // Reuses the AI-written city segments the radio host already caches. This is what turns
   // a bare event list into a page with actual substance — the difference between a real
@@ -1449,6 +1513,18 @@ function sitemap(list, eventPages) {
   fs.writeFileSync(path.join(OUT_ROOT, 'sitemap.xml'), sitemap(publish, nativePages), 'utf8');
   // Small on purpose: native events only, which is a handful, not the 58,000 imported ones.
   fs.writeFileSync(path.join(eventsDir, 'native.json'), JSON.stringify(nativeIndex), 'utf8');
+
+  /* The globe's payload, so visitors stop paying for it one at a time — see
+     writeGlobeSnapshot. ⚠️ NON-FATAL ON PURPOSE: the city pages are this job's actual
+     product, and they are already written by the time we get here. A failed snapshot
+     leaves the previous file in place and the app falls back to the live RPC, so the
+     worst case is the egress we had yesterday — never a broken build. */
+  try {
+    const snap = await writeGlobeSnapshot(eventsDir);
+    console.log(`Wrote events/globe.json — ${snap.rows} rows, ${snap.windowDays}-day window`);
+  } catch (e) {
+    console.warn('⚠️  globe.json NOT written: ' + e.message + ' (app falls back to the live RPC)');
+  }
   fs.writeFileSync(path.join(OUT_ROOT, 'robots.txt'),
     `User-agent: *\nAllow: /\n\nSitemap: ${SITE}/sitemap.xml\n`, 'utf8');
 

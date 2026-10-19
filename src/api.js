@@ -142,10 +142,70 @@
   let windowDays = 60;
   function setWindowDays(n) { const v = Number(n); if (Number.isFinite(v) && v > 0) windowDays = Math.min(365, Math.max(1, Math.round(v))); }
 
+  /* ---------------------------------------------------------------------------
+   * THE STATIC GLOBE SNAPSHOT
+   *
+   * 🔑 WHY: this one call was the single biggest thing we ship. 3,000 rows, 1,127 KB of
+   * JSON, **313 KB gzipped — per visitor, on every boot** — and the same bytes for
+   * everyone. Measured 2026-10-18 at ~185 MB a day, which was essentially the whole of
+   * the Supabase free-plan egress overage (5.94 GB against a 5 GB quota).
+   *
+   * The city-pages build now writes that payload to `/events/globe.json` three times a
+   * day (see tools/build-city-pages.js → writeGlobeSnapshot). GitHub Pages serves it,
+   * where egress is free, so Supabase answers this question three times a day instead of
+   * once per visit.
+   *
+   * ⚠️ THE FALLBACK IS THE WHOLE SAFETY MARGIN. Missing file, bad JSON, no rows, or a
+   * snapshot older than the guard → the live RPC runs exactly as before. That is also
+   * why this shipped before the first build existed: until CI writes the file, every
+   * visitor simply takes the old path.
+   * ℹ️ The service worker already refuses to cache anything under `/events/`, so the
+   * file is never served stale from the app shell — it is the CDN's copy or nothing.
+   * --------------------------------------------------------------------------- */
+  const SNAPSHOT_URL = '/events/globe.json';
+  /* 26 hours: comfortably more than the 8-hour build cadence plus GitHub's queueing
+     (runs have landed 5–6 hours late), and comfortably less than "nobody noticed CI has
+     been broken for a week". Past this the file is ignored and the RPC takes over, so a
+     dead build degrades to the old cost rather than to a frozen globe. */
+  const SNAPSHOT_MAX_AGE_MS = 26 * 3600 * 1000;
+
+  function fetchSnapshot() {
+    return fetch(SNAPSHOT_URL, { cache: 'no-cache' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (snap) {
+        if (!snap || !Array.isArray(snap.rows) || !snap.rows.length) return null;
+        const age = Date.now() - Date.parse(snap.generated || '');
+        if (!Number.isFinite(age) || age < 0 || age > SNAPSHOT_MAX_AGE_MS) return null;
+        return snap;
+      })
+      .catch(function () { return null; });
+  }
+
   // GET events for a viewport (defaults to the whole globe + the admin window, default 60 days).
   function fetchEvents(opts) {
     if (!REMOTE) return Promise.resolve(null);
     const o = opts || {};
+    /* ONLY THE WHOLE-WORLD REQUEST may be served from the file — that is the one the
+       snapshot was built for and the only one the app makes on boot. A bounded or
+       category-filtered call is somebody asking a different question, and it still goes
+       to the database. */
+    const wholeWorld = o.minLat == null && o.minLon == null && o.maxLat == null &&
+                       o.maxLon == null && !o.categories;
+    if (wholeWorld && !o._noSnapshot) {
+      return fetchSnapshot().then(function (snap) {
+        if (!snap) return fetchEvents({ _noSnapshot: true });
+        /* RESPECT THE ADMIN'S WINDOW EVEN IF THE FILE IS WIDER. The builder reads the
+           same `windowDays`, but the two can disagree across a config change, and the
+           server used to enforce this for us. Dropping anything beyond the window here
+           keeps the file honest without rebuilding it. */
+        const cutoff = Date.now() + windowDays * 86400000;
+        const rows = snap.rows.filter(function (a) {
+          const t = Date.parse(a.start_time);
+          return !Number.isFinite(t) || t <= cutoff;
+        });
+        return rows.map(toEvent);
+      });
+    }
     const body = {
       min_lat: o.minLat != null ? o.minLat : -90,
       min_lon: o.minLon != null ? o.minLon : -180,
