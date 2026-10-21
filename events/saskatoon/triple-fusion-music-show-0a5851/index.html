@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Triple Fusion Music Show — Saskatoon | Eventually</title>
+<meta name="description" content="Music performance by Fiyin Obayan, Amora Soul, and Wura Sol. Doors at 7 PM.">
+<link rel="canonical" href="https://eventually-app.com/events/saskatoon/triple-fusion-music-show-0a5851/">
+<meta name="robots" content="index,follow">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Triple Fusion Music Show">
+<meta property="og:description" content="Music performance by Fiyin Obayan, Amora Soul, and Wura Sol. Doors at 7 PM.">
+<meta property="og:url" content="https://eventually-app.com/events/saskatoon/triple-fusion-music-show-0a5851/">
+<meta property="og:image" content="https://gpsetmqivzchlvyrcgld.supabase.co/storage/v1/object/public/event-images/4ab00491-d78c-48d4-9d57-480c8c3db287/intake-1792554240902-0.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap">
+<style>
+  :root {
+    color-scheme: dark;
+    --font: 'Sora', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --mono: 'Space Mono', ui-monospace, 'SFMono-Regular', monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:#14100c; color:#ece5da; font:16px/1.65 var(--font); }
+  .wrap { position:relative; z-index:1; max-width:640px; margin:0 auto; padding:34px 20px 70px; }
+  a { color:#f0a24a; }
+  .home { font-weight:700; letter-spacing:-.02em; text-decoration:none; color:#ece5da; }
+  .home span { color:#CB5A3C; }
+  h1 { font-size:2rem; margin:18px 0 8px; letter-spacing:-.02em; text-wrap:balance; }
+  .poster { width:100%; border-radius:14px; display:block; margin:18px 0 6px; border:1px solid #2e2820; }
+  .meta { font-family:var(--mono); font-size:.88rem; color:#ffd8a8; font-variant-numeric:tabular-nums; margin:0 0 4px; }
+  .where { color:#c9bfb2; margin:0 0 18px; }
+  .tag { display:inline-block; font-family:var(--mono); font-size:.68rem; letter-spacing:.1em;
+         text-transform:uppercase; color:#f0a24a; border:1px solid #4a3a24; border-radius:99px; padding:2px 9px; }
+  .cta { display:inline-block; background:#CB5A3C; color:#fff; text-decoration:none;
+         padding:13px 22px; border-radius:11px; font-weight:700; margin:6px 10px 6px 0; }
+  .cta.ghost { background:transparent; color:#f0a24a; border:1px solid #4a3a24; }
+  .over { background:#241d16; border:1px solid #4a3a24; border-radius:12px; padding:14px 16px;
+          margin:0 0 18px; color:#e2c489; }
+  hr { border:none; border-top:1px solid #2e2820; margin:30px 0; }
+  .muted { color:#9a8f80; font-size:.9rem; }
+  .bg { position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
+  .bg img { position:absolute; top:50%; left:50%; width:min(120vw,1100px); transform:translate(-50%,-50%);
+            filter:blur(22px) saturate(1.05); opacity:.34; }
+  .bg::after { content:""; position:absolute; inset:0;
+               background:radial-gradient(ellipse at center, rgba(20,16,12,.34) 0%, rgba(20,16,12,.76) 58%, rgba(20,16,12,.96) 100%); }
+
+  /* ── EventCast (stage 1) ──────────────────────────────────────────────────
+     Hidden until the fetch finds a READY clip, so a page with no EventCast looks
+     deliberate rather than broken — there is no empty player and no spinner. */
+  .ec { background:#1d1812; border:1px solid #4a3a24; border-radius:14px;
+        padding:16px; margin:18px 0; display:flex; flex-direction:column; gap:13px; }
+  .ec-h { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .ec-k { font-family:var(--mono); font-size:.66rem; font-weight:700; letter-spacing:.14em;
+          text-transform:uppercase; color:#f0a24a; }
+  .ec-t { font-family:var(--mono); font-size:.72rem; color:#9a8f80; font-variant-numeric:tabular-nums; }
+  .ec-row { display:flex; align-items:center; gap:13px; }
+  .ec-play { width:52px; height:52px; flex:0 0 auto; border-radius:50%; border:0; background:#CB5A3C;
+             color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center;
+             padding:0; font-size:1rem; line-height:1; }
+  .ec-play:disabled { opacity:.6; cursor:progress; }
+  .ec-mid { flex:1; min-width:0; display:flex; flex-direction:column; gap:7px; }
+  .ec-bar { height:6px; border-radius:99px; background:#4a3a24; overflow:hidden; }
+  .ec-bar i { display:block; height:100%; width:0; background:#CB5A3C; border-radius:99px; }
+  .ec-by { margin:0; font-family:var(--mono); font-size:.7rem; color:#9a8f80; }
+  .ec-acts { display:flex; gap:14px; flex-wrap:wrap; }
+  .ec-link { background:none; border:0; padding:0; cursor:pointer; font-family:var(--mono);
+             font-size:.7rem; letter-spacing:.06em; text-transform:uppercase; color:#9a8f80;
+             text-decoration:underline; text-underline-offset:3px; }
+  .ec-link:hover { color:#f0a24a; }
+  /* An archive, not a pitch: once the event is over the clip is still here, but it is
+     visibly in the past rather than still selling tickets. */
+  .ec.is-past { border-color:#2e2820; }
+  .ec.is-past .ec-k { color:#9a8f80; }
+  .ec.is-past .ec-play { background:#4a3a24; }
+  /* The transition is on a transform-free property set and short on purpose; a progress
+     bar that eases looks like it is lying about where the audio is. */
+  @media (prefers-reduced-motion: reduce) { .ec-bar i { transition:none; } }
+</style>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"Event","name":"Triple Fusion Music Show","startDate":"2026-10-24T01:00:00+00:00","eventStatus":"https://schema.org/EventScheduled","eventAttendanceMode":"https://schema.org/OfflineEventAttendanceMode","description":"Music performance by Fiyin Obayan, Amora Soul, and Wura Sol. Doors at 7 PM.","image":"https://gpsetmqivzchlvyrcgld.supabase.co/storage/v1/object/public/event-images/4ab00491-d78c-48d4-9d57-480c8c3db287/intake-1792554240902-0.jpg","url":"https://eventually-app.com/events/saskatoon/triple-fusion-music-show-0a5851/","location":{"@type":"Place","name":"WBH","address":{"@type":"PostalAddress","streetAddress":"733 C 1st Ave N","addressLocality":"Saskatoon","addressCountry":"Canada"},"geo":{"@type":"GeoCoordinates","latitude":52.131802,"longitude":-106.660767}}}</script>
+</head>
+<body>
+<div class="bg"><img src="/assets/globe-blur.jpg" alt="" loading="lazy" onerror="this.remove()"></div>
+<div class="wrap">
+  <a class="home" href="/">eventually<span>.</span></a>
+
+  <!-- Swapped in by the script below once the event has finished. A printed QR code
+       outlives its event, so this page has to keep telling the truth without being
+       rebuilt — the date is in the page, so it can decide for itself. -->
+  <div class="over" id="over" hidden></div>
+
+  <span class="tag">Music</span>
+  <h1>Triple Fusion Music Show</h1>
+  <p class="meta">Fri 23 Oct · 19:00</p>
+  <p class="where">WBH, 733 C 1st Ave N, Saskatoon, Canada</p>
+  <img class="poster" src="https://gpsetmqivzchlvyrcgld.supabase.co/storage/v1/object/public/event-images/4ab00491-d78c-48d4-9d57-480c8c3db287/intake-1792554240902-0.jpg" alt="Triple Fusion Music Show">
+
+  <!-- EVENTCAST — ABOVE the description, by the owner's decision (2026-10-11). It is the
+       thing on this page you cannot get from a poster, so it should not be the thing you
+       scroll past the prose to find. Hidden until the fetch finds a READY clip; a page
+       without one shows nothing here at all, not an empty player.
+
+       Fetched client-side rather than baked in, because these pages are rebuilt by a
+       4-hourly cron: baked audio would be invisible for up to four hours after an
+       organiser approved it. The share metadata in <head>, which MUST be static, is
+       untouched by this. -->
+  <section class="ec" id="ec" hidden aria-labelledby="ec-k">
+    <div class="ec-h">
+      <span class="ec-k" id="ec-k">EventCast</span>
+      <span class="ec-t" id="ec-dur"></span>
+    </div>
+    <div class="ec-row">
+      <button type="button" class="ec-play" id="ec-play" aria-label="Play the EventCast">&#9654;</button>
+      <div class="ec-mid">
+        <div class="ec-bar" role="progressbar" aria-labelledby="ec-k" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="ec-bar"><i id="ec-prog"></i></div>
+        <p class="ec-by" id="ec-by">The Eventually hosts</p>
+      </div>
+    </div>
+    <!-- NO TRANSCRIPT AND NO READ-ALONG (owner's decision, 2026-10-11, after seeing it
+         live). A clip this short does not need its own wall of text under it, and the
+         caption was the worst part of the block: it truncated mid-word and labelled the
+         speakers "Host 1 / Host 2". The player is the feature; the words are in it.
+         ⚠️ The transcript WAS the page's indexable text for this block, so if the
+         EventCast is ever expected to earn search traffic of its own, this is the thing
+         to put back — the caption is still stored on the row, so nothing was lost. -->
+    <div class="ec-acts">
+      <button type="button" class="ec-link" id="ec-share">Share this</button>
+    </div>
+  </section>
+  <p>Music performance by Fiyin Obayan, Amora Soul, and Wura Sol. Doors at 7 PM.</p>
+
+  <p>
+    <a class="cta" href="https://www.eventbrite.com/e/triple-fusion-concert-volume-2-jazz-gospel-and-r-b-tickets-1992031821803" id="cta-tix" rel="noopener">Get tickets</a>
+    <a class="cta ghost" id="cta-globe" href="/?city=Saskatoon">See it on the globe</a>
+  </p>
+  <hr>
+  <p class="muted">More of what's on in <a href="/events/saskatoon/">Saskatoon</a> ·
+     <a href="/browse/">All cities</a></p>
+  <p class="muted">Organising something? <a href="/publish.html">Publish it on Eventually</a> — it appears on the globe
+     and gets a page like this one.</p>
+</div>
+<script>
+(function () {
+  'use strict';
+  var SB   = "https://gpsetmqivzchlvyrcgld.supabase.co";
+  var KEY  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdwc2V0bXFpdnpjaGx2eXJjZ2xkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1MDM2NzcsImV4cCI6MjA5ODA3OTY3N30.a0BB-FQDh5NKFvgxeSgJ3YmeN_HYOWGLOJza29wW8KI";
+  var EVID = "nat_af8494d2-2dca-4d07-8f07-dca5f40a5851";
+  var CITY = "Saskatoon";
+  var CTRY = "Canada";
+  var CITY_HREF = "/events/saskatoon/";
+  var ENDS = new Date("2026-10-24T05:00:00.000Z");
+  // A printed QR code outlives its event, so the page has to keep telling the truth
+  // without being rebuilt. The date is IN the page, so it can decide for itself.
+  var PAST = !isNaN(ENDS) && ENDS.getTime() <= Date.now();
+  var $ = function (id) { return document.getElementById(id); };
+  var hdr = { apikey: KEY, Authorization: 'Bearer ' + KEY };
+
+  /* ---- counters ----------------------------------------------------------
+     The same anonymous id and the same per-device opt-out as the app, because the
+     same person reading an event page and then opening the globe must count once.
+     ⚠️ log_usage_event ignores any name not in its allow-list, so these four were
+     added to it in 167 in the same change as these calls. */
+  function sid() {
+    try {
+      var s = localStorage.getItem('eventually.sid');
+      if (!s) { s = (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+                   : (Date.now().toString(36) + Math.random().toString(16).slice(2));
+                localStorage.setItem('eventually.sid', s); }
+      return s;
+    } catch (e) { return null; }
+  }
+  function track(name) {
+    try {
+      if (localStorage.getItem('eventually.notrack') === '1') return;
+      fetch(SB + '/rest/v1/rpc/log_usage_event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: KEY, Authorization: 'Bearer ' + KEY },
+        body: JSON.stringify({ p_event: name, p_sid: sid(), p_city: CITY || null }),
+        keepalive: true
+      }).catch(function () {});
+    } catch (e) {}
+  }
+
+  /* ---- after the event: a doorway, not a dead end -------------------------
+     A dead link teaches people not to tap the next one, so the finished notice
+     carries somewhere to go — and, where we can count it, HOW MUCH is there.
+     ⚠️ The number is counted by READING THE ROWS. "Prefer: count=exact" has returned
+     a false zero twice in this project, and "nothing else is on in Regina" is a far
+     worse thing to publish than no number at all. On any doubt it says nothing. */
+  var CAP = 60;
+  function ended() {
+    var o = $('over');
+    var plain = 'This event has finished. <a href="' + CITY_HREF + '">See what else is on in '
+              + "Saskatoon" + '</a>.';
+    o.innerHTML = plain;
+    o.hidden = false;
+    var tix = $('cta-tix');                    // the tickets are gone; don't offer them
+    if (tix) tix.remove();
+    var globe = $('cta-globe');
+    if (globe) { globe.classList.remove('ghost'); globe.textContent = "See what's on now"; }
+    if (!CITY) return;
+    var q = SB + '/rest/v1/events?select=event_id'
+          + '&city=eq.' + encodeURIComponent(CITY)
+          + (CTRY ? '&country=eq.' + encodeURIComponent(CTRY) : '')
+          + '&start_time=gte.' + encodeURIComponent(new Date().toISOString())
+          + '&start_time=lt.' + encodeURIComponent(new Date(Date.now() + 7 * 864e5).toISOString())
+          + '&published=not.is.false&or=(moderation.is.null,moderation.eq.approved)'
+          + '&limit=' + CAP;
+    fetch(q, { headers: hdr }).then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (rows) {
+        if (!rows || !rows.length) return;      // no number rather than a wrong one
+        var n = rows.length >= CAP ? 'more than ' + CAP : rows.length;
+        o.innerHTML = 'This event has finished — but there ' + (rows.length === 1 ? 'is' : 'are') + ' '
+          + n + ' other ' + (rows.length === 1 ? 'thing' : 'things') + ' on in '
+          + "Saskatoon" + ' this week. '
+          + '<a href="' + CITY_HREF + '">Have a look</a>.';
+      }).catch(function () {});
+  }
+  if (PAST) ended();
+
+  /* ---- the EventCast player ----------------------------------------------
+     Segments play back to back: Fish returns the whole two-host conversation as one
+     mp3, every other provider returns one clip per turn, and the player must not care
+     which. Only status=eq.ready rows are readable at all (167), so anything that
+     comes back is something the organiser approved word for word. */
+  fetch(SB + '/rest/v1/eventcasts?select=segments,status'
+          + '&event_id=eq.' + encodeURIComponent(EVID) + '&status=eq.ready&limit=1',
+        { headers: hdr })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (rows) {
+      var ec = rows && rows[0];
+      var segs = (ec && ec.segments) || [];
+      if (!segs.length || !segs[0].url) return;              // nothing approved → no player
+      mount(segs);
+    })
+    .catch(function () { /* no player, never a broken one */ });
+
+  function mount(segs) {
+    var box = $('ec'), btn = $('ec-play'), prog = $('ec-prog'), bar = $('ec-bar');
+    var dur = $('ec-dur');
+    // An EventCast written before the event is in the future tense and points at tickets
+    // that are gone, so after the event it is relabelled as what it now is: a record.
+    // Kept, because it costs nothing and it is what an organiser shows the next time they
+    // publish — but never presented as a live pitch.
+    if (PAST) {
+      box.classList.add('is-past');
+      $('ec-k').textContent = 'The EventCast';
+      $('ec-by').textContent = 'From before the event · the Eventually hosts';
+    }
+    box.hidden = false;
+    track('eventcast_view');
+
+    var audio = new Audio();
+    audio.preload = 'none';
+    var i = 0, played = false, finished = false;
+
+    function paint() {
+      // Across the WHOLE clip, not the current segment: a bar that restarts at each turn
+      // would read as the audio starting over.
+      var each = 100 / segs.length;
+      var within = (audio.duration && isFinite(audio.duration)) ? (audio.currentTime / audio.duration) : 0;
+      var pct = Math.min(100, Math.round(i * each + within * each));
+      prog.style.width = pct + '%';
+      bar.setAttribute('aria-valuenow', String(pct));
+      if (!finished && pct >= 90) { finished = true; track('eventcast_finish'); }
+    }
+    function load(n) { i = n; audio.src = segs[n].url; }
+    function stop(reset) {
+      audio.pause();
+      btn.innerHTML = '&#9654;';
+      btn.setAttribute('aria-label', 'Play the EventCast');
+      if (reset) { i = 0; prog.style.width = '0%'; bar.setAttribute('aria-valuenow', '0'); }
+    }
+
+    audio.addEventListener('timeupdate', paint);
+    audio.addEventListener('loadedmetadata', function () {
+      if (segs.length === 1 && audio.duration && isFinite(audio.duration)) {
+        dur.textContent = Math.floor(audio.duration / 60) + ':' + ('0' + Math.round(audio.duration % 60)).slice(-2);
+      }
+    });
+    audio.addEventListener('ended', function () {
+      if (i + 1 < segs.length) { load(i + 1); audio.play().catch(function () {}); return; }
+      prog.style.width = '100%'; bar.setAttribute('aria-valuenow', '100');
+      if (!finished) { finished = true; track('eventcast_finish'); }
+      stop(false);
+    });
+    // A clip that will not load must say so rather than leaving a dead button.
+    // A clip that will not load must not leave a dead play button sitting there. With
+    // the caption gone, the byline is the only line of text left to say so in.
+    audio.addEventListener('error', function () {
+      stop(true); btn.disabled = true;
+      $('ec-by').textContent = 'This EventCast could not be played.';
+    });
+
+    btn.addEventListener('click', function () {
+      if (!audio.paused) { stop(false); return; }
+      if (!audio.src) load(0);
+      btn.innerHTML = '&#10073;&#10073;';
+      btn.setAttribute('aria-label', 'Pause the EventCast');
+      audio.play().then(function () {
+        if (!played) { played = true; track('eventcast_play'); }
+      }).catch(function () { stop(false); });
+    });
+
+    $('ec-share').addEventListener('click', function () {
+      track('eventcast_share');
+      var url = location.href;
+      if (navigator.share) { navigator.share({ title: document.title, url: url }).catch(function () {}); return; }
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(url).then(function () {
+          $('ec-share').textContent = 'Link copied';
+          setTimeout(function () { $('ec-share').textContent = 'Share this'; }, 2000);
+        }).catch(function () {});
+      }
+    });
+  }
+})();
+</script>
+</body>
+</html>
