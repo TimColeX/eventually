@@ -1980,7 +1980,24 @@
           /* The type chips apply to these rows too. Filter BEFORE the slice, or a
              match set that starts with six Music events would leave nothing to show
              the visitor who asked for Family. */
+          /* 🔴 COLLAPSE REPEAT SITTINGS, BEFORE THE SLICE TO SIX.
+             A standing attraction is one row per DATE in the database, so searching
+             "London" returned London Eye three times and London Dungeon twice — five of
+             six rows spent on two places. The globe payload already solves this
+             (`dedupe_key` → `occurrences`, which is why the city panel says "+83 more
+             dates"), but `search_events` returns raw rows and bypassed all of it.
+             Same key as the server uses, minus the venue, which search does not return.
+             ⚠️ BEFORE the slice: collapsing afterwards would still waste the six.
+             ℹ️ No "+N more" here on purpose — this result set is a sample of the
+             matches, so any count would describe the sample rather than the event, and
+             an invented number is exactly what the city panel got right. */
+          const seenEv = {};
           const events = rows.filter(function (e) { return activeTypes[e.category] !== false; })
+            .filter(function (e) {
+              const k = String(e.title || '').trim().toLowerCase() + '|' + String(e.city || '').trim().toLowerCase();
+              if (seenEv[k]) return false;
+              seenEv[k] = 1; return true;
+            })
             .slice(0, 6)
             .map(function (e) { return { id: e.event_id, name: e.title, city: e.city, lat: e.lat, lon: e.lon, color: D.CATEGORIES[e.category] || '#CB5A3C' }; });
           renderSearchResults(cities, events);
@@ -2008,13 +2025,33 @@
   });
 
   /* ---------- header stats ---------- */
+  /* 🔴 "TOTAL" USED TO MEAN "HOW MANY WE HAPPENED TO LOAD", and it read as a claim
+     about the catalogue. The payload is capped at 3,000, so it said "3,000 total"
+     while search reported 847 in London alone — understating the real inventory by a
+     factor of twenty. Worse, it never added up: `live + upcoming` fell 43 short of it,
+     because the loaded set also holds events that have ENDED, which the globe filters
+     out of the markers. Three numbers that looked like a partition and were not.
+     ✅ Now: the two states that are actually PLOTTED, plus the real worldwide figure
+     when the snapshot carries one (see writeGlobeSnapshot).
+     ⚠️ NO FIGURE RATHER THAN A WRONG ONE — if the total is unknown (old snapshot, or
+     the live-RPC path) the stat is hidden entirely. */
   function updateStats() {
     const all = D.getEvents();
     const live = all.filter(function (e) { return D.typeForDate(e, selectedDate) === 'live'; }).length;
     const up = all.filter(function (e) { return D.typeForDate(e, selectedDate) === 'upcoming'; }).length;
-    document.getElementById('stat-live').textContent = live;
-    document.getElementById('stat-up').textContent = up;
-    document.getElementById('stat-total').textContent = all.length;
+    document.getElementById('stat-live').textContent = live.toLocaleString();
+    document.getElementById('stat-up').textContent = up.toLocaleString();
+    const world = (window.EventuallyAPI && window.EventuallyAPI.worldTotal) ? window.EventuallyAPI.worldTotal() : null;
+    const totalEl = document.getElementById('stat-total');
+    const wrap = totalEl.parentElement;
+    /* ⚠️ IT IS A PLANNER ESTIMATE, so it is shown as one: floored to the nearest 5,000
+       with a "+". Exact counts over this table time out (pg 57014), and printing an
+       estimate to the unit — "53,069 worldwide" — would claim a precision we do not
+       have. Flooring also keeps the "+" true if the estimate runs a little high. */
+    if (world && world >= 5000) {
+      totalEl.textContent = (Math.floor(world / 5000) * 5000).toLocaleString() + '+';
+      wrap.hidden = false;
+    } else { wrap.hidden = true; }
   }
   updateStats();
 

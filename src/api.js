@@ -163,6 +163,8 @@
    * file is never served stale from the app shell — it is the CDN's copy or nothing.
    * --------------------------------------------------------------------------- */
   const SNAPSHOT_URL = '/events/globe.json';
+  // How many upcoming events exist worldwide, per the snapshot. Null = unknown.
+  let worldTotal = null;
   /* 26 hours: comfortably more than the 8-hour build cadence plus GitHub's queueing
      (runs have landed 5–6 hours late), and comfortably less than "nobody noticed CI has
      been broken for a week". Past this the file is ignored and the RPC takes over, so a
@@ -203,6 +205,11 @@
           const t = Date.parse(a.start_time);
           return !Number.isFinite(t) || t <= cutoff;
         });
+        /* The one number the client cannot work out for itself: the payload is capped
+             at 3,000, so counting what arrived says nothing about how many exist. The
+             builder puts the real figure in the file; absent, it stays null and the
+             header simply omits the stat rather than quoting the cap. */
+        if (typeof snap.total === 'number' && snap.total > 0) worldTotal = snap.total;
         return rows.map(toEvent);
       });
     }
@@ -413,6 +420,7 @@
     config: { remote: REMOTE, baseUrl: BASE },
     boot: boot,
     onData: onData,
+    worldTotal: function () { return worldTotal; },
     fetchEvents: fetchEvents,
     setWindowDays: setWindowDays,
     toEvent: toEvent,

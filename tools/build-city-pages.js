@@ -397,6 +397,30 @@ async function writeGlobeSnapshot(eventsDir) {
   });
   if (!r.ok) throw new Error('events_in_view ' + r.status + ' ' + (await r.text()).slice(0, 160));
   const rows = await r.json();
+
+  /* HOW MANY EVENTS THERE ACTUALLY ARE, so the header can stop lying.
+     The payload is capped at 3,000, and the app was labelling that cap "total" — so it
+     read "3,000 total" while search reported 847 in London alone. The honest number is
+     this one, and it costs ONE count here (3× a day) instead of anything per visitor.
+     🔴 `count=planned`, NOT `count=exact`: the exact count over 60k rows **times out**
+     (PostgREST 500, pg 57014 — the same statement timeout the globe query fights).
+     Measured: planned answers in 0.54s.
+     ⚠️ SO THIS IS AN ESTIMATE, and the client renders it as one — floored to the
+     nearest 5,000 with a "+". A planner estimate printed to the unit would claim a
+     precision it does not have.
+     🪤 A ZERO IS TREATED AS "UNKNOWN", NOT AS ZERO. `Prefer: count=*` has produced
+     false zeros on this project before, and a confident "0 events" is far worse than
+     no number — the client hides the stat when this is absent. */
+  let total = null;
+  try {
+    const c = await fetch(
+      `${SUPABASE}/rest/v1/events?select=event_id&start_time=gte.${new Date().toISOString()}` +
+      `&published=not.is.false&moderation=eq.approved&or=(status.is.null,status.not.in.(cancelled,canceled))`,
+      { headers: { ...hdr, Range: '0-0', 'Range-Unit': 'items', Prefer: 'count=planned' } });
+    const m = (c.headers.get('content-range') || '').match(/\/(\d+)$/);
+    const n = m ? Number(m[1]) : 0;
+    if (Number.isFinite(n) && n > 0) total = n;
+  } catch { /* no total is fine — the header simply omits it */ }
   /* 🔴 NEVER WRITE AN EMPTY SNAPSHOT. The app treats a readable file as authoritative,
      so a file with no rows would blank the globe for everyone until the next build —
      a worse outcome than the egress this exists to save. An empty result means the RPC
@@ -405,10 +429,10 @@ async function writeGlobeSnapshot(eventsDir) {
 
   fs.writeFileSync(
     path.join(eventsDir, 'globe.json'),
-    JSON.stringify({ generated: new Date().toISOString(), windowDays, rows }),
+    JSON.stringify({ generated: new Date().toISOString(), windowDays, total, rows }),
     'utf8'
   );
-  return { rows: rows.length, windowDays };
+  return { rows: rows.length, windowDays, total };
 }
 
 async function cityProse() {
@@ -1521,7 +1545,8 @@ function sitemap(list, eventPages) {
      worst case is the egress we had yesterday — never a broken build. */
   try {
     const snap = await writeGlobeSnapshot(eventsDir);
-    console.log(`Wrote events/globe.json — ${snap.rows} rows, ${snap.windowDays}-day window`);
+    console.log(`Wrote events/globe.json — ${snap.rows} rows, ${snap.windowDays}-day window, ` +
+      (snap.total ? `${snap.total.toLocaleString()} events worldwide` : 'worldwide total unavailable'));
   } catch (e) {
     console.warn('⚠️  globe.json NOT written: ' + e.message + ' (app falls back to the live RPC)');
   }

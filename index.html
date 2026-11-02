@@ -76,7 +76,9 @@
       <div class="stats">
         <span><b id="stat-live">0</b> live</span>
         <span><b id="stat-up">0</b> upcoming</span>
-        <span class="muted"><b id="stat-total">0</b> total</span>
+        <!-- "total" meant "loaded", which was the 3,000-row cap. It now carries the real
+             worldwide figure from the snapshot, and hides itself when that is unknown. -->
+        <span class="muted" hidden><b id="stat-total">0</b> worldwide</span>
       </div>
       <div class="loc-wrap">
         <button id="nav-location" data-tour="location" class="loc-chip" title="Set your location"><svg class="loc-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 00-7 7c0 5.2 6.2 12.3 6.5 12.6a.7.7 0 001 0C12.8 21.3 19 14.2 19 9a7 7 0 00-7-7zm0 9.6A2.6 2.6 0 1114.6 9 2.6 2.6 0 0112 11.6z" fill="currentColor"/></svg> <span class="loc-name">Set location</span></button>
@@ -265,7 +267,7 @@
     /* Build stamp. Must match sw.js CACHE and version.json — `node tools/bump-version.js`
        keeps all three in step. This is how a running app knows a newer one exists.
        It stays inline because this file is the one the bump script rewrites. */
-    window.EVENTUALLY_BUILD = 'v317';
+    window.EVENTUALLY_BUILD = 'v318';
   </script>
   <!-- Backend config, shared with publish.html so there is one copy of it. Safe to
        commit: the anon key is a PUBLIC key, protected by row-level security.
