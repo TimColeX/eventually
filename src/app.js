@@ -3009,9 +3009,20 @@
         '<button class="bb-link" data-bb="publish">Add Event</button>' +
         '<button class="bb-link" data-bb="help">Help Centre</button>' +
       '</nav>' +
-      // Always-visible legal links (Google's brand review wants the Privacy Policy linked
-      // from the home page). Desktop only — on phones they stay in Help Centre and About.
-      '<div class="bb-legal"><a href="privacy.html" target="_blank" rel="noopener">Privacy</a> · ' +
+      /* THE FOOTER. It carried Privacy and Terms only — Google's brand review wants the
+         Privacy Policy linked from the home page, and nothing else had ever been added.
+         So About, Advertise and Browse Cities existed solely behind the ⋯ menu, which an
+         external reviewer flagged: a visitor cannot find the organiser side, or anything
+         explaining what this is, without opening a menu they have no reason to open.
+         🔑 BROWSE CITIES AND ADVERTISE ARE THE TWO THAT EARN THEIR PLACE: one is the way
+         in for somebody who does not want to spin a globe, the other is the only route to
+         the paying side. ⚠️ Still desktop-only — a phone has no room for a second row
+         under the bottom bar, and on mobile these ARE in the ⋯ menu. */
+      '<div class="bb-legal">' +
+        '<a href="/browse/">Browse cities</a> · ' +
+        '<a href="advertise.html">Advertise</a> · ' +
+        '<a href="about.html">About</a> · ' +
+        '<a href="privacy.html" target="_blank" rel="noopener">Privacy</a> · ' +
         '<a href="terms.html" target="_blank" rel="noopener">Terms</a></div>';
   }
   adbar.addEventListener('click', function (e) {
@@ -3092,6 +3103,10 @@
     // "Contact Sales" said nothing about what is for sale. The distinctive product is
     // a line read by the AI host in one city's briefing — name that.
     h += '<button class="dd-item" data-act="contact">Advertise on Eventually</button>';
+    /* ABOUT IS HERE FOR PHONES. The footer carries it on desktop, but .bb-legal is
+       hidden under 760px, so without this a phone visitor has no route to the page
+       that explains what Eventually is. */
+    h += '<button class="dd-item" data-act="about">About</button>';
     if (RT.plusComingSoon) h += '<button class="dd-item" data-act="plus">Eventually Plus</button>';
     else if (!p.plus) h += '<button class="dd-item" data-act="plus">Get Eventually Plus</button>';
     if (user) h += '<div class="dd-sep"></div><button class="dd-item dd-muted" data-act="signout">Sign Out</button>';
@@ -3116,6 +3131,7 @@
     else if (act === 'types') openTypes();
     else if (act === 'help') openHelp();
     else if (act === 'browse') location.href = '/browse/';
+    else if (act === 'about') location.href = 'about.html';
     // The menu now opens the Advertise PAGE rather than the enquiry form: a business
     // arriving cold needs to know what's on offer before being asked for its details.
     // The form is one tap further on (the page's CTA is /?advertise=1 → openContact),
@@ -3847,9 +3863,17 @@
      slow/unavailable. Plus members see it without the upsell. */
   function launchSignature() {
     if (!window.EventuallySignature) return;
-    const live = D.getEvents().filter(function (e) {
+    /* 🔴 THE SPLASH HAD THE SAME CAP BUG THE HEADER DID. This counted the LOADED set,
+       which tops out at 3,000, and the line read "3,000 events happening around the
+       world today" — understating ~53,000 by a factor of twenty, on the very first
+       screen anyone sees. The snapshot's real figure is used when it is there; the
+       loaded count is only a fallback, and the wording is honest either way (see
+       signature.js, which no longer says "today" for the worldwide line). */
+    const loadedLive = D.getEvents().filter(function (e) {
       const t = D.typeForDate(e, selectedDate); return t === 'live' || t === 'upcoming';
     }).length;
+    const world = (window.EventuallyAPI && window.EventuallyAPI.worldTotal) ? window.EventuallyAPI.worldTotal() : null;
+    const live = (world && world > loadedLive) ? world : loadedLive;
     // `isPlus` here also SUPPRESSES the splash upsell (visual + spoken). While Plus is
     // parked as "coming soon", suppress the upsell entirely rather than pitch it.
     const isPlus = !!((subState && subState.is_plus) || P.get().plus || RT.plusComingSoon);

@@ -161,10 +161,16 @@
     }
 
     const near = opts.nearCount || 0, total = opts.totalCount || 0;
-    const target = near > 0 ? near : total;
+    // Floored to the nearest 5,000 for the worldwide line, so the "+" is true even if
+    // the planner's estimate runs a little high. The "near you" count is exact and real.
+    const target = near > 0 ? near : (total >= 5000 ? Math.floor(total / 5000) * 5000 : total);
     const countLine = near > 0
       ? '<b class="sg-num">0</b> event' + (near === 1 ? '' : 's') + ' happening near you today'
-      : (total > 0 ? '<b class="sg-num">0</b> events happening around the world today'
+      /* NOT "today". This number is every upcoming event we know of, not today's -
+         and when it comes from the snapshot it is a planner ESTIMATE, so it is counted
+         up to a floored figure and shown with a "+". Saying "today" of ~53,000 events
+         would be a second untruth stacked on the first one this line used to tell. */
+      : (total > 0 ? '<b class="sg-num">0</b>+ events to discover around the world'
                    : 'Live experiences from around the world');
     const upsell = opts.isPlus ? '' :
       '<button class="sg-plus" type="button">✦ Unlock Eventually Plus — personalized AI briefings &amp; recommendations</button>';
