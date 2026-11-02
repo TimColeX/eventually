@@ -93,6 +93,17 @@
     </nav>
   </header>
 
+  <!-- WHAT THIS IS, for somebody who has just landed on a spinning globe covered in
+       orange spikes. The splash already carries a tagline, but an external reviewer
+       dismissed the intro and never saw it — which is the whole finding: the
+       explanation was trapped behind a screen people skip.
+       🔑 FIRST VISIT ONLY, and it leaves on the first interaction. A permanent band
+       would steal globe space from everyone for ever to answer a question each
+       visitor asks exactly once. See `introLine()` in src/app.js. -->
+  <p id="intro-line" class="intro-line" hidden>
+    Every event near you, on one globe — with two radio hosts who tell you what's on.
+  </p>
+
   <!-- globe controls -->
   <div class="globe-controls">
     <button id="ctl-spin" class="ctl" title="Pause / resume spin" aria-label="Pause spin">
@@ -267,7 +278,7 @@
     /* Build stamp. Must match sw.js CACHE and version.json — `node tools/bump-version.js`
        keeps all three in step. This is how a running app knows a newer one exists.
        It stays inline because this file is the one the bump script rewrites. */
-    window.EVENTUALLY_BUILD = 'v319';
+    window.EVENTUALLY_BUILD = 'v320';
   </script>
   <!-- Backend config, shared with publish.html so there is one copy of it. Safe to
        commit: the anon key is a PUBLIC key, protected by row-level security.

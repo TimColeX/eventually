@@ -3845,6 +3845,7 @@
       pruneSaved();                     // drop finished/ghost saved events → correct badge count
       syncReminders();                  // saved events are now resolvable → (re)schedule
       launchSignature();                // real data in → accurate "near you" count
+      introLine();                      // and the one line that says what this is
       openDeepLink();                   // ?city= / ?publish= from a city page
       tryPendingEvent();                // signed in on the way back → reopen their event
     });
@@ -3861,6 +3862,69 @@
      Shown once per session (the module guards). Fired from the data-ready points
      so the live "near you" count is real; a timeout is the safety net if data is
      slow/unavailable. Plus members see it without the upsell. */
+  /* The one-line explanation under the search bar. Shown once, to a first-time
+     visitor, and gone the moment they do anything at all.
+     🔑 WHY IT IS NOT PERMANENT: a visitor asks "what is this" exactly once, so a
+     standing band would cost every returning user screen space for ever to answer a
+     question they no longer have. It also fades rather than vanishing, so dismissing
+     it does not read as something breaking.
+     ⚠️ ANY interaction dismisses it — a tap, a drag of the globe, a key, a scroll.
+     A line that needs its own close button is a line that is in the way. */
+  function introLine() {
+    const el = document.getElementById('intro-line');
+    if (!el) return;
+    let seen = false;
+    try { seen = localStorage.getItem('eventually.intro.seen') === '1'; } catch (e) {}
+    if (seen) return;
+    /* POSITION IT FROM THE MEASURED BAR, not a guessed offset. The top bar's height
+       changes with the safe-area inset and again when the search wraps to its own row
+       on a phone — a hard-coded `top` was already overlapping it at 760px. The CSS
+       value stays as the pre-measurement fallback. */
+    const place = function () {
+      const bar = document.querySelector('.topbar');
+      if (bar) el.style.top = Math.round(bar.getBoundingClientRect().bottom + 10) + 'px';
+    };
+
+    /* 🔴 QUEUE BEHIND THE SPLASH *AND* THE TOUR, AND DO NOT LISTEN UNTIL THE LINE IS UP.
+       Two things went wrong before this:
+       1. The dismiss listeners were attached immediately, so the tap on the splash's own
+          "Tap to enter" button killed the line before it had ever been shown — it was
+          gone within ten seconds of every load and the visitor it exists for never saw
+          it. Nothing listens now until after the fade-in.
+       2. A first-time visitor also gets the 4-step TOUR (startTourIfNew, fired from the
+          splash's onDone), which is a full-screen overlay. A line underneath it would
+          have been two explanations competing. So hold while `.tour` is up — if the
+          tour ran, it did the explaining and this is only for whoever skipped it.
+       ⚠️ The cap matters: without it a tour left open for ever would leave a timer
+       polling for ever. */
+    let tries = 0;
+    const start = function () {
+      if ((document.querySelector('.signature') || document.querySelector('.tour')) && tries++ < 240) {
+        setTimeout(start, 250); return;
+      }
+      el.hidden = false;
+      place();
+      window.addEventListener('resize', place);
+      setTimeout(function () {
+        el.classList.add('in');
+        ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(function (n) {
+          window.addEventListener(n, done, true);
+        });
+        setTimeout(done, 15000);     // or it simply goes, if they read it and did nothing
+      }, 600);
+    };
+    const done = function () {
+      el.classList.remove('in');
+      setTimeout(function () { el.hidden = true; }, 400);
+      try { localStorage.setItem('eventually.intro.seen', '1'); } catch (e) {}
+      window.removeEventListener('resize', place);
+      ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(function (n) {
+        window.removeEventListener(n, done, true);
+      });
+    };
+    start();
+  }
+
   function launchSignature() {
     if (!window.EventuallySignature) return;
     /* 🔴 THE SPLASH HAD THE SAME CAP BUG THE HEADER DID. This counted the LOADED set,

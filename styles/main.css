@@ -987,6 +987,31 @@ body {
   opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s;
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ---------- the first-visit one-liner ----------
+   Sits just under the fixed top bar, OVER the globe — it must not push the layout,
+   because it is temporary and a reflow on dismissal would make the page jump.
+   `pointer-events: none` throughout: it is something to read, never something to hit,
+   and the globe behind it stays draggable. */
+.intro-line {
+  position: fixed; left: 50%; transform: translate(-50%, -6px);
+  top: calc(84px + env(safe-area-inset-top, 0px));
+  z-index: 25; margin: 0; max-width: min(92vw, 640px); text-align: center;
+  padding: 9px 18px; border-radius: 999px;
+  font-size: 13.5px; font-weight: 600; line-height: 1.45; letter-spacing: -.01em;
+  color: var(--ink); background: rgba(252, 247, 240, 0.86);
+  -webkit-backdrop-filter: blur(10px) saturate(1.2);
+  backdrop-filter: blur(10px) saturate(1.2);
+  border: 1px solid var(--line-2); box-shadow: 0 6px 18px rgba(33,26,21,.10);
+  opacity: 0; pointer-events: none; transition: opacity .45s ease, transform .45s ease;
+}
+.intro-line.in { opacity: 1; transform: translate(-50%, 0); }
+@media (prefers-reduced-motion: reduce) { .intro-line { transition: opacity .2s ease; } }
+/* Phones: the search wraps to a second row, so the line has to clear BOTH rows — the
+   same reason the spike label had to move down (see the 760px block below). */
+@media (max-width: 760px) {
+  .intro-line { top: calc(118px + env(safe-area-inset-top, 0px)); font-size: 12.5px; padding: 8px 14px; }
+}
 /* An actionable toast. 🔴 `.toast` is `pointer-events: none` so a passing message can
    never swallow a tap meant for the globe — which also means a button inside it would
    be dead. Only this variant takes taps back, and only while it is shown. */
