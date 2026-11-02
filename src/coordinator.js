@@ -346,7 +346,21 @@
             '<label class="co-tz-l">Time zone of the venue' +
               '<select class="f-tz"></select></label>' +
             '<p class="co-tz-note" aria-live="polite"></p>' +
-            '<label>Description<textarea class="f-desc" rows="3" placeholder="Tell people what to expect…"></textarea></label>' +
+            /* THE ONE FIELD THAT PAYS THE ORGANISER BACK.
+               A bare "Tell people what to expect…" got one-line descriptions, and a
+               one-line description is all the radio hosts have to talk about the event
+               with — they are given the title, category, city, date AND this. So the
+               hint says what it is actually for, in the organiser's own interest, and
+               names the specifics worth writing rather than asking for "detail" in the
+               abstract. Four rows, not three: a box that looks like a caption gets a
+               caption. Kept to two short sentences — a wall of guidance above an empty
+               box is its own deterrent. */
+            '<label>Description' +
+              '<textarea class="f-desc" rows="4" placeholder="What happens, who it&#39;s for, what to expect — and anything that makes it worth turning up…"></textarea></label>' +
+            // Sibling <p>, not a <span> inside the label: .co-hint carries a top margin,
+            // which an inline element would drop — and every other hint on this form is
+            // a <p> after its control (see the picture note and the map hint).
+            '<p class="co-hint co-hint-mid">Our radio hosts read this on air. The more you tell them — what happens, who it\'s for, who\'s taking part — the more they can say about your event instead of just its name and date.</p>' +
             /* WHO TO CREDIT. Optional, and the hint says "shown publicly" because it
                is: it goes onto the event's own page as schema.org `organizer`, which
                search engines read.

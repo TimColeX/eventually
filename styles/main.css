@@ -693,6 +693,11 @@ body {
 .co-search-l label { display: block; margin: 0; }   /* it IS the label; no extra gap */
 /* ONE supporting line, under a control or a card — the picture note, the map hint. */
 .co-hint { margin: 9px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--faint); }
+/* ...and the same line when ANOTHER FIELD follows it. This form's rhythm comes from each
+   label's own margin-bottom, so a hint dropped between two labels breaks the chain and the
+   next label butts straight against it (measured: a 0px gap under the Description hint).
+   Matches the label's own 14px rather than inventing a second spacing value. */
+.co-hint-mid { margin-bottom: 14px; }
 
 /* ONE section rhythm. A hairline above each group EXCEPT the first one in its column —
    a divider with nothing above it is just a stray line, and it pushed the right-hand
