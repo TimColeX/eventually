@@ -80,8 +80,26 @@
   let toastT;
   // `ms` lets a longer message (e.g. the publishing-limit wall, which carries a date and
   // an email address) stay on screen long enough to actually be read.
-  window.EventuallyToast = function (msg, ms) {
+  /* An optional third argument makes a toast actionable: { label, onTap }.
+     ⚠️ `pointer-events: none` on `.toast` means a plain toast can never swallow a tap
+     on the globe underneath — so the ACTION variant has to re-enable them (see the CSS)
+     and must therefore only be used when there is genuinely something to tap.
+     ℹ️ `textContent = msg` also clears any button left by the previous toast; keep that
+     assignment first or they accumulate. */
+  window.EventuallyToast = function (msg, ms, action) {
     toastEl.textContent = msg;
+    toastEl.classList.toggle('has-act', !!(action && action.label));
+    if (action && action.label) {
+      const b = document.createElement('button');
+      b.className = 'toast-act';
+      b.textContent = action.label;
+      b.addEventListener('click', function () {
+        clearTimeout(toastT);
+        toastEl.classList.remove('show');
+        try { action.onTap(); } catch (e) { console.warn('[toast] action failed', e); }
+      });
+      toastEl.appendChild(b);
+    }
     toastEl.classList.add('show');
     clearTimeout(toastT);
     toastT = setTimeout(function () { toastEl.classList.remove('show'); }, ms || 2600);
@@ -730,6 +748,7 @@
   }
   let pendingAction = null;
   let _askedSaveSignin = false;      // the post-save sign-in nudge fires once a session
+  let _askedHomeArea  = false;       // and so does the "make this my area" offer
 
   function openAuth(reason) {
     if (authSubEl) authSubEl.textContent = reason || AUTH_SUB_DEFAULT;
@@ -1332,9 +1351,18 @@
         '<div class="evd-actions">' +
           // Counts are REAL (event_counts, 78) and fill in once the panel is open. Until
           // then — or when there are none — no number is shown, never an invented one.
-          '<button class="ev-like' + (ev.userLiked ? ' on' : '') + '" data-act="like">♥ <span class="n">' + (ev.likes > 0 ? ev.likes.toLocaleString() : '') + '</span></button>' +
-          '<button class="ev-attend' + (ev.userAttending ? ' on' : '') + '" data-act="attend">✓ <span class="n">' + (ev.attending > 0 ? ev.attending.toLocaleString() : '') + '</span></button>' +
-          '<button class="ev-save' + (P.isSaved(ev.id) ? ' on' : '') + '" data-act="save">' + (P.isSaved(ev.id) ? '★' : '☆') + '</button>' +
+          '<button class="ev-like' + (ev.userLiked ? ' on' : '') + '" data-act="like"' +
+            ' aria-pressed="' + (ev.userLiked ? 'true' : 'false') + '"' +
+            ' aria-label="' + (ev.userLiked ? 'Remove like' : 'Like this event') + '"' +
+            ' title="' + (ev.userLiked ? 'Liked' : 'Like') + '">♥ <span class="n">' + (ev.likes > 0 ? ev.likes.toLocaleString() : '') + '</span></button>' +
+          '<button class="ev-attend' + (ev.userAttending ? ' on' : '') + '" data-act="attend"' +
+            ' aria-pressed="' + (ev.userAttending ? 'true' : 'false') + '"' +
+            ' aria-label="' + (ev.userAttending ? "I'm no longer going" : "I'm going") + '"' +
+            ' title="' + (ev.userAttending ? 'Going' : "I'm going") + '">✓ <span class="n">' + (ev.attending > 0 ? ev.attending.toLocaleString() : '') + '</span></button>' +
+          '<button class="ev-save' + (P.isSaved(ev.id) ? ' on' : '') + '" data-act="save"' +
+            ' aria-pressed="' + (P.isSaved(ev.id) ? 'true' : 'false') + '"' +
+            ' aria-label="' + (P.isSaved(ev.id) ? 'Remove from saved' : 'Save this event') + '"' +
+            ' title="' + (P.isSaved(ev.id) ? 'Saved' : 'Save') + '">' + (P.isSaved(ev.id) ? '★' : '☆') + '</button>' +
         '</div>' +
         '<div class="live-updates" hidden></div>' +
         avail +
@@ -1464,8 +1492,10 @@
       ev.userLiked = !!c.liked;
       ev.userAttending = !!c.going_me;
       const like = eventScroll.querySelector('.ev-like'), att = eventScroll.querySelector('.ev-attend');
-      if (like) { like.classList.toggle('on', ev.userLiked); like.querySelector('.n').textContent = ev.likes > 0 ? ev.likes.toLocaleString() : ''; }
-      if (att) { att.classList.toggle('on', ev.userAttending); att.querySelector('.n').textContent = ev.attending > 0 ? ev.attending.toLocaleString() : ''; }
+      if (like) { like.classList.toggle('on', ev.userLiked); like.querySelector('.n').textContent = ev.likes > 0 ? ev.likes.toLocaleString() : '';
+        setToggleLabel(like, ev.userLiked, 'Remove like', 'Like this event', 'Liked', 'Like'); }
+      if (att) { att.classList.toggle('on', ev.userAttending); att.querySelector('.n').textContent = ev.attending > 0 ? ev.attending.toLocaleString() : '';
+        setToggleLabel(att, ev.userAttending, "I'm no longer going", "I'm going", 'Going', "I'm going"); }
     }, function () {});
   }
 
@@ -1570,6 +1600,7 @@
     const ev = D.getById(activeEventId);
     if (act.dataset.act === 'save') {
       const on = P.toggleSaved(ev.id, snapOf(ev)); act.classList.toggle('on', on); act.textContent = on ? '★' : '☆';
+      setToggleLabel(act, on, 'Remove from saved', 'Save this event', 'Saved', 'Save');
       // A city you saved something in is a city you have been to, as far as the Passport
       // is concerned — and UNSAVING does not take it back, which is the point of keeping
       // this separately from `saved`.
@@ -1595,12 +1626,14 @@
       if (act.dataset.act === 'like') {
         ev.userLiked = !ev.userLiked; ev.likes = Math.max(0, ev.likes + (ev.userLiked ? 1 : -1));
         act.classList.toggle('on', ev.userLiked); act.querySelector('.n').textContent = ev.likes > 0 ? ev.likes.toLocaleString() : '';
+        setToggleLabel(act, ev.userLiked, 'Remove like', 'Like this event', 'Liked', 'Like');
         if (acctEnabled()) A.setUserEvent('like', ev.id, snap(ev), ev.userLiked);
         window.EventuallyToast(ev.userLiked ? 'Liked.' : 'Like removed.');
       } else {
         ev.userAttending = !ev.userAttending; ev.attending = Math.max(0, ev.attending + (ev.userAttending ? 1 : -1));
         if (ev.userAttending) { P.markAttended(ev.id); P.noteCity(ev.city, ev.country); }
         act.classList.toggle('on', ev.userAttending); act.querySelector('.n').textContent = ev.attending > 0 ? ev.attending.toLocaleString() : '';
+        setToggleLabel(act, ev.userAttending, "I'm no longer going", "I'm going", 'Going', "I'm going");
         if (acctEnabled()) A.setUserEvent('attend', ev.id, snap(ev), ev.userAttending);
         window.EventuallyToast(ev.userAttending ? "Marked as going." : 'No longer going.');
       }
@@ -1711,6 +1744,26 @@
     searchResults.classList.remove('show'); searchInput.value = '';
     // The AI host now follows the place you navigated to.
     if (o.lat != null && o.lon != null) setActiveBriefingLocation({ city: o.city || null, lat: +o.lat, lon: +o.lon });
+    /* OFFER TO MAKE IT YOURS — once, and only when there is no home area at all.
+       Searching a city is the clearest statement of interest anyone gives us, and until
+       now it set nothing: the chip still read "Set location", the calendar still asked,
+       and "For You" had no point to measure from.
+       🔑 AN OFFER, NOT AN ASSIGNMENT. Searching Tokyo out of curiosity must not make
+       Tokyo your home and start sending you Tokyo reminders — so this asks, and the
+       prompt FOLLOWS the navigation instead of interrupting it, the same shape as the
+       save → sign-in prompt. Dismissing it costs nothing; it is gone next time either
+       way, because a prompt that returns every search is nagging. */
+    if (!homeLoc() && o.city && o.lat != null && !_askedHomeArea) {
+      _askedHomeArea = true;
+      track('home_area_prompt', o.city);
+      window.EventuallyToast('Showing ' + o.city + '.', 7000, {
+        label: 'Make this my area',
+        onTap: function () {
+          setLocation({ city: o.city, lat: +o.lat, lon: +o.lon, source: 'manual' });
+          window.EventuallyToast(o.city + ' is now your area.');
+        }
+      });
+    }
     function finish() {
       globe.flyTo(o.lat, o.lon);
       globe.setHighlight(o.lat, o.lon, { color: '#ff3b30', id: o.eventId });
@@ -2583,6 +2636,16 @@
     return ' title="' + esc(TZ.label(z) + ' — the venue’s local time') + '"';
   }
 
+  /* Keep an icon button's accessible name in step with its state. The three action
+     buttons are toggled IN PLACE (the panel is not re-rendered on a tap), so whatever
+     the markup said at render time is stale one click later. */
+  function setToggleLabel(btn, on, labelOn, labelOff, titleOn, titleOff) {
+    if (!btn) return;
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.setAttribute('aria-label', on ? labelOn : labelOff);
+    btn.setAttribute('title', on ? titleOn : titleOff);
+  }
+
   function snapOf(ev) {
     /* ⚠️ `timezone` IS PART OF THE EVENT, NOT DECORATION. Without it here, a saved
        event resolved from its snapshot (the whole point of snapshots — it survives a
@@ -2695,9 +2758,22 @@
      already use.
      ⚠️ Before this, "For you" had NO distance limit — it listed the four nearest matches
      anywhere on earth. It gained the NEAR_KM limit so the calendar and the list agree. */
+  /* WHERE "FOR YOU" MEASURES FROM. Home first; the place you are LOOKING AT as a
+     fallback.
+     🔴 THE BUG THIS FIXES: this used to return home or nothing, and `savedRecs` scores
+     every event `d = 0` when there is no location — so the distance sort became
+     arbitrary and the list showed Jona, Petersfield and Madrid to someone who had just
+     searched London. A reviewer reported it as broken personalisation; it was a
+     degenerate sort.
+     ⚠️ HOME STILL WINS WHEN IT EXISTS, deliberately. This panel is the Calendar — your
+     days, your reminders, your saved events — so browsing Tokyo must not quietly
+     re-point it. The focus is only consulted when there is no home to point at, which
+     is exactly the case that was broken. */
   function forYouLoc() {
     const l = P.get().location;
-    return (l && l.lat != null && l.lon != null) ? l : null;
+    if (l && l.lat != null && l.lon != null) return l;
+    const a = activeBriefingLocation;
+    return (a && a.lat != null && a.lon != null) ? a : null;
   }
   function forYouEvents() {
     const loc = forYouLoc();

@@ -987,6 +987,17 @@ body {
   opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s;
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
+/* An actionable toast. 🔴 `.toast` is `pointer-events: none` so a passing message can
+   never swallow a tap meant for the globe — which also means a button inside it would
+   be dead. Only this variant takes taps back, and only while it is shown. */
+.toast.has-act { display: inline-flex; align-items: center; gap: 14px; padding-right: 8px; }
+.toast.has-act.show { pointer-events: auto; }
+.toast-act {
+  flex: none; cursor: pointer; font-family: var(--font); font-size: 12.5px; font-weight: 700;
+  padding: 7px 13px; border-radius: 9px; white-space: nowrap;
+  background: var(--clay); border: 1px solid var(--clay); color: var(--cream);
+}
+.toast-act:hover { background: var(--apricot); border-color: var(--apricot); color: var(--ink); }
 
 /* ---------- location chip + menu ---------- */
 .loc-wrap { position: relative; }
