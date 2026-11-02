@@ -2565,8 +2565,30 @@
   function svKey(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
   // A lightweight snapshot of a live event, stored with the save so it SURVIVES data reloads
   // (fixes "ghost" saved events that vanish when their id leaves the loaded window).
+  /* ---- saved-list times, in the venue's zone ----
+     The card (`eventCardHTML`) and the detail panel already do this through
+     `EventuallyTZ`; these two helpers are the same rule for the Calendar and List
+     views, which were still printing the reader's clock.
+     ⚠️ BOTH FALL BACK to the reader's clock when there is no zone, and when they do
+     they add no label — claiming a zone we do not have is worse than saying nothing. */
+  function svTime(ev) {
+    const TZ = window.EventuallyTZ, z = ev && ev.timezone;
+    const opts = { hour: '2-digit', minute: '2-digit', hour12: false };
+    if (TZ && z) return TZ.format(ev.date, z, opts);
+    return ev.date.toLocaleTimeString([], opts);
+  }
+  function svZoneTitle(ev) {
+    const TZ = window.EventuallyTZ, z = ev && ev.timezone;
+    if (!TZ || !z || TZ.sameAsLocal(ev.date, z)) return '';
+    return ' title="' + esc(TZ.label(z) + ' — the venue’s local time') + '"';
+  }
+
   function snapOf(ev) {
-    return { id: ev.id, name: ev.name, city: ev.city, category: ev.category,
+    /* ⚠️ `timezone` IS PART OF THE EVENT, NOT DECORATION. Without it here, a saved
+       event resolved from its snapshot (the whole point of snapshots — it survives a
+       data reload, and an event that has left the payload still renders) would fall
+       back to the reader's clock and quietly disagree with the same event's card. */
+    return { id: ev.id, name: ev.name, city: ev.city, category: ev.category, timezone: ev.timezone || null,
       categoryColor: ev.categoryColor, priceLabel: ev.priceLabel, lat: ev.lat, lon: ev.lon, venue: ev.venue || null,
       date: (ev.date && ev.date.toISOString) ? ev.date.toISOString() : (ev.date || null),
       endsAt: (ev.endsAt && ev.endsAt.toISOString) ? ev.endsAt.toISOString() : (ev.endsAt || null) };
@@ -2748,8 +2770,12 @@
     titleEl.textContent = svWD[d.getDay()] + ' ' + d.getDate();
     countEl.textContent = total + ' event' + (total === 1 ? '' : 's');
     const row = function (ev, isSaved) {
-      const t = ev.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-      return '<div class="sv-item" data-id="' + esc(ev.id) + '">' +
+      /* The VENUE's clock, like the card and the detail panel — a saved London gig
+         must not read 13:30 because you are in Saskatchewan. The row is too narrow
+         for a zone chip, so the zone goes in the tooltip, and only when it actually
+         differs from the reader's: a label that always says "your own time" is noise. */
+      const t = svTime(ev);
+      return '<div class="sv-item" data-id="' + esc(ev.id) + '"' + svZoneTitle(ev) + '>' +
         '<span class="sv-time">' + esc(t) + '</span>' +
         '<div class="sv-it-main"><div class="sv-it-title">' + (isSaved ? '<span class="sv-it-star" aria-label="Saved">★</span>' : '') + esc(ev.name) + '</div>' +
           '<div class="sv-it-sub">' + esc(ev.city || '') + (ev.priceLabel ? '<span class="sv-dot">·</span>' + esc(ev.priceLabel) : '') + '</div>' +
@@ -2769,7 +2795,7 @@
     }
     listView.innerHTML = evs.map(function (ev) {
       const d = ev.date && !isNaN(ev.date.getTime()) ? ev.date : null;
-      const when = d ? (svWD[d.getDay()] + ' ' + d.getDate() + ' ' + svMO[d.getMonth()].slice(0, 3) + ' · ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })) : 'Date TBC';
+      const when = d ? (svWD[d.getDay()] + ' ' + d.getDate() + ' ' + svMO[d.getMonth()].slice(0, 3) + ' · ' + svTime(ev)) : 'Date TBC';
       const sub = [ev.city, ev.priceLabel].filter(Boolean).join('  ·  ');
       return '<div class="sv-lrow">' +
         '<button class="sv-litem" data-id="' + esc(ev.id) + '">' +
