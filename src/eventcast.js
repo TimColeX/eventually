@@ -214,7 +214,10 @@
           ? '<p class="ec-note ec-warn"><b>Paused.</b> You changed ' + esc(ec.stale_reason || 'this event') +
             ', so what the hosts say no longer matches it. We are redoing it — it will come back here for you to hear. ' +
             '<b>We never quietly re-record it in your name.</b></p>'
-          : '<p class="ec-note">Thanks — we have your answers. We write and record it, then it appears here for you to listen to. ' +
+          // "we have your answers" is wrong for someone who gave none and had it
+          // written from their description (182) — the first thing we say back to them
+          // should not describe a thing they did not do.
+          : '<p class="ec-note">Thanks — that is with us. We write and record it, then it appears here for you to listen to. ' +
             'Usually within a day.</p>';
         h += questions(ec, true);
         h += '<div class="ec-btns"><button class="an-act" data-ec="restart">Change my answers</button></div>';
@@ -222,18 +225,46 @@
         box.innerHTML = h; return;
       }
 
-      // draft / nothing yet — the three questions.
+      /* draft / nothing yet.
+         🔴 THE THREE QUESTIONS ARE NO LONGER THE TOLL GATE (182). For four weeks this
+         branch opened with a blank three-question form, and in four weeks not one
+         EventCast was made — from events that passed every other test. The organiser
+         had already written a description; we simply never offered to use it.
+         So when `source` is 'description' the panel leads with the thing they can do
+         in one click, SHOWS THEM THE WORDS IT WILL USE (a panel that claims to have
+         their description without showing it is asking for trust it has not earned),
+         and the questions move behind "Make it sharper" as an improvement rather than
+         an entry fee. */
+      const src = state.source;
+      const evDesc = ((state.event && state.event.description) || '').trim();
       h += '<p class="ec-note">A short audio promo for your event, read by the Eventually hosts, free. ' +
-           'Answer two or three questions and we write and record it. You hear it first and decide whether to use it.</p>';
+           'You hear it first and decide whether to use it — it goes nowhere until you say so.</p>';
       if (eventGaps.length) {
         h += '<p class="ec-note ec-warn">Your event needs ' + esc(list(eventGaps)) +
              ' before we can make one. Press <b>Edit</b> above to add that.</p>';
       }
-      h += questions(ec, false);
+      if (src === 'description' && evDesc) {
+        h += '<p class="ec-note ec-good">Nothing to fill in — <b>we can write this from your description.</b></p>' +
+             '<blockquote class="ec-src">' + esc(evDesc.slice(0, 400)) + (evDesc.length > 400 ? '…' : '') + '</blockquote>';
+        // Open only when they have started answering, so someone who came here to add
+        // detail is not made to find it twice.
+        const started = !!(ec.ec_who || ec.ec_what || ec.ec_dont_miss);
+        h += '<details class="ec-more"' + (started ? ' open' : '') + '>' +
+               '<summary>Make it sharper (optional)</summary>' +
+               '<p class="ec-hint">Answer any of these and the hosts use them before your description.</p>' +
+               questions(ec, false) +
+             '</details>';
+      } else {
+        h += questions(ec, false);
+      }
       h += '<p class="ec-hint">These are the <b>only</b> facts the hosts are given. They are not allowed to add anything you did not write.</p>';
       if (answerGaps.length) h += '<p class="ec-note ec-warn">Still needs ' + esc(list(answerGaps)) + '.</p>';
+      // "Save answers" is pointless when there are no answers on screen to save — the
+      // Make button saves first anyway (see the ask handler), so showing both would be
+      // two buttons for one action and an invitation to press the wrong one.
       h += '<div class="ec-btns">' +
-             '<button class="an-act" data-ec="save">Save answers</button>' +
+             (src === 'description' && evDesc ? ''
+               : '<button class="an-act" data-ec="save">Save answers</button>') +
              '<button class="an-act ec-go" data-ec="ask"' + (state.ok ? '' : ' disabled') + '>Make me an EventCast</button>' +
            '</div>';
       h += '<div class="ec-msg" aria-live="polite"></div>';
@@ -325,7 +356,10 @@
         // Save first, always. Otherwise someone types an answer, presses the button, and
         // gets a script written from the answers they typed LAST time — which looks
         // exactly like the model ignoring them.
-        busy(true, 'Saving your answers…');
+        // Saving still happens either way, but an organiser who typed nothing (182 —
+        // written from their description) must not be told we are saving their answers.
+        const typed = Object.keys(answers()).some(function (k) { return (answers()[k] || '').trim(); });
+        busy(true, typed ? 'Saving your answers…' : 'Sending it to be written…');
         saveAnswers().then(function (r) {
           const d = (r && r.data) || {};
           if ((r && r.error) || d.error) { busy(false); say(explain(d, 'Couldn\'t save your answers.'), 'ec-bad'); return; }

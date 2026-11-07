@@ -941,6 +941,22 @@ body {
 .ec-script { font-family: var(--mono); font-size: 12.5px; line-height: 1.7; resize: vertical; min-height: 150px; }
 .ec-in:focus, .ec-script:focus { outline: 2px solid var(--clay); outline-offset: 1px; border-color: var(--clay); }
 .ec-hint { font-size: 11.5px; color: var(--muted); margin: 7px 0 0; line-height: 1.5; }
+/* THE ORGANISER'S OWN WORDS, SHOWN BACK (182). The panel says it can write the promo
+   from their description, so it has to prove it holds one — a claim with nothing under
+   it is the version of this they would not trust. Quoted, not boxed like an input:
+   it is not a field, and it must not invite an edit that belongs on the event itself. */
+.ec-src { margin: 0 0 10px; padding: 2px 0 2px 12px; border-left: 2px solid var(--line-2);
+          font-size: 12.5px; line-height: 1.6; color: var(--muted); font-style: italic; }
+/* The three questions, demoted to an improvement. `summary` carries the tap target, so
+   it gets the padding rather than the details wrapper. */
+.ec-more { margin: 10px 0 0; }
+/* 44px minimum, same as `.ec-go` below. Measured at 30px first time round: a disclosure
+   is a thumb target like any other, and this one is the only route back to the three
+   questions once they stop being the default. */
+.ec-more > summary { cursor: pointer; display: flex; align-items: center; min-height: 44px;
+                     font-size: 12px; font-weight: 700;
+                     color: var(--ink); list-style-position: inside; }
+.ec-more > summary:focus-visible { outline: 2px solid var(--clay); outline-offset: 2px; border-radius: 6px; }
 .ec-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 /* The one button that spends money and publishes words in someone's name. It should not
    look like "Duplicate" sitting next to it — and it gets a real 44px tap target at every
