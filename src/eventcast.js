@@ -302,7 +302,14 @@
       if (!S || !S.pathFor) { el.remove(); return; }
       S.pathFor(eventId).then(function (p) {
         if (!p) {
-          el.textContent = 'Your page is rebuilt a few times a day — the EventCast appears on it within a few hours.';
+          /* ⚠️ THIS USED TO SAY THE EVENTCAST TAKES A FEW HOURS. It does not: the player
+             fetches `eventcasts` live on page load filtered to status='ready', so an
+             approved clip is there the next time anyone opens the page. What can take a
+             few hours is the PAGE, which is built by the city-pages cron — and this
+             branch only runs when that page does not exist yet. Saying "your EventCast
+             appears within a few hours" put the delay on the wrong noun, at the exact
+             moment an organiser has just approved something and wants to see it. */
+          el.textContent = 'It is ready. Your event page is built a few times a day, and the promo is on it as soon as that page exists.';
           return;
         }
         el.innerHTML = '<a href="' + esc(p) + '" target="_blank" rel="noopener">Open your event page</a> to hear it there.';

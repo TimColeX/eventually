@@ -210,7 +210,10 @@
         // Land them on the list, where the event is now sitting as "In review" — that is
         // the honest answer to "did it work?", rather than an empty form and a toast.
         setTimeout(function () { showTab('events'); renderMyEvents(); window.scrollTo(0, 0); }, 60);
-        return { ok: true, live: false, message: 'Submitted for review — it goes live once we\'ve checked it.' };
+        // The promo is named here too, not only in the list behind this toast: this is
+        // the single highest-attention moment an organiser ever gives us, and until
+        // 2026-11-07 we spent it saying only that they now had to wait.
+        return { ok: true, live: false, message: 'Submitted for review — it goes live once we\'ve checked it. Then you can get a free radio promo for it.' };
       });
     },
     onUpdate: function (evt) {

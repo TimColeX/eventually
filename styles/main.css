@@ -909,6 +909,21 @@ body {
 .an-badge.an-pending { color: var(--warn); background: #f4ead0; }
 .an-badge.an-rejected { color: var(--danger); background: #f6ddd6; }
 .an-reason { display: block; color: var(--danger); font-size: 11px; margin-top: 2px; }
+/* The promo offer, shown under an event that is still in review. Deliberately quieter
+   than `.an-reason` — it is good news, not a problem to fix, and it must not compete
+   with a rejection sitting in the same slot on another row. */
+.an-promo { display: block; color: var(--muted); font-size: 11px; line-height: 1.45; margin-top: 3px; }
+/* The one button in the row that is an OFFER rather than an admin control. Everything
+   beside it (Edit, Duplicate, Link & QR) is a plain verb; this one has to read as a
+   thing you are being given, or it goes unpressed for another four weeks.
+
+   ⚠️ `.an-act.ec-offer`, NOT `.ec-offer`. `.an-act` is defined BELOW this block at the
+   same specificity, so the single-class version lost the cascade and the button rendered
+   in the ordinary ink colour — correct-looking CSS that did nothing. Height is left to
+   `.an-act`'s 36px on purpose: one taller button in a row of five misaligns the row,
+   which is a worse outcome than matching the group's existing target. */
+.an-act.ec-offer { border-color: var(--clay); color: var(--clay); font-weight: 700; }
+.an-act.ec-offer:hover { background: var(--clay); color: #fff; border-color: var(--clay); }
 .an-r-actions { display: flex; gap: 6px; flex: none; }
 /* ONE secondary-button height across the app's organiser surfaces (Edit / Duplicate /
    Remove, Rename, the picture's Remove, the page header's chips). 36px reads as

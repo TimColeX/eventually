@@ -1779,8 +1779,16 @@
         else if (mod === 'rejected') status = ' <span class="an-badge an-rejected">✕ rejected</span>';
         else if (!pub) status = ' <span class="an-badge">unpublished</span>';
         const reason = (mod === 'rejected' && e.moderation_reason) ? '<small class="an-reason">Reason: ' + esc(e.moderation_reason) + '</small>' : '';
+        /* The wait is where the promise belongs. Publishing lands them on this list with
+           the event sitting "pending review", and that pause is the one moment they are
+           looking at this screen with nothing to do. The promo button cannot appear yet
+           (no page to publish it on), so this says it is coming — and it is the only
+           place an organiser is told BEFORE they could use it. */
+        const promo = (mod === 'pending')
+          ? '<small class="an-promo">🎙 Once it is approved you can get a free 60-second radio promo, written from your description.</small>'
+          : '';
         html += '<div class="an-row2">' +
-          '<div class="an-r-main"><strong>' + esc(e.title) + '</strong>' + status + reason +
+          '<div class="an-r-main"><strong>' + esc(e.title) + '</strong>' + status + reason + promo +
           '<small>' + esc(e.city || '') + ' · ★ ' + (+e.saves || 0) + ' · ♥ ' + (+e.likes || 0) + ' · ✓ ' + (+e.attends || 0) + ' going</small></div>' +
           '<div class="an-r-actions">' +
             '<button class="an-act" data-me-act="edit" data-id="' + esc(e.event_id) + '">Edit</button>' +
@@ -1793,10 +1801,17 @@
             /* EventCast. Same gate as the link above and for the same reason: it is
                published ON the event page, so there is nothing to offer until that page
                exists. The panel itself decides whether this event QUALIFIES (it needs a
-               venue, a real start time and the three answers) — the button only has to
-               get them to a place where that can be explained. */
+               venue, a real start time and material to write from) — the button only has
+               to get them to a place where that can be explained.
+
+               🔴 IT USED TO SAY "EventCast", AND IN FOUR WEEKS NOBODY PRESSED IT ONCE —
+               not one row was ever created, so nobody got as far as being blocked by
+               anything. A made-up product name sitting sixth in a row of plain verbs
+               (Edit, Duplicate, Link & QR) reads as an admin control, not an offer. It
+               now says what it gives you, and `ec-offer` makes it the one coloured thing
+               in the row, because it is the only button here that is a gift. */
             (mod === 'approved' && pub
-              ? '<button class="an-act" data-me-act="eventcast" data-id="' + esc(e.event_id) + '">EventCast</button>'
+              ? '<button class="an-act ec-offer" data-me-act="eventcast" data-id="' + esc(e.event_id) + '">🎙 Free radio promo</button>'
               : '') +
             // "Remove from globe" replaces Delete: the listing comes off the map but the
             // record (and the posting slot it used) stays. Permanent deletion is admin-only —
