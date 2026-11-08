@@ -138,6 +138,38 @@
       return h + '</div>';
     }
 
+    /* TAKE IT AWAY — the promo is only worth something if it can leave this page.
+       An organiser's own WhatsApp, website, newsletter or podcast feed reaches people
+       Eventually cannot, and that value does not depend on us having an audience yet,
+       which is the honest answer to "why promote here too". So the file is theirs.
+       ⚠️ NOT a plain <a download>: the audio lives on Supabase storage, a different
+       origin, and the `download` attribute is IGNORED cross-origin — the browser would
+       navigate to the mp3 instead of saving it. Verified 2026-11-07 that the object
+       fetches cross-origin (554 KB, audio/mpeg), so it is fetched and re-served as a
+       same-origin blob. */
+    function slug(s) {
+      return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '').slice(0, 60) || 'eventcast';
+    }
+    function clipBlob() {
+      const segs = (state.eventcast && state.eventcast.segments) || [];
+      const urls = segs.map(function (s) { return s && s.url; }).filter(Boolean);
+      if (!urls.length) return Promise.reject(new Error('no audio'));
+      return Promise.all(urls.map(function (u) {
+        return fetch(u).then(function (r) {
+          if (!r.ok) throw new Error('fetch ' + r.status);
+          return r.arrayBuffer();
+        });
+      })).then(function (bufs) {
+        /* One file, however many the provider made. Fish returns the whole
+           conversation as a single mp3 (the live config), so this is usually a
+           one-item list. Other providers return a clip per turn, and joining MP3
+           frames end to end plays correctly in every common player — it is how the
+           segments already sound when the page plays them back to back. */
+        return new Blob(bufs, { type: 'audio/mpeg' });
+      });
+    }
+
     // The player. Segments play back to back: Fish returns one mp3 for the whole
     // conversation, other providers one per turn, and this must not care which.
     function player(label) {
@@ -184,9 +216,11 @@
                 owner hit exactly that: told to press Start again, and it was not on the
                 screen. A two-step dance nobody is told about is not a flow. */
              '<div class="ec-btns">' +
+               '<button class="an-act ec-go" data-ec="keep">⬇ Save the audio</button>' +
                '<button class="an-act" data-ec="decline">Take it off my page</button>' +
                '<button class="an-act" data-ec="restart">Start again</button>' +
              '</div>' +
+             '<p class="ec-hint">The file is yours — post it on WhatsApp, your site or your newsletter. (For Instagram or TikTok you would need to turn it into a video first; it is audio only.)</p>' +
              '<p class="ec-hint">“Start again” clears the answers and the recording so you can ask for a fresh one.</p>';
         h += '<div class="ec-msg" aria-live="polite"></div>';
         box.innerHTML = h;
@@ -201,10 +235,14 @@
         h += player(st === 'review' ? 'Listen before you decide' : 'Not on your page');
         h += '<div class="ec-btns">' +
                '<button class="an-act ec-go" data-ec="publish">Put it on my page</button>' +
+               // Offered on `declined` too: turning it down is a decision about YOUR
+               // PAGE, not about whether you may keep the recording. It is free either
+               // way, and the file is the part they can use anywhere.
+               '<button class="an-act" data-ec="keep">⬇ Save the audio</button>' +
                (st === 'review' ? '<button class="an-act" data-ec="decline">No thanks</button>' : '') +
                '<button class="an-act" data-ec="restart">Start again</button>' +
              '</div>';
-        h += '<p class="ec-hint">Written and recorded by us from your answers. Nothing goes on your page until you say so.</p>';
+        h += '<p class="ec-hint">Written and recorded by us from your answers. Nothing goes on your page until you say so — and the audio is yours to post anywhere either way.</p>';
         h += '<div class="ec-msg" aria-live="polite"></div>';
         box.innerHTML = h; return;
       }
@@ -348,6 +386,44 @@
       const act = b.dataset.ec;
 
       if (act === 'play') { play(b); return; }
+
+      if (act === 'keep') {
+        const name = slug((state.event && state.event.title) + '-eventually-promo') + '.mp3';
+        busy(true, 'Getting your file…');
+        clipBlob().then(function (blob) {
+          busy(false);
+          const save = function () {
+            const u = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = u; a.download = name;
+            document.body.appendChild(a); a.click(); a.remove();
+            // Revoked late: Safari has been known to abandon the save if the object
+            // URL disappears while the download is still starting.
+            setTimeout(function () { URL.revokeObjectURL(u); }, 30000);
+            say('Saved. Look in your downloads for ' + name, 'ec-good');
+          };
+          /* ON A PHONE, SHARING BEATS SAVING — and a phone is where someone actually
+             posts to WhatsApp. The native sheet hands the file straight to the app,
+             with no trip through a downloads folder most people cannot find.
+             ⚠️ iOS requires the share to happen while the tap is still "live", and the
+             fetch above may have spent that activation — so a refusal is not an error,
+             it falls through to the ordinary save. A cancelled sheet (AbortError) is
+             the user saying no and must stay silent. */
+          let file = null;
+          try { file = new File([blob], name, { type: 'audio/mpeg' }); } catch (e) { file = null; }
+          if (file && navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
+            navigator.share({ files: [file], title: (state.event && state.event.title) || 'My event' })
+              .then(function () { say('Shared.', 'ec-good'); },
+                    function (err) { if (!err || err.name !== 'AbortError') save(); });
+            return;
+          }
+          save();
+        }, function () {
+          busy(false);
+          say('Could not fetch the audio just now. Try again in a moment.', 'ec-bad');
+        });
+        return;
+      }
 
       if (act === 'save') {
         busy(true, 'Saving…');
