@@ -1348,6 +1348,12 @@
         (ev.description
           ? '<p class="evd-desc' + (ev.is_native ? '' : ' is-external') + '">' + esc(ev.description) + '</p>'
           : '') +
+        /* THE EVENTCAST, WHERE THE AUDIENCE ACTUALLY IS. The promo used to exist only
+           on the static /events/<city>/<slug>/ page, so the organiser could hear it and
+           the people spinning the globe — the audience the whole thing is for — could
+           not. Empty and hidden until a clip is found; only native events are even
+           looked up, so this costs nothing on the ~138,000 imported rows. */
+        '<div class="evd-ec" hidden></div>' +
         '<div class="evd-actions">' +
           // Counts are REAL (event_counts, 78) and fill in once the panel is open. Until
           // then — or when there are none — no number is shown, never an invented one.
@@ -1384,10 +1390,113 @@
       mountTicketDest(ev);
     }
     paintEventWeather(eventScroll);
+    mountEventcast(ev, eventScroll);
     M.mountAdSense(eventScroll);
     eventScroll.scrollTop = 0; syncEventShade();
     eventEl.classList.add('open');
   }
+  /* ── THE EVENTCAST PLAYER, IN THE DRAWER ───────────────────────────────────────
+     A promo nobody can hear is not a promo. Until now it played only on the static
+     event page, which is where the ORGANISER was sent to approve it — while every
+     visitor browsing the globe got the text and no idea a recording existed.
+
+     🔑 ONLY NATIVE EVENTS ARE LOOKED UP. `is_native` is already on the row, and the
+     overwhelming majority of the catalogue is imported, so this adds one small
+     request to the few hundred listings that could possibly have a clip and zero to
+     the rest. Egress is a live concern on this project (see the snapshot work); a
+     fetch per card open across 138,000 events would have been a careless way to undo
+     it. RLS only exposes `status = 'ready'` rows (167), so anything that comes back
+     is something an organiser approved word for word.
+
+     🔴 ONE VOICE AT A TIME. The radio host may be mid-briefing when someone presses
+     this, and two voices over each other is a bug this project has already fixed once
+     in `aihost.js`. Pressing play here STOPS the host outright — not ducks it. The
+     listener asked for this specific clip; finishing a sentence about something else
+     over the top of it is not a kindness. `stop()` takes the music bed with it. */
+  function mountEventcast(ev, scroll) {
+    const box = scroll && scroll.querySelector('.evd-ec');
+    if (!box || !ev || !ev.is_native) return;
+    const cfg = window.EVENTUALLY_CONFIG || {};
+    const base = (cfg.supabaseUrl || '').replace(/\/+$/, '');
+    if (!base || !cfg.supabaseAnonKey) return;
+    const want = ev.id;                       // the drawer may be reused before this lands
+
+    fetch(base + '/rest/v1/eventcasts?select=segments&status=eq.ready&limit=1&event_id=eq.' +
+          encodeURIComponent(ev.id),
+          { headers: { apikey: cfg.supabaseAnonKey, Authorization: 'Bearer ' + cfg.supabaseAnonKey } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (rows) {
+        // Someone can open and close three cards while this is in flight. Without this
+        // the promo for the FIRST one mounts inside whichever drawer is open now.
+        if (activeEventId !== want) return;
+        const segs = (rows && rows[0] && rows[0].segments) || [];
+        if (!segs.length || !segs[0].url) return;      // nothing approved → no player
+        paint(segs);
+      })
+      .catch(function () { /* no player, never a broken one */ });
+
+    function paint(segs) {
+      box.innerHTML =
+        '<div class="ecd-head">🎙 <b>The hosts on this event</b> <span class="ecd-sub">a 60-second listen</span></div>' +
+        '<div class="ecd-row">' +
+          '<button type="button" class="ecd-play" aria-label="Play the promo">&#9654;</button>' +
+          '<div class="ecd-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">' +
+            '<i class="ecd-prog"></i></div>' +
+        '</div>';
+      box.hidden = false;
+      track('eventcast_view_app', ev.city || null);
+
+      const btn = box.querySelector('.ecd-play');
+      const bar = box.querySelector('.ecd-bar');
+      const prog = box.querySelector('.ecd-prog');
+      const audio = new Audio();
+      audio.preload = 'none';
+      let i = 0, played = false, finished = false;
+
+      // Across the WHOLE clip, not the current segment: Fish returns one file and the
+      // others return one per turn, and a bar that restarted each turn would read as
+      // the audio starting over.
+      function size() {
+        const each = 100 / segs.length;
+        const within = (audio.duration && isFinite(audio.duration)) ? (audio.currentTime / audio.duration) : 0;
+        const pct = Math.min(100, Math.round(i * each + within * each));
+        prog.style.width = pct + '%';
+        bar.setAttribute('aria-valuenow', String(pct));
+        if (!finished && pct >= 90) { finished = true; track('eventcast_finish_app', ev.city || null); }
+      }
+      function halt(reset) {
+        try { audio.pause(); } catch (e) {}
+        btn.innerHTML = '&#9654;';
+        btn.setAttribute('aria-label', 'Play the promo');
+        if (reset) { i = 0; prog.style.width = '0%'; bar.setAttribute('aria-valuenow', '0'); }
+      }
+      audio.addEventListener('timeupdate', size);
+      audio.addEventListener('ended', function () {
+        if (i + 1 < segs.length) { i++; audio.src = segs[i].url; audio.play().catch(function () {}); return; }
+        prog.style.width = '100%'; bar.setAttribute('aria-valuenow', '100');
+        if (!finished) { finished = true; track('eventcast_finish_app', ev.city || null); }
+        halt(false);
+      });
+      audio.addEventListener('error', function () {
+        halt(true); btn.disabled = true;
+        box.querySelector('.ecd-sub').textContent = 'this could not be played';
+      });
+      btn.addEventListener('click', function () {
+        if (!audio.paused) { halt(false); return; }
+        try { if (aiHost && aiHost.stop) aiHost.stop(); } catch (e) {}   // one voice at a time
+        if (!audio.src) audio.src = segs[i].url;
+        btn.innerHTML = '&#10073;&#10073;';
+        btn.setAttribute('aria-label', 'Pause the promo');
+        audio.play().then(function () {
+          if (!played) { played = true; track('eventcast_play_app', ev.city || null); }
+        }).catch(function () { halt(false); });
+      });
+      // Closing the drawer must silence it. Without this the promo keeps playing over
+      // whatever the listener opens next, with no visible control to stop it.
+      box._stop = function () { halt(true); };
+    }
+  }
+
   /* The event page says it in words, and credits MET Norway — showing their data is
      licensed on the condition that they are credited wherever it appears. */
   function paintEventWeather(scroll) {
@@ -1404,7 +1513,14 @@
       el.hidden = false;
     });
   }
-  function closeEvent() { eventEl.classList.remove('open'); activeEventId = null; if (window.EventuallyUpdates) window.EventuallyUpdates.unmount(); }
+  function closeEvent() {
+    // Silence the promo FIRST: an <audio> created in mountEventcast is not attached to
+    // the DOM, so hiding the drawer does not stop it and it would play on over the
+    // next card with nothing on screen to pause it.
+    try { const b = eventScroll.querySelector('.evd-ec'); if (b && b._stop) b._stop(); } catch (e) {}
+    eventEl.classList.remove('open'); activeEventId = null;
+    if (window.EventuallyUpdates) window.EventuallyUpdates.unmount();
+  }
 
   /* "Take them straight back to the event they picked." Both sign-in routes leave the
      page (Google redirects; an emailed link opens a new tab), so the event is kept in
