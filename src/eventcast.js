@@ -198,7 +198,14 @@
       }
 
       if (st === 'ready') {
-        h += '<p class="ec-note ec-good">Live on your event page. ' +
+        /* ⚠️ THE HEADLINE IS PROVISIONAL UNTIL WE KNOW THE PAGE EXISTS — see
+           fillPageLink, which rewrites it. The owner hit this on 2026-11-07: the panel
+           said "Live on your event page. Anyone who opens the page can play it." and
+           directly underneath, "your event page is built a few times a day". Both
+           sentences at once, and only the second was true — the page had not been
+           generated yet, so they went looking for a player that could not be there.
+           The clip WAS ready and publicly readable; nothing was broken except this. */
+        h += '<p class="ec-note ec-good ec-live-h">Live on your event page. ' +
              (state.past ? 'Your event has finished, so it now plays there as a record of it.'
                          : 'Anyone who opens the page can play it.') + '</p>' +
              player('On your page now') +
@@ -346,8 +353,22 @@
              few hours is the PAGE, which is built by the city-pages cron — and this
              branch only runs when that page does not exist yet. Saying "your EventCast
              appears within a few hours" put the delay on the wrong noun, at the exact
-             moment an organiser has just approved something and wants to see it. */
-          el.textContent = 'It is ready. Your event page is built a few times a day, and the promo is on it as soon as that page exists.';
+             moment an organiser has just approved something and wants to see it.
+             AND THE HEADLINE HAS TO COME WITH IT: fixing this line alone left "Live on
+             your event page. Anyone who opens the page can play it." sitting directly
+             above it, which sent the owner off to look for a player on a page that did
+             not exist. One state, one story. */
+          const head = box.querySelector('.ec-live-h');
+          if (head) {
+            head.classList.remove('ec-good');
+            head.textContent = 'Approved and waiting for your page. Event pages are built a few times a day — '
+              + 'yours is not up yet, and the promo goes on it the moment it is. Nothing else for you to do.';
+          }
+          // The player's own label said "On your page now" under that corrected
+          // headline — the same contradiction one line lower down.
+          const lab = box.querySelector('.ec-plabel');
+          if (lab) lab.textContent = 'Ready — have a listen';
+          el.textContent = '';
           return;
         }
         el.innerHTML = '<a href="' + esc(p) + '" target="_blank" rel="noopener">Open your event page</a> to hear it there.';
