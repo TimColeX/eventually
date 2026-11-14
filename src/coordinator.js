@@ -171,8 +171,14 @@
   // Geocoding is the shared EventuallyGeo util (OpenStreetMap Nominatim).
   const Geo = global.EventuallyGeo;
 
+  // How far ahead an organiser may publish. 60 is what this form has always allowed
+  // and stays the FLOOR; `app_config.windowDays` raises it, 365 caps it (api.js clamps
+  // the same value identically). See _setupDate for why these were ever separate.
+  const AHEAD_MIN = 60, AHEAD_MAX = 365;
+
   function Coordinator(el, opts) {
     this.el = el;
+    this.maxAhead = AHEAD_MIN;             // until the remote config says otherwise
     this.onPublish = opts.onPublish;       // (eventObj) -> Promise<bool>
     this.onUpdate = opts.onUpdate;         // (eventObj) -> Promise<bool>  (edit existing)
     this.onDelete = opts.onDelete;         // (eventId) -> Promise<bool>
@@ -589,12 +595,29 @@
       });
     }
 
-    // Default the date to today; allow today .. +60 days (the forward window).
+    /* HOW FAR AHEAD YOU MAY PUBLISH NOW FOLLOWS THE ADMIN'S GLOBE WINDOW.
+       🔴 It used to be a hardcoded 60, in TWO places, reading nothing. The owner
+       raised "Globe time window (days)" to 180 in the admin portal, tried to publish
+       an event for 13 February, and was still stopped at 60 — because that setting
+       (`app_config.windowDays`) controls how far ahead an event SHOWS ON THE GLOBE
+       and had no connection to this form at all. Two numbers that obviously mean the
+       same thing to anyone reading the screen, wired to nothing in common.
+       Tying them together is also the coherent rule: you may publish an event as far
+       ahead as the globe will actually show it. Publishing beyond that would put an
+       organiser's event somewhere they cannot find it until it drifts into range.
+       FLOOR of 60 so a small window can never make this STRICTER than it has always
+       been; ceiling of 365 to match `api.js`'s own clamp on the same value. */
     const dateEl = this.el.querySelector('.f-date');
     const t = global.EventuallyData.TODAY;
     const fmt = function (d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
-    const maxD = new Date(t); maxD.setDate(maxD.getDate() + 60);
-    dateEl.value = fmt(t); dateEl.min = fmt(t); dateEl.max = fmt(maxD);
+    const applyMax = function (days) {
+      const maxD = new Date(t); maxD.setDate(maxD.getDate() + days);
+      dateEl.max = fmt(maxD);
+    };
+    dateEl.value = fmt(t); dateEl.min = fmt(t); applyMax(this.maxAhead);
+    // The config arrives after the form is built, so the limit is re-applied when it
+    // lands rather than leaving the picker stuck on the default.
+    this._loadMaxAhead().then(applyMax);
 
     this.el.querySelector('.co-close').addEventListener('click', function () { self.close(); });
     this.el.querySelector('.co-backdrop').addEventListener('click', function () { self.close(); });
@@ -684,6 +707,30 @@
   // "My Events" — mounted into a SEPARATE modal (its own ⋯-menu item). Renders the manage
   // list + engagement, and wires edit / publish-toggle / delete. `closeFn` closes that modal
   // so "Edit" can hand off to the Create modal.
+  /* `app_config.windowDays`, read once. publish.html does not load `api.js` (and
+     should not — it boots the globe's whole data layer), so this is a deliberately
+     tiny copy of `getConfig`'s one request rather than a new dependency. Any failure
+     resolves to the floor: an organiser must never be blocked from publishing because
+     a settings read did not come back. */
+  Coordinator.prototype._loadMaxAhead = function () {
+    const self = this;
+    if (this._maxAheadP) return this._maxAheadP;
+    const cfg = global.EVENTUALLY_CONFIG || {};
+    const base = (cfg.supabaseUrl || '').replace(/\/+$/, '');
+    if (!base || !cfg.supabaseAnonKey) return (this._maxAheadP = Promise.resolve(AHEAD_MIN));
+    this._maxAheadP = fetch(base + '/rest/v1/app_config?select=config&limit=1',
+        { headers: { apikey: cfg.supabaseAnonKey, Authorization: 'Bearer ' + cfg.supabaseAnonKey } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (rows) {
+        const n = Number(rows && rows[0] && rows[0].config && rows[0].config.windowDays);
+        const days = Number.isFinite(n) ? Math.min(AHEAD_MAX, Math.max(AHEAD_MIN, Math.round(n))) : AHEAD_MIN;
+        self.maxAhead = days;
+        return days;
+      })
+      .catch(function () { return AHEAD_MIN; });
+    return this._maxAheadP;
+  };
+
   Coordinator.prototype.mountMyEvents = function (container, closeFn) {
     const self = this;
     this._meClose = closeFn || function () {};
@@ -937,7 +984,10 @@
     const today = global.EventuallyData.TODAY;
     const dayOffset = Math.round((date - today) / 86400000);
     if (dayOffset < 0) { this._toast('Pick a date from today onward.'); return; }
-    if (dayOffset > 60) { this._toast('Events can be up to 60 days ahead.'); return; }
+    // Says the real number. "Events can be up to 60 days ahead" was not only the wrong
+    // limit once the admin raised the window, it was unfalsifiable from the outside:
+    // the message named a figure the settings screen appeared to contradict.
+    if (dayOffset > this.maxAhead) { this._toast('Events can be up to ' + this.maxAhead + ' days ahead.'); return; }
     const regMode = (q('.f-reg-eventually').checked && 'eventually')
                  || (q('.f-reg-none').checked && 'none') || 'link';
     const url = regMode === 'link' ? q('.f-url').value.trim() : '';

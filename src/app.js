@@ -944,9 +944,7 @@
     const dateLabel = (TZc && ev.timezone)
       ? TZc.format(ev.date, ev.timezone, { weekday: 'short', month: 'short', day: 'numeric' })
       : ev.date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-    const badge = type === 'live'
-      ? '<span class="badge live">● Live today</span>'
-      : '<span class="badge soon">Upcoming</span>';
+    const badge = type === 'live' ? liveBadge(ev) : '<span class="badge soon">Upcoming</span>';
     const featured = ev.sponsored ? '<span class="badge featured">★ Featured</span>' : '';
     const srcs = ev.sourceCount > 1
       ? '<span class="ev-srcs">◇ Found on ' + ev.sourceCount + ' sources</span>'
@@ -1243,7 +1241,7 @@
     // isn't cluttered with a label that tells them nothing.
     const tzTag = (TZ && zone && !TZ.sameAsLocal(ev.date, zone))
       ? ' <span class="evd-tz" title="' + esc(TZ.label(zone)) + '">' + esc(TZ.abbr(ev.date, zone) || TZ.label(zone)) + '</span>' : '';
-    const badge = type === 'live' ? '<span class="badge live">● Live today</span>'
+    const badge = type === 'live' ? liveBadge(ev)
       : (type === 'past' ? '<span class="badge past">Past</span>' : '<span class="badge soon">Upcoming</span>');
     const featured = ev.sponsored ? '<span class="badge featured">★ Featured</span>' : '';
     const transparency = ev.sourceCount > 1
@@ -1499,6 +1497,25 @@
 
   /* The event page says it in words, and credits MET Norway — showing their data is
      licensed on the condition that they are credited wherever it appears. */
+  /* "Live today" is the wrong sentence for something that is also on tomorrow and
+     for the next three months. `typeForDate` now correctly calls a run that has
+     started and not finished 'live' (see data.js), which makes the LABEL the thing
+     that has to tell the two apart: one occasion happening today, or a run you can
+     still catch. The end date is read in the VENUE's zone, like every other date on
+     these cards — a run ending 9 a.m. Sydney must not say 14 Feb to a reader in
+     Vancouver. */
+  function liveBadge(ev) {
+    if (!D.isRun || !D.isRun(ev)) return '<span class="badge live">● Live today</span>';
+    const TZr = window.EventuallyTZ;
+    let until = '';
+    try {
+      until = (TZr && ev.timezone)
+        ? TZr.format(ev.endsAt, ev.timezone, { month: 'short', day: 'numeric' })
+        : ev.endsAt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    } catch (e) { until = ''; }
+    return '<span class="badge live">● On now' + (until ? ' · to ' + esc(until) : '') + '</span>';
+  }
+
   function paintEventWeather(scroll) {
     const W = window.EventuallyWeather, el = scroll && scroll.querySelector('.evd-wx');
     if (!W || !W.enabled || !el || el.dataset.lat == null) return;

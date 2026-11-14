@@ -151,16 +151,58 @@
       && !(e.lat === 0 && e.lon === 0);
   }
 
+  /* 🔴 A RUN THAT HAS STARTED AND NOT FINISHED IS ON, NOT PAST.
+   *
+   * This compared the START date and nothing else, so an event lasting more than a
+   * day was 'live' on the day it opened and 'past' every day afterwards — and
+   * callers drop 'past'. Measured against the live snapshot on 2026-11-13: of 59
+   * events then in progress, 45 (76%) were classified 'past' and therefore HIDDEN,
+   * including a season pass running to 14 February and a yoga class with four weeks
+   * left. The backend goes to real trouble to keep these (176 holds events until
+   * they have ENDED; the briefing has its own LIVE_GRACE for the same reason) and
+   * the front end was throwing them away the morning after they opened.
+   *
+   * The remaining 14 were the other half of the same bug, and the half that got
+   * noticed: a 99-day pass wearing "● Live today" on its opening day.
+   *
+   * Judged against `selectedDate`, not `now`, because the timeline lets someone
+   * look at another day — "is this on then" has to answer for the day being asked
+   * about. `endsAt` is compared to the END of that day: a run that finishes at
+   * 9 a.m. is still on during the day it finishes. */
   function typeForDate(evt, selectedDate) {
-    // Same calendar day as selected date => LIVE (pillar). Future => UPCOMING (dot).
-    // Local calendar components so "today" matches the user's device date.
     const a = evt.date, b = selectedDate;
     const sameDay =
       a.getFullYear() === b.getFullYear() &&
       a.getMonth() === b.getMonth() &&
       a.getDate() === b.getDate();
     if (sameDay) return 'live';
+    if (evt.endsAt && a.getTime() < b.getTime()) {
+      const dayStart = new Date(b.getFullYear(), b.getMonth(), b.getDate()).getTime();
+      if (evt.endsAt.getTime() >= dayStart) return 'live';
+    }
     return a.getTime() > b.getTime() ? 'upcoming' : 'past';
+  }
+
+  /* Is this a RUN rather than a single occasion? Used only for the badge: "Live
+   * today" is the wrong sentence for something that is also on tomorrow and for the
+   * next three months.
+   *
+   * ⚠️ DURATION, NOT "does it cross a calendar day" — the obvious rule, measured and
+   * rejected. Against the live data (113 running events with an end time) spanning a
+   * venue calendar day flagged 28 of them, including a THREE-hour set and several
+   * five-hour gigs: a club night from ten until one crosses midnight and is plainly
+   * one night out.
+   *
+   * 36 hours also sits above a band the data cannot be trusted in. Between about 19
+   * and 31 hours sit a hockey match whose end time is 27 hours after its start and a
+   * greenhouse carrying its opening hours — source errors, not long events. Calling
+   * those "On now · to Nov 14" would dress a bad `end_time` up as a confident claim
+   * about tomorrow, where "Live today" is merely imprecise. **Where the input is
+   * unreliable the quieter label is the honest one**, so the line is drawn where only
+   * the unambiguous runs — passes, seasons, festivals, exhibitions — fall above it. */
+  function isRun(evt) {
+    if (!evt.endsAt || !evt.date) return false;
+    return (evt.endsAt.getTime() - evt.date.getTime()) > 36 * 3600000;
   }
 
   // Popularity 0..1 drives glow brightness / dot size / pillar height.
@@ -272,6 +314,7 @@
     getEvents: function () { return EVENTS; },
     getById: byId,
     typeForDate: typeForDate,
+    isRun: isRun,
     popularity: popularity,
     getClusters: function () { return CLUSTERS; },
     buildClusters: buildClusters,
