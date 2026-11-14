@@ -55,6 +55,16 @@ const OUT_ROOT = path.join(__dirname, '..');
 const MIN_EVENTS = 10;        // DISTINCT events — see titleKey/qualifies below
 const MIN_VENUES = 3;         // distinct locations — guards against one venue faking a "city"
 const DAYS_AHEAD = 90;
+/* AN ORGANISER'S OWN EVENT GETS ITS PAGE HOWEVER FAR AHEAD IT IS (up to the 365 days the
+   publish form allows). DAYS_AHEAD is right for a CITY page — a landing page listing the
+   next three months — and was wrong for an event page, which is the organiser's link and
+   QR. Found 2026-11-14: Love Jazz was moved to 13 Feb (92 days out), fell out of the
+   build, so "Link & QR" said "built a few times a day" about a page that would never be
+   built — while the page from its OLD date stayed online saying 5 December. Anyone who
+   publishes early, the people most likely to want a link early, got nothing until 90
+   days before. These rows make native event pages and native.json only; they are never
+   listed on, or counted by, a city page. */
+const NATIVE_DAYS_AHEAD = 365;
 const MAX_LISTED = 40;        // events shown per page
 
 // ── City name cleanup ────────────────────────────────────────────────────────
@@ -460,11 +470,13 @@ async function analyse() {
   // started within a day, stays in the build.
   const dayAgo = new Date(Date.now() - 86400000).toISOString();
   const to = new Date(Date.now() + DAYS_AHEAD * 86400000).toISOString();
+  // `timezone` is what makes the printed times correct — see fmt() below. description,
+  // image_url, address and event_sources feed the Event structured data (ldEvent).
+  const COLS = 'event_id,title,city,country,start_time,end_time,category,lat,lon,is_native,timezone,venue,address,description,image_url,created_at,event_sources(url,price,currency)';
+  const OPTIONAL = ['performers', 'organiser_name'];   // each needs its migration run — see fetchWithOptional
   const rows = await fetchWithOptional(
-    // `timezone` is what makes the printed times correct — see fmt() below. description,
-    // image_url, address and event_sources feed the Event structured data (ldEvent).
-    'event_id,title,city,country,start_time,end_time,category,lat,lon,is_native,timezone,venue,address,description,image_url,created_at,event_sources(url,price,currency)',
-    ['performers', 'organiser_name'],   // each needs its migration run — see fetchWithOptional
+    COLS,
+    OPTIONAL,
     /* A CANCELLED EVENT MUST NOT KEEP A SEARCH-INDEXED PAGE. 719 upcoming events were
        marked cancelled on 2026-10-01 and every one of them still had a page inviting a
        crawler and a reader to it. `status` has been stored since 81_event_changes.sql.
@@ -496,8 +508,22 @@ async function analyse() {
     + `&start_time=lte.${to}&order=start_time.asc`
   );
 
+  /* NATIVE EVENTS BEYOND DAYS_AHEAD — see NATIVE_DAYS_AHEAD. Same approval / published /
+     not-cancelled rules as above, so an event never gets a page here that it would be
+     refused there. Tagged `_later` and grouped with everything else (so they land in the
+     same city and the same sticky slug), then split off before any city counts, venues or
+     listings are worked out — a city page never sees them. */
+  const toNative = new Date(Date.now() + NATIVE_DAYS_AHEAD * 86400000).toISOString();
+  const later = await fetchWithOptional(
+    COLS,
+    OPTIONAL,
+    `moderation=eq.approved&published=not.is.false&or=(status.is.null,status.not.in.(cancelled,canceled))`
+    + `&is_native=eq.true&start_time=gt.${to}&start_time=lte.${toNative}&order=start_time.asc`
+  );
+  later.forEach((e) => { e._later = true; });
+
   const byCity = new Map();
-  for (const e of rows) {
+  for (const e of rows.concat(later)) {
     e.title = cleanTitle(e.title);          // normalise once, before anything groups on it
     const city = cleanCity(e.city);
     if (!city) continue;
@@ -510,7 +536,7 @@ async function analyse() {
     c.events.push(e);
     // Distinct rounded coordinates ≈ distinct venues. A genuine city has many; a data
     // artifact (one venue, or an aggregator's default location) has one or two.
-    if (e.lat != null && e.lon != null) c.venues.add(e.lat.toFixed(2) + ',' + e.lon.toFixed(2));
+    if (!e._later && e.lat != null && e.lon != null) c.venues.add(e.lat.toFixed(2) + ',' + e.lon.toFixed(2));
   }
 
   // MERGE ROWS WITH A MISSING COUNTRY into the same city's main entry. Sources disagree:
@@ -535,6 +561,9 @@ async function analyse() {
      The list is chronological or it is noise. */
   for (const c of byCity.values()) {
     c.events.sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+    // Split the far-ahead native events off BEFORE anything counts c.events (see `later`).
+    c.later = c.events.filter((e) => e._later);
+    c.events = c.events.filter((e) => !e._later);
   }
 
   const all = [...byCity.values()].map((c) => ({
@@ -1467,7 +1496,7 @@ function sitemap(list, eventPages) {
     // A page of its own for each native event, so an organiser has something to send.
     // Old pages are never deleted: a printed QR outlives its event, and the page
     // detects that for itself rather than 404ing on someone standing in a venue.
-    c.events.filter((e) => e.is_native).forEach((e) => {
+    c.events.concat(c.later || []).filter((e) => e.is_native).forEach((e) => {
       const edir = path.join(dir, eventSlug(e));
       fs.mkdirSync(edir, { recursive: true });
       fs.writeFileSync(path.join(edir, 'index.html'), eventPage(e, c), 'utf8');
@@ -1500,7 +1529,7 @@ function sitemap(list, eventPages) {
   const covered = new Set(publish.map((c) => c.slug));
   all.forEach((c) => {
     if (covered.has(c.slug)) return;
-    c.events.filter((e) => e.is_native).forEach((e) => {
+    c.events.concat(c.later || []).filter((e) => e.is_native).forEach((e) => {
       const edir = path.join(eventsDir, c.slug, eventSlug(e));
       fs.mkdirSync(edir, { recursive: true });
       fs.writeFileSync(path.join(edir, 'index.html'), eventPage(e, c, false), 'utf8');
