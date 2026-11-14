@@ -1411,6 +1411,12 @@
             ' aria-pressed="' + (P.isSaved(ev.id) ? 'true' : 'false') + '"' +
             ' aria-label="' + (P.isSaved(ev.id) ? 'Remove from saved' : 'Save this event') + '"' +
             ' title="' + (P.isSaved(ev.id) ? 'Saved' : 'Save') + '"><span class="ic" aria-hidden="true">' + (P.isSaved(ev.id) ? '★' : '☆') + '</span><span class="lbl">' + (P.isSaved(ev.id) ? 'Saved' : 'Save') + '</span></button>' +
+          // Native events only, and revealed by mountShare() once the page is known to
+          // exist — a Share button that leads to a 404 is worse than none.
+          (ev.is_native
+            ? '<button type="button" class="ev-share evd-act" data-act="share" hidden aria-label="Share this event\'s page"' +
+              ' title="Share"><span class="ic" aria-hidden="true">↗</span><span class="lbl">Share</span></button>'
+            : '') +
         '</div>' +
         '<div class="live-updates" hidden></div>' +
         avail +
@@ -1434,6 +1440,7 @@
     }
     paintEventWeather(eventScroll);
     mountEventcast(ev, eventScroll);
+    mountShare(ev, eventScroll);
     foldDescription();
     M.mountAdSense(eventScroll);
     eventScroll.scrollTop = 0; syncEventShade();
@@ -1457,6 +1464,28 @@
      in `aihost.js`. Pressing play here STOPS the host outright — not ducks it. The
      listener asked for this specific clip; finishing a sentence about something else
      over the top of it is not a kindness. `stop()` takes the music bed with it. */
+  /* ── SHARE, FOR EVENTS PUBLISHED ON EVENTUALLY ──────────────────────────────────
+     The organiser's event page (/events/<city>/<slug>/) is the thing worth passing on:
+     their poster, the hosts' promo, the details, and a link that opens without the app.
+     The path is looked up in events/native.json through share.js — the same index
+     "Link & QR" uses — because only the page builder knows it (city slugs are
+     disambiguated, e.g. london-ca). Not in the index = page not built yet, and the
+     button stays hidden rather than sharing a link that 404s. Imported events have no
+     page of ours, so they never get the button and never cost the lookup. */
+  function mountShare(ev, scroll) {
+    const btn = scroll && scroll.querySelector('.ev-share');
+    const S = window.EventuallyShare;
+    if (!btn || !ev || !ev.is_native || !S || !S.pathFor) return;
+    const want = ev.id;
+    S.pathFor(ev.id).then(function (p) {
+      if (!p || activeEventId !== want || !btn.isConnected) return;
+      btn.dataset.url = location.origin + p;
+      btn.hidden = false;
+      const row = btn.closest('.evd-actions');
+      if (row) row.classList.add('has-share');
+    }, function () { /* no index → no button; nothing to tell anyone */ });
+  }
+
   function mountEventcast(ev, scroll) {
     const box = scroll && scroll.querySelector('.evd-ec');
     if (!box || !ev || !ev.is_native) return;
@@ -1921,6 +1950,22 @@
     }
     const act = e.target.closest('[data-act]'); if (!act) return;
     const ev = D.getById(activeEventId);
+    /* SHARE needs no account — passing a link on is the last thing to put a sign-in in
+       front of. Phones get the system share sheet (WhatsApp, Messages, copy link …) with
+       the page's link; anything without one (most desktops) opens the page itself in a
+       new tab, where the address is there to copy. A dismissed sheet rejects with
+       AbortError — that is the person changing their mind, not a failure. */
+    if (act.dataset.act === 'share') {
+      const url = act.dataset.url; if (!url) return;
+      if (navigator.share) {
+        navigator.share({ title: (ev && ev.name) || 'Eventually', url: url }).catch(function (err) {   // app rows call it `name`
+          if (err && err.name !== 'AbortError') window.open(url, '_blank', 'noopener');
+        });
+      } else {
+        window.open(url, '_blank', 'noopener');
+      }
+      return;
+    }
     if (act.dataset.act === 'save') {
       const on = P.toggleSaved(ev.id, snapOf(ev)); act.classList.toggle('on', on);
       // The symbol and the word separately — setting the button's textContent (as this

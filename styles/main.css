@@ -1948,6 +1948,28 @@ body.no-timeline.has-ad .legend { bottom: calc(138px + env(safe-area-inset-botto
 .evd-actions .evd-act .ic { font-size: 14px; line-height: 1; }
 .evd-actions .evd-act .n:empty { display: none; }
 .evd-actions .evd-act .n { font-variant-numeric: tabular-nums; color: var(--muted); }
+/* Four across once a native event's Share button is revealed (mountShare). Inline
+   "✓ Going 148" needs ~78px and a quarter of a 320px phone's row is ~59px, so in this
+   mode each button STACKS: icon + count on top, the word underneath — the usual phone
+   action-bar shape, and it fits with room to spare. `display:flex` above would beat the
+   `hidden` attribute, hence the explicit rule. */
+.evd-actions .ev-share[hidden] { display: none; }
+/* Save (since v330) and Share had no base button style in the drawer — only Like and
+   Going share the `.ev-like, .ev-attend` rule — so they rendered with the BROWSER'S
+   default 2px black outset border and system font, visibly unlike their neighbours.
+   Scoped to the drawer so the list card's own Save is untouched. */
+.evd-actions .ev-save, .evd-actions .ev-share {
+  border: 1px solid var(--line-2); color: var(--ink); font-family: var(--font); cursor: pointer; transition: .15s; }
+.evd-actions .ev-save:hover, .evd-actions .ev-share:hover { border-color: var(--clay); }
+.evd-actions .ev-save.on { border-color: var(--clay); color: var(--clay); }
+.evd-actions.has-share { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.evd-actions.has-share .evd-act {
+  flex-wrap: wrap; align-content: center; column-gap: 4px; row-gap: 3px;
+  height: 54px; font-size: 12px; padding: 0 4px; }
+.evd-actions.has-share .ev-save { padding: 0 4px !important; }   /* beats the list card's !important (line ~1115) */
+/* The word takes a full line of its own, so icon + count share the line above, centred. */
+.evd-actions.has-share .evd-act .lbl { flex-basis: 100%; text-align: center; order: 2; }
+.evd-actions.has-share .evd-act .n   { order: 1; }   /* the markup puts it after the word */
 /* Signed-out preview: what the event IS stays visible above; the description, actions
    and ticket link sit behind this one prompt (see openEvent's `gated`). */
 /* ⚠️ UNUSED SINCE v278 — the sign-in wall was removed from the event panel and the
