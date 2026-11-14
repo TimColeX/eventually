@@ -129,6 +129,11 @@
       // True when the payload carried only a snippet (126). The detail panel
       // fetches the rest on open; a card never needs it.
       descTruncated: !!a.desc_truncated,
+      /* The source gave a DATE and no time, and the importer used midday so the
+         event could not drift onto the wrong day (185). Only an explicit true means
+         unknown: a row imported before the flag existed sends nothing, and "we have
+         not asked yet" must not be shown to a reader as "the time is unknown". */
+      timeTbc: a.time_tbc === true,
       /* How many sittings of this event the one entry stands for (127). A
          recurring drop-in session was previously one row, one dot and one slot
          in the 3,000 PER SITTING — 1,000 Saskatoon rows held only 90 distinct

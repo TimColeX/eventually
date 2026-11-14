@@ -1236,10 +1236,17 @@
     const zone = ev.timezone || null;
     const inZone = function (d, o) { return (TZ && zone) ? TZ.format(d, zone, o) : d.toLocaleString(undefined, o); };
     const dateLabel = inZone(ev.date, { weekday: 'long', month: 'long', day: 'numeric' });
-    const timeLabel = inZone(ev.date, { hour: 'numeric', minute: '2-digit' });
+    /* 185 — DON'T STATE A TIME NOBODY PUBLISHED. When the source gave a date and
+       no time, the importer stores midday so the event cannot drift onto the wrong
+       day; printing that back reads as "doors at twelve" to someone deciding whether
+       to go. The date is still certain, so only the time is withheld. */
+    const timeLabel = ev.timeTbc
+      ? 'Time TBC'
+      : inZone(ev.date, { hour: 'numeric', minute: '2-digit' });
     // Name the zone only when it differs from the reader's, so a local event
     // isn't cluttered with a label that tells them nothing.
-    const tzTag = (TZ && zone && !TZ.sameAsLocal(ev.date, zone))
+    // No zone tag on an unknown time: "Time TBC CST" implies a time we were told.
+    const tzTag = (TZ && zone && !ev.timeTbc && !TZ.sameAsLocal(ev.date, zone))
       ? ' <span class="evd-tz" title="' + esc(TZ.label(zone)) + '">' + esc(TZ.abbr(ev.date, zone) || TZ.label(zone)) + '</span>' : '';
     const badge = type === 'live' ? liveBadge(ev)
       : (type === 'past' ? '<span class="badge past">Past</span>' : '<span class="badge soon">Upcoming</span>');
@@ -1315,7 +1322,7 @@
         '<div class="evd-badges">' + featured + badge + '</div>' +
         '<h2 class="evd-title">' + esc(ev.name) + '</h2>' +
         '<p class="evd-meta">' + esc(dateLabel) + ' · ' + esc(timeLabel) +
-          (ev.endsAt ? '–' + esc(inZone(new Date(ev.endsAt), { hour: 'numeric', minute: '2-digit' })) : '') + tzTag +
+          ((ev.endsAt && !ev.timeTbc) ? '–' + esc(inZone(new Date(ev.endsAt), { hour: 'numeric', minute: '2-digit' })) : '') + tzTag +
           // Venue and city are each optional; show whichever exist, and no dangling dash.
           ((ev.venue || ev.city) ? '  —  ' + [ev.venue, ev.city].filter(Boolean).map(esc).join(', ') : '') + '</p>' +
         (ev.address ? '<p class="evd-addr">📍 ' + esc(ev.address) + '</p>' : '') +
