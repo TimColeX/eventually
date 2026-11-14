@@ -1228,12 +1228,14 @@
     // effect of removing the wall can be measured against the old `event_gate_view`.
     track('event_open', ev.city || null);
     if (gated) track('event_open_anon', ev.city || null);
-    ensureImages([ev], function () {          // banner picture, if this event has one
+    ensureImages([ev], function () {          // the poster thumbnail, if this event has a picture
       if (activeEventId !== id || !ev.image) return;
-      const b = eventScroll.querySelector('.evd-banner');
-      if (b && !b.classList.contains('has-img')) {
-        b.classList.add('has-img');
-        b.style.background = "url('" + ev.image + "') center/cover, linear-gradient(135deg," + ev.categoryColor + ",#211A15)";
+      const t = eventScroll.querySelector('.evd-thumb');
+      if (t && !t.querySelector('img')) {
+        const im = document.createElement('img');
+        im.src = ev.image; im.alt = ''; im.decoding = 'async';
+        t.insertBefore(im, t.firstChild);
+        t.hidden = false;
       }
     });
     const type = D.typeForDate(ev, selectedDate);
@@ -1255,9 +1257,17 @@
     // No zone tag on an unknown time: "Time TBC CST" implies a time we were told.
     const tzTag = (TZ && zone && !ev.timeTbc && !TZ.sameAsLocal(ev.date, zone))
       ? ' <span class="evd-tz" title="' + esc(TZ.label(zone)) + '">' + esc(TZ.abbr(ev.date, zone) || TZ.label(zone)) + '</span>' : '';
+    // No "Upcoming" chip here any more (2026-11-13): on an upcoming event the countdown
+    // directly below already says it, in more useful terms. Live and Past still need a
+    // badge — nothing else on the card states either.
     const badge = type === 'live' ? liveBadge(ev)
-      : (type === 'past' ? '<span class="badge past">Past</span>' : '<span class="badge soon">Upcoming</span>');
+      : (type === 'past' ? '<span class="badge past">Past</span>' : '');
     const featured = ev.sponsored ? '<span class="badge featured">★ Featured</span>' : '';
+    /* The category as a colour DOT beside readable text, not as coloured text. Several
+       category colours are too light to read as type — Comedy's amber is 2.2:1 and
+       Community's tan 2.5:1 against the cream card — and the dot keeps the colour code
+       without asking anyone to read it. */
+    const catLabel = '<span class="evd-catlbl"><i aria-hidden="true" style="background:' + ev.categoryColor + '"></i>' + esc(ev.category) + '</span>';
     const transparency = ev.sourceCount > 1
       ? '<div class="evd-dedup">◇ Found on ' + ev.sourceCount + ' sources · best match ' + Math.round(ev.topScore * 100) + '%' +
         '<small>Listings grouped automatically — every original source is preserved.</small></div>' : '';
@@ -1320,20 +1330,37 @@
         '<span class="evd-bar-title">' + esc(ev.name) + '</span>' +
         '<button class="evd-x" aria-label="Close">✕</button>' +
       '</div>' +
-      '<div class="evd-banner' + (ev.image ? ' has-img' : '') + '" style="background:' +
-        (ev.image ? "url('" + esc(ev.image) + "') center/cover, " : '') +
-        'linear-gradient(135deg,' + ev.categoryColor + ',#211A15)">' +
-        '<span class="evd-cat">' + esc(ev.category) + '</span>' +
-      '</div>' +
-      '<div class="evd-body">' +
-        '<div class="evd-badges">' + featured + badge + '</div>' +
-        '<h2 class="evd-title">' + esc(ev.name) + '</h2>' +
-        '<p class="evd-meta">' + esc(dateLabel) + ' · ' + esc(timeLabel) +
-          ((ev.endsAt && !ev.timeTbc) ? '–' + esc(inZone(new Date(ev.endsAt), { hour: 'numeric', minute: '2-digit' })) : '') + tzTag +
-          // Venue and city are each optional; show whichever exist, and no dangling dash.
-          ((ev.venue || ev.city) ? '  —  ' + [ev.venue, ev.city].filter(Boolean).map(esc).join(', ') : '') + '</p>' +
+      /* 🔴 NO BANNER (2026-11-13, mockups B + D). The top of this panel was a 120px
+         gradient carrying nothing but the category name — on an event with no picture,
+         which is about half of them, it was most of the card. A 6px band keeps the
+         category colour; the picture, when there is one, becomes the tappable thumbnail
+         below, which opens the WHOLE poster (openPoster) instead of the cropped strip
+         that hid Love Jazz's date. */
+      '<div class="evd-band" aria-hidden="true" style="background:' + ev.categoryColor + '"></div>' +
+      '<div class="evd-body' + (fromList ? ' has-back' : '') + '">' +
+        '<div class="evd-head">' +
+          '<button type="button" class="evd-thumb" aria-label="View the poster"' + (ev.image ? '' : ' hidden') + '>' +
+            (ev.image ? '<img src="' + esc(ev.image) + '" alt="" decoding="async">' : '') +
+            '<span class="evd-thumb-ic" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"></path></svg></span>' +
+          '</button>' +
+          '<div class="evd-head-main">' +
+            '<div class="evd-badges">' + featured + badge + catLabel + '</div>' +
+            '<h2 class="evd-title">' + esc(ev.name) + '</h2>' +
+            '<p class="evd-meta">' + esc(dateLabel) + ' · ' + esc(timeLabel) +
+              ((ev.endsAt && !ev.timeTbc) ? '–' + esc(inZone(new Date(ev.endsAt), { hour: 'numeric', minute: '2-digit' })) : '') + tzTag +
+              // Venue and city are each optional; show whichever exist, on their own line.
+              ((ev.venue || ev.city) ? '<br>' + [ev.venue, ev.city].filter(Boolean).map(esc).join(', ') : '') + '</p>' +
+          '</div>' +
+        '</div>' +
         (ev.address ? '<p class="evd-addr">📍 ' + esc(ev.address) + '</p>' : '') +
         (type === 'upcoming' ? '<div class="evd-cd"><span class="cd-label">Starts in</span><span class="ev-cd" data-start="' + ev.date.getTime() + '">⏳ ' + esc(fmtCountdown(ev.date.getTime() - Date.now())) + '</span></div>' : '') +
+        /* THE HOSTS' PLAYER, UP HERE (owner, 2026-11-13). It is the one thing on this
+           card no other listing site has, and it used to sit below the whole
+           description — on a phone, at the very bottom of the screen with the Like /
+           Going / Save row and the ticket button already scrolled out of reach. Empty
+           and hidden until a clip is found; only native events are looked up, so this
+           costs nothing on the ~138,000 imported rows. */
+        '<div class="evd-ec" hidden></div>' +
         // Forecast for when it starts. Empty (and invisible) unless one arrives.
         '<p class="evd-wx" data-when="' + ev.date.getTime() + '"' +
           (ev.lat != null ? ' data-lat="' + ev.lat + '" data-lon="' + ev.lon + '"' : '') + ' hidden></p>' +
@@ -1357,33 +1384,37 @@
            `.is-external` clamps to three lines as a guard; the snippet is already ~140
            characters cut at a word boundary (143), and mountDescription no longer
            fetches the remainder for these. */
+        /* NATIVE TEXT IS FOLDED TO THREE LINES (2026-11-13). Love Jazz's eight lines
+           pushed every action on the card below the bottom of a phone screen. The full
+           text is one tap away ("Read more", shown only when it actually overflows —
+           see foldDescription); imported snippets keep their own 3-line clamp. */
         (ev.description
-          ? '<p class="evd-desc' + (ev.is_native ? '' : ' is-external') + '">' + esc(ev.description) + '</p>'
+          ? '<p class="evd-desc ' + (ev.is_native ? 'is-folded' : 'is-external') + '">' + esc(ev.description) + '</p>' +
+            (ev.is_native ? '<button type="button" class="evd-more" hidden>Read more</button>' : '')
           : '') +
-        /* THE EVENTCAST, WHERE THE AUDIENCE ACTUALLY IS. The promo used to exist only
-           on the static /events/<city>/<slug>/ page, so the organiser could hear it and
-           the people spinning the globe — the audience the whole thing is for — could
-           not. Empty and hidden until a clip is found; only native events are even
-           looked up, so this costs nothing on the ~138,000 imported rows. */
-        '<div class="evd-ec" hidden></div>' +
+        /* LABELLED ACTIONS (notes item 10). Three bare symbols left people guessing which
+           meant save and which meant going. The symbol and the word live in their own
+           spans because the click handler updates them separately — it used to set the
+           whole button's textContent, which would wipe a label on the first tap. */
         '<div class="evd-actions">' +
           // Counts are REAL (event_counts, 78) and fill in once the panel is open. Until
           // then — or when there are none — no number is shown, never an invented one.
-          '<button class="ev-like' + (ev.userLiked ? ' on' : '') + '" data-act="like"' +
+          '<button class="ev-like evd-act' + (ev.userLiked ? ' on' : '') + '" data-act="like"' +
             ' aria-pressed="' + (ev.userLiked ? 'true' : 'false') + '"' +
             ' aria-label="' + (ev.userLiked ? 'Remove like' : 'Like this event') + '"' +
-            ' title="' + (ev.userLiked ? 'Liked' : 'Like') + '">♥ <span class="n">' + (ev.likes > 0 ? ev.likes.toLocaleString() : '') + '</span></button>' +
-          '<button class="ev-attend' + (ev.userAttending ? ' on' : '') + '" data-act="attend"' +
+            ' title="' + (ev.userLiked ? 'Liked' : 'Like') + '"><span class="ic" aria-hidden="true">♥</span><span class="lbl">Like</span><span class="n">' + (ev.likes > 0 ? ev.likes.toLocaleString() : '') + '</span></button>' +
+          '<button class="ev-attend evd-act' + (ev.userAttending ? ' on' : '') + '" data-act="attend"' +
             ' aria-pressed="' + (ev.userAttending ? 'true' : 'false') + '"' +
             ' aria-label="' + (ev.userAttending ? "I'm no longer going" : "I'm going") + '"' +
-            ' title="' + (ev.userAttending ? 'Going' : "I'm going") + '">✓ <span class="n">' + (ev.attending > 0 ? ev.attending.toLocaleString() : '') + '</span></button>' +
-          '<button class="ev-save' + (P.isSaved(ev.id) ? ' on' : '') + '" data-act="save"' +
+            ' title="' + (ev.userAttending ? 'Going' : "I'm going") + '"><span class="ic" aria-hidden="true">✓</span><span class="lbl">Going</span><span class="n">' + (ev.attending > 0 ? ev.attending.toLocaleString() : '') + '</span></button>' +
+          '<button class="ev-save evd-act' + (P.isSaved(ev.id) ? ' on' : '') + '" data-act="save"' +
             ' aria-pressed="' + (P.isSaved(ev.id) ? 'true' : 'false') + '"' +
             ' aria-label="' + (P.isSaved(ev.id) ? 'Remove from saved' : 'Save this event') + '"' +
-            ' title="' + (P.isSaved(ev.id) ? 'Saved' : 'Save') + '">' + (P.isSaved(ev.id) ? '★' : '☆') + '</button>' +
+            ' title="' + (P.isSaved(ev.id) ? 'Saved' : 'Save') + '"><span class="ic" aria-hidden="true">' + (P.isSaved(ev.id) ? '★' : '☆') + '</span><span class="lbl">' + (P.isSaved(ev.id) ? 'Saved' : 'Save') + '</span></button>' +
         '</div>' +
         '<div class="live-updates" hidden></div>' +
         avail +
+        alsoOnHTML(ev) +
         // The in-app half of the event disclaimer (full text: terms.html#event-disclaimer).
         '<p class="evd-disclaimer">Event details come from ' +
           (ev.is_native ? 'the organiser' : 'the organiser or ticket seller') +
@@ -1403,6 +1434,7 @@
     }
     paintEventWeather(eventScroll);
     mountEventcast(ev, eventScroll);
+    foldDescription();
     M.mountAdSense(eventScroll);
     eventScroll.scrollTop = 0; syncEventShade();
     eventEl.classList.add('open');
@@ -1448,12 +1480,18 @@
       .catch(function () { /* no player, never a broken one */ });
 
     function paint(segs) {
+      // Mockup D: a big play button first, the words and the bar beside it. The class
+      // names below are the ones the player's own code finds (.ecd-play / .ecd-bar /
+      // .ecd-prog / .ecd-sub — the error path rewrites .ecd-sub), so they are unchanged.
+      // "Under a minute", not "a 60-second listen": sixty is the MAXIMUM a script may
+      // run, and the first real one is about thirty-five seconds.
       box.innerHTML =
-        '<div class="ecd-head">🎙 <b>The hosts on this event</b> <span class="ecd-sub">a 60-second listen</span></div>' +
-        '<div class="ecd-row">' +
-          '<button type="button" class="ecd-play" aria-label="Play the promo">&#9654;</button>' +
-          '<div class="ecd-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">' +
+        '<button type="button" class="ecd-play" aria-label="Play the promo">&#9654;</button>' +
+        '<div class="ecd-main">' +
+          '<div class="ecd-head"><b>The hosts on this event</b></div>' +
+          '<div class="ecd-bar" role="progressbar" aria-label="Promo progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">' +
             '<i class="ecd-prog"></i></div>' +
+          '<span class="ecd-sub">Under a minute</span>' +
         '</div>';
       box.hidden = false;
       track('eventcast_view_app', ev.city || null);
@@ -1530,6 +1568,110 @@
     return '<span class="badge live">● On now' + (until ? ' · to ' + esc(until) : '') + '</span>';
   }
 
+  /* ── "ALSO ON <DAY> IN <CITY>" (mockup B, owner-chosen 2026-11-13) ─────────────
+     An event with nothing to say still leads somewhere. Built from the SAME list the
+     city panel shows (visibleEvents of the event's own cluster), so it respects the
+     Types filter, never shows a past event, and costs no request — those events are
+     already loaded.
+     ⚠️ The closing link says "More in <city>", not "All N events on Saturday": the
+     city panel lists everything from the selected date onward and has no single-day
+     view, and a count computed here could be short when only part of the city has
+     loaded. A promise the next screen can't keep is worse than a plainer label. */
+  function alsoOnHTML(ev) {
+    if (!ev || !ev.city || ev.lat == null) return '';
+    const near = clusterForSearch({ city: ev.city, lat: ev.lat, lon: ev.lon });
+    if (!near || !near.cluster || near.km > NEAR_OPEN_KM) return '';
+    const TZ = window.EventuallyTZ, zone = ev.timezone || null;
+    const dayKey = function (d) {
+      return (TZ && zone) ? TZ.format(d, zone, { year: 'numeric', month: '2-digit', day: '2-digit' }) : d.toDateString();
+    };
+    const key = dayKey(ev.date);
+    const same = visibleEvents(near.cluster).filter(function (e) {
+      return e && e.id !== ev.id && dayKey(e.date) === key && D.typeForDate(e, selectedDate) !== 'past';
+    }).sort(function (a, b) { return a.date - b.date; });
+    if (!same.length) return '';
+    const fmt = function (d, o) { return (TZ && zone) ? TZ.format(d, zone, o) : d.toLocaleString(undefined, o); };
+    const heading = dayKey(new Date()) === key
+      ? 'Also today in ' + ev.city
+      : 'Also on ' + fmt(ev.date, { weekday: 'long' }) + ' in ' + ev.city;
+    const rows = same.slice(0, 2).map(function (e) {
+      /* Each row in ITS OWN venue's clock, like every other card in the app — not this
+         event's. They usually agree, and when they don't the same event must not read
+         differently in two places: "A King is Born" (Regina) is stored as
+         Canada/Mountain, an hour off Saskatchewan's year-round Central time, and was
+         showing 6 PM here against 5 PM on its own card. The zone is a data error to
+         fix at the source; this only keeps the app consistent with itself. */
+      const ez = e.timezone || zone;
+      const when = e.timeTbc ? 'Time TBC'
+        : ((TZ && ez) ? TZ.format(e.date, ez, { hour: 'numeric', minute: '2-digit' }) : e.date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }));
+      const tile = e.image
+        ? '<span class="evd-also-tile"><img src="' + esc(e.image) + '" alt="" loading="lazy" decoding="async"></span>'
+        : '<span class="evd-also-tile" style="background:' + esc(e.categoryColor) + '"></span>';
+      return '<button type="button" class="evd-also-row" data-also="' + esc(e.id) + '">' + tile +
+        '<span class="evd-also-txt"><span class="evd-also-t">' + esc(e.name) + '</span>' +
+        '<span class="evd-also-m">' + esc(when) + (e.venue ? ' · ' + esc(e.venue) : '') + '</span></span>' +
+        '<span class="evd-also-go" aria-hidden="true">›</span></button>';
+    }).join('');
+    return '<section class="evd-also" aria-label="' + esc(heading) + '">' +
+      '<h3 class="evd-also-h">' + esc(heading) + '</h3>' + rows +
+      '<button type="button" class="evd-also-more" data-also-city="' + esc(near.cluster.id) + '">More in ' + esc(near.cluster.city || ev.city) + ' ›</button>' +
+    '</section>';
+  }
+
+  /* ── THE POSTER, WHOLE ────────────────────────────────────────────────────────
+     The card shows a thumbnail; tapping it shows the entire poster, fitted to the
+     screen — the cropped strip it replaces hid information only the poster carries
+     (Love Jazz's real date, its street address).
+     🔑 NO CUSTOM PINCH-ZOOM, on purpose. Pinching inside a fixed overlay on an iPhone
+     tends to zoom the whole page instead, and it is a lot of code to keep working.
+     "Open to zoom" puts the image in its own tab, where the phone's ordinary zoom
+     works perfectly: the viewport allows it, and posters are stored up to 1600px, so
+     zooming shows real detail. Opening it downloads nothing new — it is the file the
+     card already loaded. */
+  let posterEl = null, posterReturn = null, posterY0 = null;
+  function openPoster(src, title, from) {
+    if (!posterEl) {
+      posterEl = document.createElement('div');
+      posterEl.className = 'poster-view';
+      posterEl.setAttribute('role', 'dialog');
+      posterEl.setAttribute('aria-modal', 'true');
+      posterEl.hidden = true;
+      posterEl.innerHTML =
+        '<button type="button" class="pv-x" aria-label="Close the poster">✕</button>' +
+        '<img class="pv-img" alt="">' +
+        '<a class="pv-open" target="_blank" rel="noopener">Open to zoom ↗</a>';
+      document.body.appendChild(posterEl);
+      // Tap the dark surround (not the poster itself) or the ✕ to close.
+      posterEl.addEventListener('click', function (e) {
+        if (e.target === posterEl || e.target.closest('.pv-x')) closePoster();
+      });
+      // Swipe down to dismiss, the gesture a phone user reaches for first.
+      posterEl.addEventListener('touchstart', function (e) { posterY0 = e.touches.length === 1 ? e.touches[0].clientY : null; }, { passive: true });
+      posterEl.addEventListener('touchend', function (e) {
+        if (posterY0 == null) return;
+        const dy = e.changedTouches[0].clientY - posterY0; posterY0 = null;
+        if (dy > 90) closePoster();
+      }, { passive: true });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && posterEl && !posterEl.hidden) { e.stopPropagation(); closePoster(); }
+      }, true);
+    }
+    posterEl.setAttribute('aria-label', 'Poster for ' + title);
+    const img = posterEl.querySelector('.pv-img');
+    img.src = src; img.alt = 'Poster for ' + title;
+    posterEl.querySelector('.pv-open').href = src;
+    posterReturn = from || document.activeElement;
+    posterEl.hidden = false;
+    posterEl.querySelector('.pv-x').focus();
+  }
+  function closePoster() {
+    if (!posterEl || posterEl.hidden) return;
+    posterEl.hidden = true;
+    // Back to where they were — the thumbnail they tapped — not the top of the page.
+    if (posterReturn && posterReturn.focus && document.contains(posterReturn)) posterReturn.focus();
+    posterReturn = null;
+  }
+
   function paintEventWeather(scroll) {
     const W = window.EventuallyWeather, el = scroll && scroll.querySelector('.evd-wx');
     if (!W || !W.enabled || !el || el.dataset.lat == null) return;
@@ -1549,6 +1691,7 @@
     // the DOM, so hiding the drawer does not stop it and it would play on over the
     // next card with nothing on screen to pause it.
     try { const b = eventScroll.querySelector('.evd-ec'); if (b && b._stop) b._stop(); } catch (e) {}
+    closePoster();                    // a poster left open over a closed card has nothing behind it
     eventEl.classList.remove('open'); activeEventId = null;
     if (window.EventuallyUpdates) window.EventuallyUpdates.unmount();
   }
@@ -1569,7 +1712,9 @@
     openEvent(id);
   }
   // Pinned bar fills in once the 120px banner has scrolled up under it (styles: .evd-bar).
-  function syncEventShade() { eventEl.classList.toggle('is-scrolled', eventScroll.scrollTop > 66); }
+  // 100, not 66: with the banner gone the title sits higher, and the bar's copy of it
+  // should appear as the real one leaves the screen, not while it is still in view.
+  function syncEventShade() { eventEl.classList.toggle('is-scrolled', eventScroll.scrollTop > 100); }
   eventScroll.addEventListener('scroll', syncEventShade, { passive: true });
 
   /* The rest of the description, for the event just opened.
@@ -1597,6 +1742,20 @@
       ev.descTruncated = false;                  // fetched once, kept for the session
       const el = eventScroll.querySelector('.evd-desc');
       if (el) el.textContent = full;             // textContent — a description is never markup
+      foldDescription();                          // longer now — it may need its "Read more"
+    });
+  }
+
+  /* "Read more" only when there IS more. A three-line description folded behind a
+     button that reveals nothing is worse than no button. Measured after layout, and
+     again by mountDescription once a native event's full text has replaced the
+     snippet. */
+  function foldDescription() {
+    requestAnimationFrame(function () {
+      const d = eventScroll.querySelector('.evd-desc.is-folded');
+      const b = eventScroll.querySelector('.evd-more');
+      if (!d || !b) return;
+      b.hidden = !(d.scrollHeight > d.clientHeight + 2);
     });
   }
 
@@ -1736,6 +1895,23 @@
        RELOADS the page and tryPendingEvent() reopens it afterwards. */
     if (e.target.closest('.evd-back')) { closeEvent(); return; }                 // back to the list
     if (e.target.closest('.evd-x')) { closeEvent(); place.classList.remove('open'); activeClusterId = null; return; }
+    const thumb = e.target.closest('.evd-thumb');
+    if (thumb) {
+      const pev = D.getById(activeEventId);
+      if (pev && pev.image) openPoster(pev.image, pev.name, thumb);
+      return;
+    }
+    const more = e.target.closest('.evd-more');
+    if (more) {
+      const d = eventScroll.querySelector('.evd-desc'); if (d) d.classList.remove('is-folded');
+      more.hidden = true;
+      return;
+    }
+    // "Also on <day> in <city>": another event that day, or the whole city list.
+    const also = e.target.closest('[data-also]');
+    if (also) { openEvent(also.getAttribute('data-also')); return; }
+    const alsoCity = e.target.closest('[data-also-city]');
+    if (alsoCity) { const cid = alsoCity.getAttribute('data-also-city'); closeEvent(); openPlace(cid); return; }
     const tix = e.target.closest('[data-tickets]');
     if (tix) {
       // The anchor navigates to /go (server resolves affiliate + logs the click);
@@ -1746,7 +1922,12 @@
     const act = e.target.closest('[data-act]'); if (!act) return;
     const ev = D.getById(activeEventId);
     if (act.dataset.act === 'save') {
-      const on = P.toggleSaved(ev.id, snapOf(ev)); act.classList.toggle('on', on); act.textContent = on ? '★' : '☆';
+      const on = P.toggleSaved(ev.id, snapOf(ev)); act.classList.toggle('on', on);
+      // The symbol and the word separately — setting the button's textContent (as this
+      // used to) would wipe its visible label on the first tap.
+      const sIc = act.querySelector('.ic'), sLb = act.querySelector('.lbl');
+      if (sIc) { sIc.textContent = on ? '★' : '☆'; if (sLb) sLb.textContent = on ? 'Saved' : 'Save'; }
+      else act.textContent = on ? '★' : '☆';
       setToggleLabel(act, on, 'Remove from saved', 'Save this event', 'Saved', 'Save');
       // A city you saved something in is a city you have been to, as far as the Passport
       // is concerned — and UNSAVING does not take it back, which is the point of keeping

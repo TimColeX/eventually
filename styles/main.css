@@ -324,7 +324,7 @@ body {
 .ev-cd { text-transform: none; letter-spacing: 0; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .ev-cd.urgent, .ev-cd.now { color: var(--clay); font-weight: 700; }
 .evd-cd { display: flex; align-items: baseline; gap: 9px; margin: 2px 0 14px; }
-.evd-cd .cd-label { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); }
+.evd-cd .cd-label { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 .evd-cd .ev-cd { font-family: var(--mono); font-size: 15px; font-weight: 700; color: var(--ink); }
 .evd-cd .ev-cd.urgent, .evd-cd .ev-cd.now { color: var(--clay); }
 .ev-desc {
@@ -1850,8 +1850,14 @@ body.no-timeline.has-ad .legend { bottom: calc(138px + env(safe-area-inset-botto
 }
 .evdetail.open { right: var(--page-inset); }
 .evd-scroll { overflow-y: auto; }
-.evd-banner { position: relative; height: 120px; display: flex; align-items: flex-end; padding: 14px; }
-.evd-banner::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to top, rgba(33,26,21,.5), transparent 60%); }
+/* THE BAND, where the 120px banner was (2026-11-13, mockups B + D). The banner carried
+   nothing but the category name; on an imageless event — about half of them — it was
+   most of the card. The category keeps its colour here; the picture moves to the
+   tappable thumbnail in the header. */
+.evd-band { height: 6px; }
+/* ⚠️ `display` on these would beat the `hidden` attribute (an author rule outranks the
+   UA's display:none), so each element that starts hidden says so explicitly. */
+.evd-thumb[hidden], .evd-ec[hidden], .evd-more[hidden] { display: none; }
 /* Pinned Back / close. A zero-height sticky bar so the buttons float over the banner and
    stay put while the detail scrolls. Once the banner has gone (see syncEventShade) the bar
    fills in cream with the event name and the same soft shadow as the list header. */
@@ -1868,34 +1874,61 @@ body.no-timeline.has-ad .legend { bottom: calc(138px + env(safe-area-inset-botto
 }
 .evd-bar.no-back .evd-bar-title { left: 18px; }
 .evdetail.is-scrolled .evd-bar::before, .evdetail.is-scrolled .evd-bar-title { opacity: 1; }
-.evd-back, .evd-x { position: absolute; top: 12px; border: 0; cursor: pointer; background: rgba(33,26,21,.42); color: #fff; border-radius: 999px; transition: background .2s, color .2s; }
-.evd-back { left: 12px; padding: 6px 12px; font-family: var(--font); font-size: 13px; font-weight: 600; }
-.evd-x { right: 12px; width: 30px; height: 30px; font-size: 14px; }
+/* 44px targets, and sand-on-ink from the start: these used to be translucent dark over
+   the banner picture, and with no banner beneath them a dark circle on cream read as a
+   hole in the card. Top 5px keeps a 44px button inside the 54px bar. */
+.evd-back, .evd-x { position: absolute; top: 5px; height: 44px; border: 0; cursor: pointer; background: var(--sand); color: var(--ink); border-radius: 999px; transition: background .2s, color .2s; }
+.evd-back { left: 10px; padding: 0 14px; font-family: var(--font); font-size: 13px; font-weight: 600; }
+.evd-x { right: 10px; width: 44px; font-size: 15px; }
+.evd-bar-title { right: 62px; }
 .evdetail.is-scrolled .evd-back, .evdetail.is-scrolled .evd-x { background: var(--sand); color: var(--ink); }
 .evdetail .evd-back:hover, .evdetail .evd-x:hover { background: var(--clay); color: var(--cream); }
-.evd-cat { position: relative; z-index: 1; font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #fff; background: rgba(33,26,21,.4); padding: 4px 10px; border-radius: 999px; }
-.evd-body { padding: 16px 18px 22px; }
-.evd-badges { display: flex; gap: 8px; margin-bottom: 8px; }
-/* Type follows the list card (.ev-title / .ev-date / .ev-desc) so opening an event feels
-   like the same card grown taller — the title is one small step up, nothing else jumps. */
-.evd-title { margin: 2px 0 6px; font-size: 18px; font-weight: 700; letter-spacing: -0.015em; line-height: 1.2; }
-.evd-meta { margin: 0 0 12px; font-family: var(--mono); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--faint); }
+.evd-body { padding: 14px 18px 22px; }
+/* The header row: poster thumbnail (when there is a picture), then badges, title, when
+   and where. Right padding keeps the text clear of the ✕ floating in the sticky bar;
+   with a ‹ Back button the row also drops below it. */
+.evd-head { display: flex; align-items: flex-start; gap: 14px; padding-right: 48px; margin-bottom: 12px; }
+.evd-body.has-back .evd-head { padding-top: 34px; }
+.evd-head-main { flex: 1; min-width: 0; }
+.evd-thumb { position: relative; flex: none; width: 80px; height: 100px; padding: 0; overflow: hidden;
+  border-radius: 10px; border: 1px solid var(--line-2); background: var(--sand); cursor: zoom-in; }
+.evd-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* The expand mark tells people the small picture opens — it would not be guessed. */
+.evd-thumb-ic { position: absolute; right: 5px; bottom: 5px; width: 22px; height: 22px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center; background: rgba(33,26,21,.62); color: #fff; }
+.evd-thumb:focus-visible { outline: 2px solid var(--clay); outline-offset: 2px; }
+.evd-badges { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-bottom: 7px; }
+.evd-catlbl { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 10px; font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.evd-catlbl i { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.evd-title { margin: 0 0 6px; font-size: 21px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.18; text-wrap: balance; }
+/* --muted, not --faint: --faint is 3.9:1 on white and less on the cream card, under
+   the 4.5:1 that 11px text needs. This line is when and where — it has to be read. */
+.evd-meta { margin: 0; font-family: var(--mono); font-size: 11px; line-height: 1.55; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
 .evd-dedup { background: var(--tint); border: 1px solid var(--line); border-radius: 12px; padding: 10px 13px; margin-bottom: 14px; font-family: var(--mono); font-size: 11.5px; color: var(--ember); display: flex; flex-direction: column; gap: 4px; }
 .evd-dedup small { font-family: var(--font); font-size: 11.5px; color: var(--muted); letter-spacing: 0; }
-.evd-desc { margin: 0 0 16px; font-size: 13px; line-height: 1.6; color: var(--muted); }
+.evd-desc { margin: 0 0 16px; font-size: 14px; line-height: 1.6; color: var(--muted); }
+/* A native description, folded to three lines until "Read more" (foldDescription). */
+.evd-desc.is-folded {
+  margin-bottom: 2px;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.evd-more { display: block; margin: 0 0 14px; padding: 8px 0; border: 0; background: none; cursor: pointer;
+  font-family: var(--font); font-size: 13px; font-weight: 700; color: var(--ember); }
 /* THE EVENTCAST, IN THE DRAWER. Tinted and bordered because it is the one thing in
    this panel that is ours rather than the listing's — every other block here is the
    organiser's or the provider's text. Quiet enough not to outshout the Get Tickets
    button, which is still the action that matters most on this screen. */
-.evd-ec { margin: 0 0 16px; padding: 11px 12px; border: 1px solid var(--line-2);
-          border-radius: 12px; background: rgba(203, 90, 60, .06); }
-.ecd-head { font-size: 12px; color: var(--ink); margin-bottom: 9px; }
-.ecd-sub { color: var(--faint); font-weight: 400; }
-.ecd-row { display: flex; align-items: center; gap: 11px; }
-/* 44px, like every other primary control: this one gets tapped on a phone held in
-   one hand while someone decides whether an evening is worth leaving the house for. */
-.ecd-play { flex: 0 0 auto; width: 44px; height: 44px; border-radius: 50%; border: none;
-            background: var(--clay); color: #fff; font-size: 15px; line-height: 1; cursor: pointer; }
+/* Mockup D: the player sits directly under the countdown and leads with the button. */
+.evd-ec { display: flex; align-items: center; gap: 14px; margin: 0 0 14px; padding: 13px 14px;
+          border: 1px solid #F0D5C9; border-radius: 14px; background: #FBEFE9; }
+.ecd-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.ecd-head { font-size: 14px; color: var(--ink); }
+.ecd-sub { font-size: 12px; color: var(--muted); font-weight: 400; }
+/* 56px: the one primary control on the card that is OURS, and it should look it. */
+.ecd-play { flex: 0 0 auto; width: 56px; height: 56px; border-radius: 50%; border: none;
+            background: #B94E32; color: #fff; font-size: 18px; line-height: 1; cursor: pointer;
+            box-shadow: 0 6px 16px rgba(185,78,50,.30); }
 .ecd-play:disabled { background: var(--line-2); cursor: default; }
 .ecd-play:focus-visible { outline: 2px solid var(--clay); outline-offset: 3px; }
 .ecd-bar { flex: 1 1 auto; height: 5px; border-radius: 3px; background: var(--line-2); overflow: hidden; }
@@ -1907,7 +1940,14 @@ body.no-timeline.has-ad .legend { bottom: calc(138px + env(safe-area-inset-botto
 .evd-desc.is-external {
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
 }
-.evd-actions { display: flex; gap: 8px; margin-bottom: 18px; }
+/* Three equal, labelled buttons (notes item 10). `.ev-save`'s !important padding from
+   the list card still applies; with a fixed height and centred content it is harmless. */
+.evd-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 18px; }
+.evd-actions .evd-act { height: 44px; display: flex; align-items: center; justify-content: center; gap: 6px;
+  font-size: 13px; font-weight: 600; border-radius: 12px; background: var(--paper); }
+.evd-actions .evd-act .ic { font-size: 14px; line-height: 1; }
+.evd-actions .evd-act .n:empty { display: none; }
+.evd-actions .evd-act .n { font-variant-numeric: tabular-nums; color: var(--muted); }
 /* Signed-out preview: what the event IS stays visible above; the description, actions
    and ticket link sit behind this one prompt (see openEvent's `gated`). */
 /* ⚠️ UNUSED SINCE v278 — the sign-in wall was removed from the event panel and the
@@ -1947,19 +1987,54 @@ body.no-timeline.has-ad .legend { bottom: calc(138px + env(safe-area-inset-botto
 .avail-tag { font-family: var(--mono); font-size: 9px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--cream); background: var(--clay); padding: 2px 7px; border-radius: 5px; }
 .avail-price { font-weight: 800; font-size: 14.5px; color: var(--ink); }
 .avail-go { color: var(--clay); font-weight: 700; }
-.native-cta { display: block; width: 100%; box-sizing: border-box; padding: 14px; border-radius: 12px; cursor: pointer; background: var(--clay); color: var(--cream); border: 0; font-family: var(--font); font-weight: 700; font-size: 15px; text-align: center; text-decoration: none; }
-.native-cta:hover { background: var(--clay-hover); }
+/* THE BUTTON THAT MATTERS MOST HAD TO BE READABLE. Cream text on clay is under 4:1 —
+   short of the 4.5:1 a 15px label needs. White on --clay-hover is 5.0:1, and it is
+   already the palette's own hover colour, so the button looks the same at a glance. */
+.native-cta { display: block; width: 100%; box-sizing: border-box; padding: 14px; border-radius: 12px; cursor: pointer; background: var(--clay-hover); color: #fff; border: 0; font-family: var(--font); font-weight: 700; font-size: 15px; text-align: center; text-decoration: none; }
+.native-cta:hover { background: var(--ember); }
 /* Outbound "Get Tickets" CTA → the official provider via the /go redirect. */
 .evd-tickets { display: block; width: 100%; box-sizing: border-box; text-align: center; text-decoration: none;
-  padding: 14px; border-radius: 12px; cursor: pointer; background: var(--clay); color: var(--cream);
+  padding: 14px; border-radius: 12px; cursor: pointer; background: var(--clay-hover); color: #fff;
   font-family: var(--font); font-weight: 700; font-size: 15px; letter-spacing: -0.01em; transition: background .15s; }
-.evd-tickets:hover { background: var(--clay-hover); }
-.evd-note { margin: 11px 0 0; font-size: 12px; color: var(--hint); line-height: 1.5; }
+.evd-tickets:hover { background: var(--ember); }
+.evd-note { margin: 11px 0 0; font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+/* ── "Also on <day> in <city>" (mockup B) ─────────────────────────────────── */
+.evd-also { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; }
+.evd-also-h { margin: 0 0 6px; font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.evd-also-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 6px 0;
+  border: 0; background: none; text-align: left; cursor: pointer; font-family: var(--font); color: var(--ink); }
+.evd-also-row:hover .evd-also-t { text-decoration: underline; text-underline-offset: 2px; }
+.evd-also-row:focus-visible, .evd-also-more:focus-visible { outline: 2px solid var(--clay); outline-offset: 2px; border-radius: 8px; }
+.evd-also-tile { flex: none; width: 44px; height: 44px; border-radius: 10px; overflow: hidden; background: var(--sand); }
+.evd-also-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.evd-also-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.evd-also-t { font-size: 14px; font-weight: 600; line-height: 1.25; }
+.evd-also-m { font-family: var(--mono); font-size: 10.5px; letter-spacing: .03em; text-transform: uppercase; color: var(--muted); }
+.evd-also-go { flex: none; color: var(--muted); font-size: 18px; }
+.evd-also-more { align-self: flex-start; margin-top: 4px; padding: 8px 0; border: 0; background: none; cursor: pointer;
+  font-family: var(--font); font-size: 13px; font-weight: 700; color: var(--ember); }
+
+/* ── The whole poster (openPoster) ──────────────────────────────────────────
+   Fitted to the screen on a dark surround; "Open to zoom" hands it to the phone's own
+   zoom in a new tab rather than reimplementing pinch inside a fixed overlay. */
+.poster-view { position: fixed; inset: 0; z-index: 400; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; padding: calc(64px + env(safe-area-inset-top, 0px)) 16px calc(24px + env(safe-area-inset-bottom, 0px));
+  background: rgba(20,15,12,.92); }
+.poster-view[hidden] { display: none; }
+.pv-img { max-width: 100%; max-height: calc(100% - 60px); object-fit: contain; border-radius: 8px; box-shadow: 0 18px 50px rgba(0,0,0,.45); }
+.pv-x { position: absolute; top: calc(12px + env(safe-area-inset-top, 0px)); right: 12px; width: 44px; height: 44px; border: 0; border-radius: 999px;
+  background: rgba(255,255,255,.14); color: #fff; font-size: 16px; cursor: pointer; }
+.pv-x:hover { background: rgba(255,255,255,.26); }
+.pv-open { color: #fff; font-family: var(--font); font-size: 14px; font-weight: 700; text-decoration: none; padding: 12px 18px;
+  border-radius: 999px; background: rgba(255,255,255,.12); }
+.pv-open:hover { background: rgba(255,255,255,.22); }
+.pv-x:focus-visible, .pv-open:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 /* Zone tag beside an event's time — shown only when it differs from the reader's. */
 .evd-tz { display: inline-block; margin-left: 5px; padding: 1px 6px; border-radius: 5px;
   background: var(--line-2); color: var(--muted); font-size: 10.5px; font-weight: 700;
   letter-spacing: .03em; vertical-align: 1px; cursor: help; }
-.evd-addr { margin: 4px 0 0; font-size: 12px; color: var(--hint); line-height: 1.5; }
+.evd-addr { margin: 0 0 12px; font-size: 12px; color: var(--muted); line-height: 1.5; }
 
 /* ---------- Eventually-managed registration (event drawer) ---------- */
 .reg-loading { font-size: 12px; color: var(--hint); padding: 4px 0; }
