@@ -877,8 +877,15 @@
     if (ev.image) {
       return '<div class="ev-thumb"><img src="' + esc(ev.image) + '" alt="" loading="lazy" decoding="async"></div>';
     }
-    return '<div class="ev-thumb is-empty" data-thumb="' + esc(ev.id) + '" style="--cat:' + esc(ev.categoryColor) + '">' +
-      '<span>' + esc(ev.category) + '</span></div>';
+    /* NO WORD IN THE EMPTY TILE. It used to print the category, and the card prints
+       the category again immediately beside it — so every imageless card read
+       "COMMUNITY COMMUNITY" (the Dune screenings were the example that got noticed,
+       and about half of all cards have no image). The tile keeps the category's
+       colour, which is the part that carries information at a glance; the name is
+       one element to the right. aria-hidden because a screen reader was hearing the
+       category twice as well. What belongs in this tile is the empty-card design's
+       question, not this fix's. */
+    return '<div class="ev-thumb is-empty" data-thumb="' + esc(ev.id) + '" style="--cat:' + esc(ev.categoryColor) + '" aria-hidden="true"></div>';
   }
   // Look up images for events on screen, then fill in their thumbnails. Each event is
   // asked about once (null is remembered too), so scrolling or re-rendering is free.

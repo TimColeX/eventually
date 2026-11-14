@@ -298,10 +298,12 @@ body {
 .ev-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .ev-thumb.is-empty { display: flex; align-items: center; justify-content: center; padding: 6px; background: var(--paper); }
 @supports (background: color-mix(in srgb, red 10%, white)) {
-  .ev-thumb.is-empty { background: color-mix(in srgb, var(--cat) 15%, var(--paper)); }
+  /* 28%, not 15%: 15 was a background for the category word that used to sit in this
+     tile. With the word gone (it duplicated the label beside it), a 15% wash read as
+     an image that failed to load; at 28 it reads as a deliberate swatch of the
+     category's colour. Interim — the empty-card design decides what lives here. */
+  .ev-thumb.is-empty { background: color-mix(in srgb, var(--cat) 28%, var(--paper)); }
 }
-.ev-thumb.is-empty span { font-family: var(--mono); font-size: 9px; font-weight: 700; letter-spacing: .06em;
-  text-transform: uppercase; color: var(--cat); text-align: center; line-height: 1.25; }
 @media (max-width: 420px) { .ev-thumb { width: 64px; min-height: 64px; } }
 .ev-main { flex: 1; padding: 13px 15px; min-width: 0; }
 .ev-top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
